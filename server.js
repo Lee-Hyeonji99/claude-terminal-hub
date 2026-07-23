@@ -37,6 +37,11 @@ function projectsDirFor(profileId) {
   const cfg = configDirFor(profileId);
   return cfg ? path.join(cfg, 'projects') : PROJECTS_DIR;
 }
+// 프로필별 .claude.json (계정 정보 위치)
+function accountFileFor(profileId) {
+  const cfg = configDirFor(profileId);
+  return cfg ? path.join(cfg, '.claude.json') : path.join(os.homedir(), '.claude.json');
+}
 
 const app = express();
 
@@ -54,6 +59,18 @@ app.get('/health', (_req, res) => {
 
 app.get('/api/defaults', (_req, res) => {
   res.json({ home: os.homedir(), cwd: process.cwd(), sep: path.sep });
+});
+
+// 프로필(계정) 로그인 정보 — .claude.json 의 oauthAccount
+app.get('/api/account', (req, res) => {
+  try {
+    const j = JSON.parse(fs.readFileSync(accountFileFor(req.query.profile), 'utf8'));
+    const a = j.oauthAccount;
+    if (a && a.emailAddress) {
+      return res.json({ loggedIn: true, email: a.emailAddress, org: a.organizationUuid || null });
+    }
+  } catch { /* 파일 없음/미로그인 */ }
+  res.json({ loggedIn: false });
 });
 
 // ---- 파일시스템 탐색 (폴더 선택기용) ----

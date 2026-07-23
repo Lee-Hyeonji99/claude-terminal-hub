@@ -29,6 +29,14 @@ function saveProfiles() { localStorage.setItem('cth_profiles', JSON.stringify(pr
 let activeProfileId = localStorage.getItem('cth_active_profile') || 'default';
 if (!profiles.find((p) => p.id === activeProfileId)) activeProfileId = 'default';
 const profileWorkspaces = {}; // id -> { columns, activePane }
+const accountCache = {}; // id -> 계정 라벨 (탭 호버 툴팁)
+function fetchAccount(id) {
+  accountCache[id] = '계정 확인 중…';
+  fetch(`/api/account?profile=${encodeURIComponent(id)}`).then((r) => r.json()).then((a) => {
+    accountCache[id] = a.loggedIn ? `계정: ${a.email}` : '로그인 안 됨 — 첫 세션에서 /login 하세요';
+    renderTabs();
+  }).catch(() => { accountCache[id] = '계정 정보 없음'; renderTabs(); });
+}
 const wsStash = document.createElement('div');
 wsStash.style.display = 'none';
 document.body.appendChild(wsStash);
@@ -48,6 +56,7 @@ function switchProfile(id) {
   // 대상 워크스페이스 로드
   activeProfileId = id;
   localStorage.setItem('cth_active_profile', id);
+  delete accountCache[id]; // 전환 시 계정 정보 재조회 (로그인 변경 반영)
   const w = profileWorkspaces[id] || { columns: [], activePane: null };
   columns = w.columns;
   activePane = w.activePane || null;
@@ -71,9 +80,11 @@ function renderTabs() {
     t.innerHTML = `<span class="tname">${escapeHtml(p.name)}</span>` +
       (n ? `<span class="cnt">${n}</span>` : '') +
       (p.id !== 'default' ? `<button class="tclose" title="프로필 삭제">✕</button>` : '');
+    if (!(p.id in accountCache)) fetchAccount(p.id);
+    const acct = accountCache[p.id] || '계정 확인 중…';
+    t.title = acct + (p.id !== 'default' ? '\n더블클릭 = 이름 변경' : '');
     t.addEventListener('click', () => switchProfile(p.id));
     if (p.id !== 'default') {
-      t.title = '더블클릭 = 이름 변경';
       t.addEventListener('dblclick', (e) => { e.stopPropagation(); renameProfile(p.id); });
     }
     const cb = t.querySelector('.tclose');
