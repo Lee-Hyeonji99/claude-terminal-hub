@@ -78,8 +78,8 @@ function renderTabs() {
   });
 }
 
-function addProfile() {
-  const name = prompt('새 계정(프로필) 이름 — 예: 회사, 개인\n(첫 세션에서 /login 으로 그 계정에 로그인하세요)');
+async function addProfile() {
+  const name = await uiPrompt('새 계정(프로필) 추가', '', '예: 회사, 개인 — 첫 세션에서 /login 으로 그 계정에 로그인하세요.');
   if (!name || !name.trim()) return;
   const id = 'p_' + Math.abs(Date.now()).toString(36);
   profiles.push({ id, name: name.trim() });
@@ -87,14 +87,57 @@ function addProfile() {
   switchProfile(id);
 }
 
-function deleteProfile(id) {
-  if (paneCountOf(id) > 0) { alert('이 프로필에 열린 세션이 있습니다. 먼저 닫아주세요.'); return; }
-  if (!confirm('이 프로필 탭을 삭제할까요?\n(계정 로그인 폴더 ~/.claude-hub-profiles 는 남습니다)')) return;
+async function deleteProfile(id) {
+  if (paneCountOf(id) > 0) { await uiConfirm('이 프로필에 열린 세션이 있습니다. 먼저 닫아주세요.', '삭제 불가'); return; }
+  if (!(await uiConfirm('계정 로그인 폴더(~/.claude-hub-profiles)는 남습니다.', '이 프로필 탭을 삭제할까요?'))) return;
   profiles = profiles.filter((p) => p.id !== id);
   delete profileWorkspaces[id];
   saveProfiles();
   if (activeProfileId === id) { activeProfileId = 'default'; switchProfile('default'); }
   else renderTabs();
+}
+
+/* ---------- 인페이지 프롬프트/확인 모달 (네이티브 prompt/confirm 대체) ---------- */
+function uiPrompt(title, value, msg) {
+  return new Promise((resolve) => {
+    const ov = document.getElementById('promptOverlay');
+    document.getElementById('pmTitle').textContent = title || '';
+    const mEl = document.getElementById('pmMsg'); mEl.textContent = msg || ''; mEl.style.display = msg ? 'block' : 'none';
+    const inp = document.getElementById('pmInput'); inp.style.display = 'block'; inp.value = value || '';
+    const ok = document.getElementById('pmOk'); const cancel = document.getElementById('pmCancel');
+    ov.classList.add('open');
+    setTimeout(() => { inp.focus(); inp.select(); }, 30);
+    const done = (val) => { ov.classList.remove('open'); ok.removeEventListener('click', onOk); cancel.removeEventListener('click', onCancel); inp.removeEventListener('keydown', onKey); resolve(val); };
+    const onOk = () => done(inp.value);
+    const onCancel = () => done(null);
+    const onKey = (e) => { if (e.key === 'Enter') { e.preventDefault(); done(inp.value); } else if (e.key === 'Escape') { e.preventDefault(); done(null); } };
+    ok.addEventListener('click', onOk); cancel.addEventListener('click', onCancel); inp.addEventListener('keydown', onKey);
+  });
+}
+function uiConfirm(msg, title) {
+  return new Promise((resolve) => {
+    const ov = document.getElementById('promptOverlay');
+    document.getElementById('pmTitle').textContent = title || '확인';
+    const mEl = document.getElementById('pmMsg'); mEl.textContent = msg || ''; mEl.style.display = msg ? 'block' : 'none';
+    const inp = document.getElementById('pmInput'); inp.style.display = 'none';
+    const ok = document.getElementById('pmOk'); const cancel = document.getElementById('pmCancel');
+    ov.classList.add('open');
+    setTimeout(() => ok.focus(), 30);
+    const done = (val) => { ov.classList.remove('open'); ok.removeEventListener('click', onOk); cancel.removeEventListener('click', onCancel); document.removeEventListener('keydown', onKey); resolve(val); };
+    const onOk = () => done(true);
+    const onCancel = () => done(false);
+    const onKey = (e) => { if (e.key === 'Escape') { e.preventDefault(); done(false); } };
+    ok.addEventListener('click', onOk); cancel.addEventListener('click', onCancel); document.addEventListener('keydown', onKey);
+  });
+}
+
+/* ---------- 테마 (라이트/다크) ---------- */
+function applyTheme(t) {
+  document.body.classList.toggle('light', t === 'light');
+  const btn = document.getElementById('themeToggle');
+  if (btn) btn.textContent = t === 'light' ? '☀️' : '🌙';
+  localStorage.setItem('cth_theme', t);
+  setTimeout(() => { try { fitAll(); } catch {} }, 60);
 }
 
 function updateStatus() {
@@ -169,10 +212,9 @@ function addPane(cfg, placement) {
       <span class="label" title="${escapeHtml(cfg.cwd)}\n더블클릭 = 이름 변경">
         <span class="ttl">${escapeHtml(title)}</span><span class="cwd">📁 ${escapeHtml(shortCwd)}</span>
       </span>
-      <button class="changed" title="새 메시지 감지됨 — 클릭해 새로고침">● 새 메시지</button>
       <button class="prename" title="세션 이름 변경">✎</button>
-      <button class="auto" title="새 메시지 자동 새로고침 켜기/끄기">🔄</button>
-      <button class="reload" title="세션 새로고침 (다시 불러오기)">⟳</button>
+      <button class="auto" title="새 메시지 자동 새로고침 (유휴 시 자동 반영)">자동</button>
+      <button class="reload" title="새로고침 (세션 다시 불러오기)">⟳</button>
       <button class="split" title="아래로 분할">▤</button>
       <button class="x" title="세션 종료">✕</button>
     </div>
@@ -329,9 +371,9 @@ function addPane(cfg, placement) {
   termEl.addEventListener('mousedown', () => setActive(paneObj));
   if (term.textarea) term.textarea.addEventListener('focus', () => setActive(paneObj));
 
-  pane.querySelector('.x').addEventListener('click', (e) => {
+  pane.querySelector('.x').addEventListener('click', async (e) => {
     e.stopPropagation();
-    if (confirm('이 세션을 종료할까요?')) paneObj.dispose();
+    if (await uiConfirm('이 세션을 종료할까요?', '세션 종료')) paneObj.dispose();
   });
   pane.querySelector('.split').addEventListener('click', (e) => {
     e.stopPropagation();
@@ -344,20 +386,21 @@ function addPane(cfg, placement) {
     reload();
   });
   const autoBtn = pane.querySelector('.auto');
-  const changedBtn = pane.querySelector('.changed');
-  if (!cfg.resumeId) { autoBtn.style.display = 'none'; changedBtn.style.display = 'none'; }
+  const reloadBtn = pane.querySelector('.reload');
+  // 재개 세션만 새 메시지 감지 대상 → 자동 토글 노출
+  if (!cfg.resumeId) autoBtn.style.display = 'none';
   autoBtn.addEventListener('click', (e) => {
     e.stopPropagation();
     autoReload = !autoReload;
     autoBtn.classList.toggle('on', autoReload);
-    autoBtn.title = autoReload ? '자동 새로고침: 켜짐 (유휴 시 자동 반영)' : '새 메시지 자동 새로고침 켜기/끄기';
+    autoBtn.textContent = autoReload ? '자동 ●' : '자동';
+    autoBtn.title = autoReload ? '자동 새로고침: 켜짐 (유휴 시 새 메시지 자동 반영)' : '자동 새로고침: 꺼짐 (새 메시지 오면 ⟳ 가 깜빡임)';
     if (autoReload) pane.classList.remove('has-changes');
   });
-  changedBtn.addEventListener('click', (e) => { e.stopPropagation(); reload(); });
   // 이름 변경 — 제목 더블클릭 또는 ✎ 버튼
-  function renamePane() {
+  async function renamePane() {
     const ttlEl = pane.querySelector('.ttl');
-    const v = prompt('이 세션의 이름', ttlEl.textContent);
+    const v = await uiPrompt('세션 이름 변경', ttlEl.textContent);
     if (v === null) return;
     const name = v.trim() || cfg.title || 'claude 새 대화';
     ttlEl.textContent = name;
@@ -455,8 +498,8 @@ function addPreviewPane(url, placement) {
   updateStatus();
 }
 
-document.getElementById('addWeb').addEventListener('click', () => {
-  const u = prompt('미리보기할 URL', 'http://localhost:3000');
+document.getElementById('addWeb').addEventListener('click', async () => {
+  const u = await uiPrompt('웹 미리보기 URL', 'http://localhost:3000');
   if (u === null) return;
   addPreviewPane(u, 'column');
 });
@@ -678,9 +721,9 @@ document.getElementById('newChat').addEventListener('click', () => {
   const p = document.getElementById('sesCwd').textContent;
   closeOverlay(); addPane({ cwd: p, runClaude: true, command: 'claude', title: 'claude 새 대화' }, getPlacement());
 });
-document.getElementById('customCmd').addEventListener('click', () => {
+document.getElementById('customCmd').addEventListener('click', async () => {
   const p = document.getElementById('sesCwd').textContent;
-  const cmd = prompt('실행할 명령 (빈칸이면 셸만 열림)', 'claude --continue');
+  const cmd = await uiPrompt('명령 직접 입력', 'claude --continue', '빈칸이면 셸만 열립니다.');
   if (cmd === null) return;
   closeOverlay();
   addPane({ cwd: p, runClaude: !!cmd.trim(), command: cmd.trim() || 'claude', title: cmd.trim() || '셸' }, getPlacement());
@@ -737,9 +780,9 @@ function renderSessionList(sessions, emptyMsg) {
       <div class="rt">💬 ${escapeHtml(name)}</div>
       <div class="rf">📁 ${escapeHtml(folder)}</div>
       <div class="rs">${relTime(s.mtime)}</div>`;
-    it.querySelector('.rename').onclick = (e) => {
+    it.querySelector('.rename').onclick = async (e) => {
       e.stopPropagation();
-      const v = prompt('이 세션의 이름 (비우면 기본 이름)', getName(s.id) || s.title);
+      const v = await uiPrompt('세션 이름 변경', getName(s.id) || s.title, '비우면 기본 이름으로 되돌립니다.');
       if (v === null) return;
       setName(s.id, v);
       applyNameToOpenPanes(s.id);
@@ -805,6 +848,8 @@ document.getElementById('lnbToggle').addEventListener('click', () => {
 });
 document.getElementById('lnbRefresh').addEventListener('click', refreshLnb);
 document.getElementById('addProfile').addEventListener('click', addProfile);
+document.getElementById('themeToggle').addEventListener('click', () => applyTheme(document.body.classList.contains('light') ? 'dark' : 'light'));
+applyTheme(localStorage.getItem('cth_theme') || 'dark');
 
 let rt;
 window.addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(fitAll, 120); });
