@@ -1,0 +1,23 @@
+{
+  "name": "claude-terminal-hub",
+  "version": "1.0.0",
+  "private": true,
+  "description": "여러 Claude Code / 셸 세션을 한 브라우저 화면에서 보는 통합 터미널",
+  "type": "commonjs",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "app": "electron electron/main.js"
+  },
+  "dependencies": {
+    "@xterm/addon-fit": "^0.10.0",
+    "@xterm/xterm": "^5.5.0",
+    "express": "^4.19.2",
+    "node-pty": "^1.0.0",
+    "split.js": "^1.6.5",
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "electron": "^43.2.0"
+  }
+}

@@ -1,0 +1,7 @@
+node_modules/
+*.log
+npm-debug.log*
+.DS_Store
+Thumbs.db
+# 앱 창 전용 브라우저 프로필 (런타임 생성물, LOCALAPPDATA에 위치하지만 혹시 몰라)
+claude-hub-appwin/
