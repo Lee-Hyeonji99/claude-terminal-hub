@@ -72,6 +72,10 @@ function renderTabs() {
       (n ? `<span class="cnt">${n}</span>` : '') +
       (p.id !== 'default' ? `<button class="tclose" title="프로필 삭제">✕</button>` : '');
     t.addEventListener('click', () => switchProfile(p.id));
+    if (p.id !== 'default') {
+      t.title = '더블클릭 = 이름 변경';
+      t.addEventListener('dblclick', (e) => { e.stopPropagation(); renameProfile(p.id); });
+    }
     const cb = t.querySelector('.tclose');
     if (cb) cb.addEventListener('click', (e) => { e.stopPropagation(); deleteProfile(p.id); });
     list.appendChild(t);
@@ -85,6 +89,17 @@ async function addProfile() {
   profiles.push({ id, name: name.trim() });
   saveProfiles();
   switchProfile(id);
+}
+
+async function renameProfile(id) {
+  if (id === 'default') return; // 기본 프로필은 이름 고정
+  const p = profiles.find((x) => x.id === id);
+  if (!p) return;
+  const v = await uiPrompt('프로필 이름 변경', p.name);
+  if (v === null || !v.trim()) return;
+  p.name = v.trim();
+  saveProfiles();
+  renderTabs();
 }
 
 async function deleteProfile(id) {
