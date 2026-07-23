@@ -435,7 +435,12 @@ function addPane(cfg, placement) {
 function normalizeUrl(u) {
   u = (u || '').trim();
   if (!u) return '';
-  if (!/^https?:\/\//i.test(u)) u = 'http://' + u;
+  if (!/^https?:\/\//i.test(u)) {
+    // 로컬/IP/포트지정은 http, 그 외 공개 도메인은 https 기본
+    const head = u.split('/')[0];
+    const isLocal = /^(localhost|127\.0\.0\.1|0\.0\.0\.0|\[?::1\]?|\d{1,3}(\.\d{1,3}){3})(:\d+)?$/i.test(head) || /:\d+$/.test(head);
+    u = (isLocal ? 'http://' : 'https://') + u;
+  }
   return u;
 }
 
