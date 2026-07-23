@@ -235,24 +235,36 @@ function addPane(cfg, placement) {
   term.loadAddon(fit);
   term.open(termEl);
 
-  // 클립보드(Ctrl+Shift+C/V) + 브라우저가 예약하지 않은 제어키를 터미널(pty)로 넘긴다.
+  // 복사/붙여넣기 + 제어키 처리
+  const pasteFromClipboard = () => {
+    navigator.clipboard.readText().then((t) => {
+      if (t && ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: 'input', data: t }));
+    }).catch(() => {});
+  };
+  const copySelection = () => {
+    const s = term.getSelection();
+    if (s) navigator.clipboard.writeText(s).catch(() => {});
+    return !!s;
+  };
   term.attachCustomKeyEventHandler((e) => {
     if (e.type !== 'keydown') return true;
     const k = e.key.toLowerCase();
-    if (e.ctrlKey && e.shiftKey && !e.altKey) {
-      if (k === 'c') { const s = term.getSelection(); if (s) navigator.clipboard.writeText(s).catch(() => {}); e.preventDefault(); return false; }
-      if (k === 'v') {
-        navigator.clipboard.readText().then((t) => {
-          if (t && ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: 'input', data: t }));
-        }).catch(() => {});
-        e.preventDefault(); return false;
+    if ((e.ctrlKey || e.metaKey) && !e.altKey) {
+      // 붙여넣기: Ctrl+V / Ctrl+Shift+V
+      if (k === 'v') { e.preventDefault(); pasteFromClipboard(); return false; }
+      // 복사: Ctrl+Shift+C 는 항상, Ctrl+C 는 선택영역이 있을 때만(없으면 인터럽트 \x03 전달)
+      if (k === 'c') {
+        if (e.shiftKey) { e.preventDefault(); copySelection(); return false; }
+        if (copySelection()) { e.preventDefault(); return false; }
+        return true;
       }
-    }
-    if (e.ctrlKey && !e.altKey && !e.metaKey && !e.shiftKey) {
-      if (['u', 'w', 'a', 'e', 'k', 'r', 'l', 'd', 'c'].includes(k)) { try { e.preventDefault(); } catch {} }
+      // 나머지 제어키: 브라우저 기본동작만 막고 pty 로 전달
+      if (!e.shiftKey && ['u', 'w', 'a', 'e', 'k', 'r', 'l', 'd'].includes(k)) { try { e.preventDefault(); } catch {} }
     }
     return true;
   });
+  // 우클릭 붙여넣기
+  termEl.addEventListener('contextmenu', (e) => { e.preventDefault(); pasteFromClipboard(); });
 
   let disposed = false;
   let reloading = false;
@@ -428,8 +440,7 @@ function normalizeUrl(u) {
 }
 
 function addPreviewPane(url, placement) {
-  url = normalizeUrl(url);
-  if (!url) return;
+  url = normalizeUrl(url); // 빈 값이면 '' (빈 패널로 열림)
   emptyMsg.style.display = 'none';
 
   let col;
@@ -438,7 +449,7 @@ function addPreviewPane(url, placement) {
 
   const pane = document.createElement('div');
   pane.className = 'pane running';
-  let host = url; try { host = new URL(url).host; } catch {}
+  let host = '웹 미리보기'; try { if (url) host = new URL(url).host; } catch {}
   pane.innerHTML = `
     <div class="bar">
       <span class="dot"></span>
@@ -449,15 +460,16 @@ function addPreviewPane(url, placement) {
     </div>
     <div class="preview">
       <div class="urlbar">
-        <input type="text" spellcheck="false" value="${escapeHtml(url)}" />
+        <input type="text" spellcheck="false" placeholder="주소 입력 후 Enter (예: http://localhost:3000)" value="${escapeHtml(url)}" />
         <button class="go">이동</button>
       </div>
-      <iframe src="${escapeHtml(url)}" referrerpolicy="no-referrer"></iframe>
+      <iframe referrerpolicy="no-referrer"></iframe>
     </div>`;
   col.el.appendChild(pane);
 
   const iframe = pane.querySelector('iframe');
   const input = pane.querySelector('.urlbar input');
+  if (url) iframe.src = url; // 빈 값이면 빈 iframe
 
   const paneObj = {
     el: pane, cfg: { preview: true, url },
@@ -496,12 +508,11 @@ function addPreviewPane(url, placement) {
   rebuildAll();
   setActive(paneObj);
   updateStatus();
+  if (!url) setTimeout(() => input.focus(), 80); // 빈 패널이면 주소창에 바로 입력
 }
 
-document.getElementById('addWeb').addEventListener('click', async () => {
-  const u = await uiPrompt('웹 미리보기 URL', 'http://localhost:3000');
-  if (u === null) return;
-  addPreviewPane(u, 'column');
+document.getElementById('addWeb').addEventListener('click', () => {
+  addPreviewPane('', 'column'); // URL 은 패널 주소창에서 입력
 });
 
 /* ---------- 드래그 도킹 ---------- */
