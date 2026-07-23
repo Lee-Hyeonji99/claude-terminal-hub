@@ -22,6 +22,21 @@ const pty = require('node-pty');
 const PORT = Number(process.env.CLAUDE_HUB_PORT || 4778);
 const IS_WIN = process.platform === 'win32';
 const PROJECTS_DIR = path.join(os.homedir(), '.claude', 'projects');
+const PROFILES_ROOT = path.join(os.homedir(), '.claude-hub-profiles');
+
+// 프로필(계정)별 CLAUDE_CONFIG_DIR. 'default'/빈값이면 기본 ~/.claude 사용(null 반환).
+function configDirFor(profileId) {
+  if (!profileId || profileId === 'default') return null;
+  const safe = String(profileId).replace(/[^a-zA-Z0-9_-]/g, '_');
+  const dir = path.join(PROFILES_ROOT, safe);
+  try { fs.mkdirSync(dir, { recursive: true }); } catch {}
+  return dir;
+}
+// 프로필별 projects 디렉터리 (세션 기록 위치)
+function projectsDirFor(profileId) {
+  const cfg = configDirFor(profileId);
+  return cfg ? path.join(cfg, 'projects') : PROJECTS_DIR;
+}
 
 const app = express();
 
@@ -109,7 +124,7 @@ app.get('/api/fs/list', (req, res) => {
     path: target,
     parent: parent === target ? null : parent,
     dirs,
-    hasSessions: fs.existsSync(path.join(PROJECTS_DIR, encodeProjectPath(target))),
+    hasSessions: fs.existsSync(path.join(projectsDirFor(req.query.profile), encodeProjectPath(target))),
   });
 });
 
@@ -165,15 +180,16 @@ async function getMeta(full, mtime) {
   return meta;
 }
 
-// 모든 프로젝트의 세션 파일 목록(stat 포함)
-function listAllSessions() {
+// 모든 프로젝트의 세션 파일 목록(stat 포함). 프로필별 projects 디렉터리 대상.
+function listAllSessions(projectsDir) {
+  const base = projectsDir || PROJECTS_DIR;
   let projectDirs;
   try {
-    projectDirs = fs.readdirSync(PROJECTS_DIR, { withFileTypes: true }).filter((d) => d.isDirectory());
+    projectDirs = fs.readdirSync(base, { withFileTypes: true }).filter((d) => d.isDirectory());
   } catch { return []; }
   const all = [];
   for (const pd of projectDirs) {
-    const dir = path.join(PROJECTS_DIR, pd.name);
+    const dir = path.join(base, pd.name);
     let files;
     try { files = fs.readdirSync(dir).filter((f) => f.endsWith('.jsonl')); } catch { continue; }
     for (const f of files) {
@@ -190,7 +206,7 @@ function listAllSessions() {
 // ---- 최근 세션 (모든 프로젝트 통합, LNB 추천용) ----
 app.get('/api/recent', async (req, res) => {
   const limit = Math.min(30, Math.max(1, parseInt(req.query.limit, 10) || 12));
-  const all = listAllSessions().sort((a, b) => b.mtime - a.mtime);
+  const all = listAllSessions(projectsDirFor(req.query.profile)).sort((a, b) => b.mtime - a.mtime);
   const top = all.slice(0, limit);
   const sessions = await Promise.all(top.map(async (s) => {
     const meta = await getMeta(s.full, s.mtime);
@@ -204,7 +220,7 @@ app.get('/api/search', async (req, res) => {
   const q = (req.query.q || '').toString().trim().toLowerCase();
   const limit = Math.min(100, Math.max(1, parseInt(req.query.limit, 10) || 50));
   if (!q) return res.json({ sessions: [], total: 0 });
-  const all = listAllSessions().sort((a, b) => b.mtime - a.mtime);
+  const all = listAllSessions(projectsDirFor(req.query.profile)).sort((a, b) => b.mtime - a.mtime);
   const out = [];
   for (const s of all) {
     const meta = await getMeta(s.full, s.mtime);
@@ -222,7 +238,7 @@ app.get('/api/search', async (req, res) => {
 app.get('/api/sessions', async (req, res) => {
   const target = (req.query.path || '').toString().trim();
   if (!target) return res.status(400).json({ error: 'path 필요' });
-  const dir = path.join(PROJECTS_DIR, encodeProjectPath(target));
+  const dir = path.join(projectsDirFor(req.query.profile), encodeProjectPath(target));
   let files;
   try {
     files = fs.readdirSync(dir).filter((f) => f.endsWith('.jsonl'));
@@ -249,19 +265,79 @@ app.get('/api/sessions', async (req, res) => {
   res.json({ path: target, encoded: encodeProjectPath(target), total: withStat.length, sessions });
 });
 
+// ---- 사용량 (/status 스크레이프, 요청 시 1회) ----
+function stripAnsi(s) {
+  let c = s.replace(/\x1b\[[0-9;?]*[ -/]*[@-~]/g, '').replace(/\x1b[\]P][\s\S]*?(\x07|\x1b\\)/g, '');
+  return c.split('').filter((ch) => ch === '\n' || ch >= ' ').join('');
+}
+function extractUsageLines(clean) {
+  const seen = new Set();
+  const out = [];
+  for (let line of clean.split('\n')) {
+    line = line.replace(/[│╭╮╰╯─�||]/g, ' ').replace(/\s+/g, ' ').trim();
+    if (!line || line.length < 3) continue;
+    if (/(%|reset|limit|usage|remaining|session|hour|week|month|사용|남은|초기화|시간당|주간|월간|한도)/i.test(line)) {
+      if (!seen.has(line)) { seen.add(line); out.push(line); }
+    }
+  }
+  return out.slice(0, 25);
+}
+
+app.get('/api/usage', (req, res) => {
+  const env = cleanEnv(req.query.profile);
+  let term;
+  try {
+    term = pty.spawn(IS_WIN ? 'powershell.exe' : (process.env.SHELL || '/bin/bash'),
+      IS_WIN ? ['-NoLogo', '-NoExit'] : [],
+      { name: 'xterm-256color', cols: 110, rows: 42, cwd: os.homedir(), env, useConpty: IS_WIN ? true : undefined });
+  } catch (e) {
+    return res.status(500).json({ error: 'PTY 생성 실패: ' + e.message });
+  }
+  let out = '';
+  let trusted = false;
+  term.onData((d) => {
+    out += d;
+    if (!trusted && /trust this folder|신뢰하|trust it/i.test(out)) { trusted = true; setTimeout(() => { try { term.write('1\r'); } catch {} }, 250); }
+  });
+  const t1 = setTimeout(() => { try { term.write('claude\r'); } catch {} }, 800);
+  // 기동 완료 후 /status 입력 (프롬프트 렌더 여유), 그리고 캡처 마커 리셋
+  const t2 = setTimeout(() => { try { term.write('/status'); } catch {} }, 11000);
+  const t2b = setTimeout(() => { try { out = ''; term.write('\r'); } catch {} }, 11800); // 여기서부터 캡처(=/status 결과만)
+  const t3 = setTimeout(() => {
+    try { term.kill(); } catch {}
+    const clean = stripAnsi(out);
+    res.json({ ok: true, lines: extractUsageLines(clean), raw: clean.slice(-3500) });
+  }, 16000);
+  req.on('close', () => { [t1, t2, t2b, t3].forEach(clearTimeout); try { term.kill(); } catch {} });
+  req.on('close', () => { clearTimeout(t1); clearTimeout(t2); clearTimeout(t3); try { term.kill(); } catch {} });
+});
+
 // ---- PTY WebSocket ----
 const server = http.createServer(app);
 const wss = new WebSocketServer({ server, path: '/pty' });
 
-function spawnShell(cwd, cols, rows) {
+// 허브가 claude 세션 안에서 실행되더라도 spawn 되는 claude 가 '중첩 자식 세션'으로
+// 오작동하지 않도록 CLAUDE_CODE_* 마커를 제거한 깨끗한 env 를 만든다.
+function cleanEnv(profileId) {
+  const env = { ...process.env, TERM: 'xterm-256color' };
+  for (const k of Object.keys(env)) {
+    if (/^CLAUDE_CODE/i.test(k) || k === 'CLAUDECODE') delete env[k];
+  }
+  const cfgDir = configDirFor(profileId);
+  if (cfgDir) env.CLAUDE_CONFIG_DIR = cfgDir; // 프로필(계정)별 로그인/설정 분리
+  return env;
+}
+
+function spawnShell(cwd, cols, rows, profileId) {
   const shell = IS_WIN ? 'powershell.exe' : (process.env.SHELL || '/bin/bash');
   const args = IS_WIN ? ['-NoLogo', '-NoExit'] : [];
+  const env = cleanEnv(profileId);
   return pty.spawn(shell, args, {
     name: 'xterm-256color',
     cols: Math.max(20, cols | 0) || 80,
     rows: Math.max(5, rows | 0) || 24,
     cwd: cwd && cwd.trim() ? cwd : os.homedir(),
-    env: { ...process.env, TERM: 'xterm-256color' },
+    env,
     // ConPTY 사용(TUI/claude 렌더·리사이즈 정확). 과거 'AttachConsole failed' 크래시는
     // process.on('uncaughtException') 가드로 서버 전체가 죽지 않도록 흡수한다.
     useConpty: IS_WIN ? true : undefined,
@@ -274,9 +350,9 @@ wss.on('connection', (ws) => {
   const safeSend = (obj) => { if (ws.readyState === ws.OPEN) ws.send(JSON.stringify(obj)); };
 
   // 세션 jsonl 파일이 커지면(새 메시지 append) 클라이언트에 알림
-  function watchSession(cwd, resumeId) {
+  function watchSession(cwd, resumeId, profileId) {
     if (!resumeId) return;
-    const jf = path.join(PROJECTS_DIR, encodeProjectPath(cwd || os.homedir()), resumeId + '.jsonl');
+    const jf = path.join(projectsDirFor(profileId), encodeProjectPath(cwd || os.homedir()), resumeId + '.jsonl');
     if (!fs.existsSync(jf)) return;
     watchedFile = jf;
     let lastSize = 0;
@@ -296,7 +372,7 @@ wss.on('connection', (ws) => {
       if (term) return;
       const cwd = (msg.cwd || '').trim();
       try {
-        term = spawnShell(cwd, msg.cols, msg.rows); // 클라이언트 실제 크기로 PTY 생성 (TUI 입력줄 정렬)
+        term = spawnShell(cwd, msg.cols, msg.rows, msg.profile); // 크기 + 프로필(계정) 반영
       } catch (err) {
         safeSend({ type: 'error', message: `PTY 생성 실패: ${err.message}` });
         return;
@@ -310,7 +386,7 @@ wss.on('connection', (ws) => {
       if (msg.resumeId) cmd = `claude --resume ${msg.resumeId}`;
       else if (msg.runClaude) cmd = (msg.command && msg.command.trim()) || 'claude';
       if (cmd) setTimeout(() => { if (term) term.write(`${cmd}\r`); }, 400);
-      watchSession(cwd, msg.resumeId);
+      watchSession(cwd, msg.resumeId, msg.profile);
       return;
     }
 

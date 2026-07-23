@@ -26,6 +26,14 @@
     button.primary:hover{filter:brightness(1.1)}
     button.ghost{background:transparent}
 
+    #tabs{display:flex;align-items:center;gap:4px;padding:4px 8px;background:#0e1119;border-bottom:1px solid var(--border);flex:none;overflow-x:auto}
+    #tabList{display:flex;gap:4px}
+    .tab{display:flex;align-items:center;gap:6px;padding:5px 12px;border:1px solid var(--border);border-radius:7px 7px 0 0;background:var(--panel);color:var(--muted);cursor:pointer;font-size:12px;white-space:nowrap}
+    .tab.active{color:var(--text);background:var(--head);border-color:var(--active);border-bottom-color:var(--head)}
+    .tab .cnt{color:var(--accent);font-size:10px}
+    .tab .tclose{border:none;background:transparent;color:var(--muted);padding:0 2px;font-size:12px;line-height:1}
+    .tab .tclose:hover{color:var(--danger)}
+    #addProfile{padding:4px 10px;font-size:12px}
     #main{flex:1;display:flex;min-height:0;overflow:hidden}
     #lnb{width:260px;flex:none;display:flex;flex-direction:column;background:var(--panel);border-right:1px solid var(--border);transition:width .15s ease}
     body.lnb-collapsed #lnb{width:0;border-right:none;overflow:hidden}
@@ -131,6 +139,11 @@
     <div class="spacer"></div>
     <span class="status" id="status">세션 0</span>
   </header>
+
+  <div id="tabs">
+    <div id="tabList"></div>
+    <button id="addProfile" class="ghost" title="새 계정(프로필) 추가">＋ 프로필</button>
+  </div>
 
   <div id="dropIndicator"><span class="dz"></span></div>
 

@@ -21,10 +21,87 @@ let columns = [];
 let columnSplit = null;
 let activePane = null;
 
+/* ---------- 계정 프로필 / 탭 ---------- */
+function loadProfiles() { try { return JSON.parse(localStorage.getItem('cth_profiles')) || null; } catch { return null; } }
+let profiles = loadProfiles() || [{ id: 'default', name: '기본' }];
+if (!profiles.find((p) => p.id === 'default')) profiles.unshift({ id: 'default', name: '기본' });
+function saveProfiles() { localStorage.setItem('cth_profiles', JSON.stringify(profiles)); }
+let activeProfileId = localStorage.getItem('cth_active_profile') || 'default';
+if (!profiles.find((p) => p.id === activeProfileId)) activeProfileId = 'default';
+const profileWorkspaces = {}; // id -> { columns, activePane }
+const wsStash = document.createElement('div');
+wsStash.style.display = 'none';
+document.body.appendChild(wsStash);
+const profileQ = () => `profile=${encodeURIComponent(activeProfileId)}`;
+
+function paneCountOf(id) {
+  const cols = id === activeProfileId ? columns : ((profileWorkspaces[id] && profileWorkspaces[id].columns) || []);
+  return cols.reduce((a, c) => a + c.panes.length, 0);
+}
+
+function switchProfile(id) {
+  if (id === activeProfileId) { renderTabs(); return; }
+  // 현재 워크스페이스 저장 + DOM 을 스태시로 분리 (패널/세션 유지)
+  profileWorkspaces[activeProfileId] = { columns, activePane };
+  columns.forEach((c) => wsStash.appendChild(c.el));
+  if (columnSplit) { try { columnSplit.destroy(); } catch {} columnSplit = null; }
+  // 대상 워크스페이스 로드
+  activeProfileId = id;
+  localStorage.setItem('cth_active_profile', id);
+  const w = profileWorkspaces[id] || { columns: [], activePane: null };
+  columns = w.columns;
+  activePane = w.activePane || null;
+  columns.forEach((c) => stage.appendChild(c.el));
+  rebuildAll();
+  renderTabs();
+  updateStatus();
+  const si = document.getElementById('lnbSearch');
+  if (si) { si.value = ''; document.getElementById('lnbSearchClear').style.display = 'none'; }
+  loadRecent();
+}
+
+function renderTabs() {
+  const list = document.getElementById('tabList');
+  if (!list) return;
+  list.innerHTML = '';
+  profiles.forEach((p) => {
+    const t = document.createElement('div');
+    t.className = 'tab' + (p.id === activeProfileId ? ' active' : '');
+    const n = paneCountOf(p.id);
+    t.innerHTML = `<span class="tname">${escapeHtml(p.name)}</span>` +
+      (n ? `<span class="cnt">${n}</span>` : '') +
+      (p.id !== 'default' ? `<button class="tclose" title="프로필 삭제">✕</button>` : '');
+    t.addEventListener('click', () => switchProfile(p.id));
+    const cb = t.querySelector('.tclose');
+    if (cb) cb.addEventListener('click', (e) => { e.stopPropagation(); deleteProfile(p.id); });
+    list.appendChild(t);
+  });
+}
+
+function addProfile() {
+  const name = prompt('새 계정(프로필) 이름 — 예: 회사, 개인\n(첫 세션에서 /login 으로 그 계정에 로그인하세요)');
+  if (!name || !name.trim()) return;
+  const id = 'p_' + Math.abs(Date.now()).toString(36);
+  profiles.push({ id, name: name.trim() });
+  saveProfiles();
+  switchProfile(id);
+}
+
+function deleteProfile(id) {
+  if (paneCountOf(id) > 0) { alert('이 프로필에 열린 세션이 있습니다. 먼저 닫아주세요.'); return; }
+  if (!confirm('이 프로필 탭을 삭제할까요?\n(계정 로그인 폴더 ~/.claude-hub-profiles 는 남습니다)')) return;
+  profiles = profiles.filter((p) => p.id !== id);
+  delete profileWorkspaces[id];
+  saveProfiles();
+  if (activeProfileId === id) { activeProfileId = 'default'; switchProfile('default'); }
+  else renderTabs();
+}
+
 function updateStatus() {
   const n = columns.reduce((a, c) => a + c.panes.length, 0);
   statusEl.textContent = `세션 ${n}`;
   emptyMsg.style.display = n === 0 ? 'flex' : 'none';
+  renderTabs();
 }
 
 function fitAll() { columns.forEach((c) => c.panes.forEach((p) => p.fit())); }
@@ -76,6 +153,7 @@ function setActive(pane) {
 /* ---------- 패널(세션) 생성 ---------- */
 function addPane(cfg, placement) {
   emptyMsg.style.display = 'none';
+  if (!cfg.profile) cfg.profile = activeProfileId; // 현재 계정 프로필에 소속
 
   let col;
   if (placement === 'row' && activePane && findColumnOf(activePane)) col = findColumnOf(activePane);
@@ -167,7 +245,7 @@ function addPane(cfg, placement) {
       paneObj.fit();
       ws.send(JSON.stringify({
         type: 'init', cwd: cfg.cwd, runClaude: cfg.runClaude, command: cfg.command,
-        resumeId: cfg.resumeId, cols: term.cols || 80, rows: term.rows || 24,
+        resumeId: cfg.resumeId, profile: cfg.profile, cols: term.cols || 80, rows: term.rows || 24,
       }));
     };
     ws.onmessage = (ev) => {
@@ -502,7 +580,7 @@ async function loadDrives() {
 }
 
 async function browseTo(p) {
-  const res = await fetch(`/api/fs/list?path=${encodeURIComponent(p)}`).then((r) => r.json()).catch((e) => ({ error: String(e) }));
+  const res = await fetch(`/api/fs/list?path=${encodeURIComponent(p)}&${profileQ()}`).then((r) => r.json()).catch((e) => ({ error: String(e) }));
   const list = document.getElementById('fslist');
   const note = document.getElementById('fsnote');
   if (res.error) { note.textContent = '⚠ ' + res.error; return; }
@@ -534,7 +612,7 @@ async function browseTo(p) {
 async function choosePath(p) {
   p = (p || '').trim();
   if (!p) return;
-  const res = await fetch(`/api/fs/list?path=${encodeURIComponent(p)}`).then((r) => r.json()).catch(() => ({ error: '경로 조회 실패' }));
+  const res = await fetch(`/api/fs/list?path=${encodeURIComponent(p)}&${profileQ()}`).then((r) => r.json()).catch(() => ({ error: '경로 조회 실패' }));
   if (res.error) { document.getElementById('fsnote').textContent = '⚠ ' + res.error; return; }
   localStorage.setItem('cth_last_path', res.path);
   openSessionPicker(res.path);
@@ -567,7 +645,7 @@ async function openSessionPicker(p) {
   document.getElementById('sesCwd').textContent = p;
   document.getElementById('seslist').innerHTML = '<div class="sesempty">불러오는 중…</div>';
   openOverlay('session');
-  const res = await fetch(`/api/sessions?path=${encodeURIComponent(p)}`).then((r) => r.json()).catch(() => ({ sessions: [] }));
+  const res = await fetch(`/api/sessions?path=${encodeURIComponent(p)}&${profileQ()}`).then((r) => r.json()).catch(() => ({ sessions: [] }));
   const list = document.getElementById('seslist');
   document.getElementById('sesCount').textContent = res.total ? `(${res.sessions.length}/${res.total})` : '(0)';
   list.innerHTML = '';
@@ -673,14 +751,14 @@ function renderSessionList(sessions, emptyMsg) {
 async function loadRecent() {
   document.getElementById('lnbTitle').textContent = '최근 세션';
   document.getElementById('recentList').innerHTML = '<div class="recent-empty">불러오는 중…</div>';
-  const res = await fetch('/api/recent?limit=15').then((r) => r.json()).catch(() => ({ sessions: [] }));
+  const res = await fetch(`/api/recent?limit=15&${profileQ()}`).then((r) => r.json()).catch(() => ({ sessions: [] }));
   renderSessionList(res.sessions, '최근 세션이 없습니다.');
 }
 
 async function searchSessions(q) {
   document.getElementById('lnbTitle').textContent = '검색 중…';
   document.getElementById('recentList').innerHTML = '<div class="recent-empty">검색 중…</div>';
-  const res = await fetch(`/api/search?q=${encodeURIComponent(q)}&limit=60`).then((r) => r.json()).catch(() => ({ sessions: [] }));
+  const res = await fetch(`/api/search?q=${encodeURIComponent(q)}&limit=60&${profileQ()}`).then((r) => r.json()).catch(() => ({ sessions: [] }));
   document.getElementById('lnbTitle').textContent = `검색 결과 (${res.sessions.length})`;
   renderSessionList(res.sessions, `"${q}" 와 일치하는 세션이 없습니다.`);
 }
@@ -724,11 +802,13 @@ document.getElementById('lnbToggle').addEventListener('click', () => {
   setLnb(!document.body.classList.contains('lnb-collapsed'));
 });
 document.getElementById('lnbRefresh').addEventListener('click', refreshLnb);
+document.getElementById('addProfile').addEventListener('click', addProfile);
 
 let rt;
 window.addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(fitAll, 120); });
 
 setLnb(localStorage.getItem('cth_lnb_collapsed') === '1');
+renderTabs();
 loadRecent();
 updateStatus();
 // 로드 시 모달을 자동으로 열지 않는다 — 모달이 LNB(최근 세션) 클릭을 가리기 때문.
