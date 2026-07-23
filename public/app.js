@@ -170,6 +170,7 @@ function addPane(cfg, placement) {
         <span class="ttl">${escapeHtml(title)}</span><span class="cwd">📁 ${escapeHtml(shortCwd)}</span>
       </span>
       <button class="changed" title="새 메시지 감지됨 — 클릭해 새로고침">● 새 메시지</button>
+      <button class="prename" title="세션 이름 변경">✎</button>
       <button class="auto" title="새 메시지 자동 새로고침 켜기/끄기">🔄</button>
       <button class="reload" title="세션 새로고침 (다시 불러오기)">⟳</button>
       <button class="split" title="아래로 분할">▤</button>
@@ -353,9 +354,8 @@ function addPane(cfg, placement) {
     if (autoReload) pane.classList.remove('has-changes');
   });
   changedBtn.addEventListener('click', (e) => { e.stopPropagation(); reload(); });
-  // 제목 더블클릭 = 이름 변경
-  pane.querySelector('.label').addEventListener('dblclick', (e) => {
-    e.stopPropagation();
+  // 이름 변경 — 제목 더블클릭 또는 ✎ 버튼
+  function renamePane() {
     const ttlEl = pane.querySelector('.ttl');
     const v = prompt('이 세션의 이름', ttlEl.textContent);
     if (v === null) return;
@@ -363,7 +363,9 @@ function addPane(cfg, placement) {
     ttlEl.textContent = name;
     cfg.title = name;
     if (cfg.resumeId) { setName(cfg.resumeId, v.trim()); refreshLnb(); }
-  });
+  }
+  pane.querySelector('.label').addEventListener('dblclick', (e) => { e.stopPropagation(); renamePane(); });
+  pane.querySelector('.prename').addEventListener('click', (e) => { e.stopPropagation(); setActive(paneObj); renamePane(); });
 
   enablePaneDrag(paneObj, pane.querySelector('.bar'));
 

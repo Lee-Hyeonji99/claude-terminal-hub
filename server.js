@@ -283,34 +283,7 @@ function extractUsageLines(clean) {
   return out.slice(0, 25);
 }
 
-app.get('/api/usage', (req, res) => {
-  const env = cleanEnv(req.query.profile);
-  let term;
-  try {
-    term = pty.spawn(IS_WIN ? 'powershell.exe' : (process.env.SHELL || '/bin/bash'),
-      IS_WIN ? ['-NoLogo', '-NoExit'] : [],
-      { name: 'xterm-256color', cols: 110, rows: 42, cwd: os.homedir(), env, useConpty: IS_WIN ? true : undefined });
-  } catch (e) {
-    return res.status(500).json({ error: 'PTY 생성 실패: ' + e.message });
-  }
-  let out = '';
-  let trusted = false;
-  term.onData((d) => {
-    out += d;
-    if (!trusted && /trust this folder|신뢰하|trust it/i.test(out)) { trusted = true; setTimeout(() => { try { term.write('1\r'); } catch {} }, 250); }
-  });
-  const t1 = setTimeout(() => { try { term.write('claude\r'); } catch {} }, 800);
-  // 기동 완료 후 /status 입력 (프롬프트 렌더 여유), 그리고 캡처 마커 리셋
-  const t2 = setTimeout(() => { try { term.write('/status'); } catch {} }, 11000);
-  const t2b = setTimeout(() => { try { out = ''; term.write('\r'); } catch {} }, 11800); // 여기서부터 캡처(=/status 결과만)
-  const t3 = setTimeout(() => {
-    try { term.kill(); } catch {}
-    const clean = stripAnsi(out);
-    res.json({ ok: true, lines: extractUsageLines(clean), raw: clean.slice(-3500) });
-  }, 16000);
-  req.on('close', () => { [t1, t2, t2b, t3].forEach(clearTimeout); try { term.kill(); } catch {} });
-  req.on('close', () => { clearTimeout(t1); clearTimeout(t2); clearTimeout(t3); try { term.kill(); } catch {} });
-});
+// (사용량 /status 스크레이프 기능은 신뢰도 문제로 제거됨 — 사용자 요청)
 
 // ---- PTY WebSocket ----
 const server = http.createServer(app);
