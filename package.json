@@ -10,6 +10,7 @@
     "app": "electron electron/main.js"
   },
   "dependencies": {
+    "@xterm/addon-canvas": "^0.7.0",
     "@xterm/addon-fit": "^0.10.0",
     "@xterm/xterm": "^5.5.0",
     "express": "^4.19.2",

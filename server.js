@@ -65,6 +65,7 @@ app.use(express.static(path.join(__dirname, 'public'), {
 }));
 app.use('/vendor/xterm', express.static(path.join(__dirname, 'node_modules/@xterm/xterm')));
 app.use('/vendor/addon-fit', express.static(path.join(__dirname, 'node_modules/@xterm/addon-fit')));
+app.use('/vendor/addon-canvas', express.static(path.join(__dirname, 'node_modules/@xterm/addon-canvas')));
 app.use('/vendor/split', express.static(path.join(__dirname, 'node_modules/split.js/dist')));
 
 app.get('/health', (_req, res) => {
@@ -429,7 +430,8 @@ const wss = new WebSocketServer({ server, path: '/pty' });
 // 허브가 claude 세션 안에서 실행되더라도 spawn 되는 claude 가 '중첩 자식 세션'으로
 // 오작동하지 않도록 CLAUDE_CODE_* 마커를 제거한 깨끗한 env 를 만든다.
 function cleanEnv(profileId) {
-  const env = { ...process.env, TERM: 'xterm-256color', COLORTERM: 'truecolor' };
+  const env = { ...process.env, TERM: 'xterm-256color', COLORTERM: 'truecolor', FORCE_COLOR: '1' };
+  delete env.NO_COLOR; // 허브 프로세스 자체가 NO_COLOR 환경(예: 에이전트 셸)에서 떠도 자식 셸 색은 항상 켠다
   for (const k of Object.keys(env)) {
     if (/^CLAUDE_CODE/i.test(k) || k === 'CLAUDECODE') delete env[k];
   }

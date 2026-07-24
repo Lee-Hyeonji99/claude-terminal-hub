@@ -12,10 +12,60 @@
       --active:#4c8bf5; --text:#d7dbe6; --muted:#8a91a5; --accent:#4c8bf5; --danger:#e5484d; --ok:#3fb950;
       --sb-thumb:#39415a;
     }
-    body.light{
+    body[data-theme="light"]{
       --bg:#f3f4f7; --panel:#ffffff; --head:#e9ebf0; --border:#d3d8e2;
-      --active:#2f6fe0; --text:#1a1e2b; --muted:#5b6376; --accent:#2f6fe0; --danger:#d5202a; --ok:#1e9e4a;
+      --active:#2f6fe0; --text:#1a1e2b; --muted:#5b6376; --accent:#2f6fe0; --danger:#d5202a; --ok:#1a863f;
       --sb-thumb:#b8bfce;
+    }
+    body[data-theme="dracula"]{
+      --bg:#282a36; --panel:#282a36; --head:#21222c; --border:#44475a;
+      --active:#bd93f9; --text:#f8f8f2; --muted:#8592b8; --accent:#bd93f9; --danger:#ff5858; --ok:#50fa7b;
+      --sb-thumb:#44475a;
+    }
+    body[data-theme="solarized"]{
+      --bg:#002b36; --panel:#002b36; --head:#073642; --border:#586e75;
+      --active:#3295da; --text:#93a1a1; --muted:#79939a; --accent:#3295da; --danger:#e56764; --ok:#859900;
+      --sb-thumb:#073642;
+    }
+    body[data-theme="nord"]{
+      --bg:#2e3440; --panel:#2e3440; --head:#3b4252; --border:#4c566a;
+      --active:#88c0d0; --text:#d8dee9; --muted:#939eb2; --accent:#81a1c1; --danger:#d08b91; --ok:#a3be8c;
+      --sb-thumb:#4c566a;
+    }
+    body[data-theme="onedark"]{
+      --bg:#282c34; --panel:#282c34; --head:#21252b; --border:#3e4451;
+      --active:#61afef; --text:#abb2bf; --muted:#8d95a2; --accent:#61afef; --danger:#e1737b; --ok:#98c379;
+      --sb-thumb:#3e4451;
+    }
+    body[data-theme="gruvbox"]{
+      --bg:#282828; --panel:#282828; --head:#3c3836; --border:#504945;
+      --active:#83a598; --text:#ebdbb2; --muted:#a89984; --accent:#83a598; --danger:#fb5844; --ok:#b8bb26;
+      --sb-thumb:#504945;
+    }
+    body[data-theme="monokai"]{
+      --bg:#272822; --panel:#272822; --head:#1e1f1c; --border:#49483e;
+      --active:#66d9ef; --text:#f8f8f2; --muted:#94907a; --accent:#66d9ef; --danger:#fa4d8c; --ok:#a6e22e;
+      --sb-thumb:#49483e;
+    }
+    body[data-theme="tokyonight"]{
+      --bg:#1a1b26; --panel:#1a1b26; --head:#16161e; --border:#414868;
+      --active:#7aa2f7; --text:#c0caf5; --muted:#7a83ab; --accent:#7aa2f7; --danger:#f7768e; --ok:#9ece6a;
+      --sb-thumb:#414868;
+    }
+    body[data-theme="catppuccin"]{
+      --bg:#1e1e2e; --panel:#1e1e2e; --head:#181825; --border:#313244;
+      --active:#89b4fa; --text:#cdd6f4; --muted:#9399b2; --accent:#89b4fa; --danger:#f38ba8; --ok:#a6e3a1;
+      --sb-thumb:#313244;
+    }
+    body[data-theme="githubdark"]{
+      --bg:#0d1117; --panel:#0d1117; --head:#161b22; --border:#30363d;
+      --active:#58a6ff; --text:#c9d1d9; --muted:#8b949e; --accent:#58a6ff; --danger:#ff7b72; --ok:#3fb950;
+      --sb-thumb:#30363d;
+    }
+    body[data-theme="solarizedlight"]{
+      --bg:#fdf6e3; --panel:#fdf6e3; --head:#eee8d5; --border:#93a1a1;
+      --active:#2074b0; --text:#4b5b61; --muted:#5f737b; --accent:#2074b0; --danger:#d72724; --ok:#687700;
+      --sb-thumb:#93a1a1;
     }
     *{box-sizing:border-box}
     html,body{height:100%;margin:0}
@@ -159,6 +209,14 @@
     .sesempty{color:var(--muted);padding:16px;text-align:center}
     .hint{color:var(--muted);font-size:11px;margin-top:6px}
 
+    .popover-wrap{position:relative}
+    .popover{position:absolute;top:calc(100% + 6px);right:0;background:var(--panel);border:1px solid var(--border);border-radius:8px;box-shadow:0 12px 32px rgba(0,0,0,.35);padding:6px;min-width:170px;max-height:70vh;overflow-y:auto;z-index:40;display:none}
+    .popover.open{display:block}
+    .popover-item{display:flex;align-items:center;gap:8px;padding:7px 10px;border-radius:6px;cursor:pointer;font-size:12px;color:var(--text);white-space:nowrap}
+    .popover-item:hover{background:var(--head)}
+    .popover-item.active{background:var(--head);font-weight:600}
+    .popover-item .swatch{width:14px;height:14px;border-radius:50%;flex:none;border:1px solid rgba(128,128,128,.35)}
+
     /* 인페이지 프롬프트/확인 모달 (네이티브 prompt/confirm 대체) */
     #promptOverlay{position:fixed;inset:0;background:rgba(0,0,0,.55);display:none;align-items:center;justify-content:center;z-index:70}
     #promptOverlay.open{display:flex}
@@ -178,7 +236,27 @@
     <button id="addFile" class="ghost" title="로컬 파일 미리보기 (HTML/이미지/MD)"><span data-icon="file"></span> 파일 열기</button>
     <div class="spacer"></div>
     <span class="status" id="status">세션 0</span>
-    <button id="themeToggle" class="ghost icon-btn" title="라이트/다크 전환"></button>
+    <div class="popover-wrap">
+      <button id="themeBtn" class="ghost icon-btn" title="색상 테마"><span data-icon="palette"></span></button>
+      <div id="themePopover" class="popover">
+        <div class="popover-item" data-theme="dark"><span class="swatch" style="background:#0c0e14"></span>다크 (기본)</div>
+        <div class="popover-item" data-theme="light"><span class="swatch" style="background:#f3f4f7"></span>라이트 (기본)</div>
+        <div class="popover-item" data-theme="dracula"><span class="swatch" style="background:#282a36"></span>Dracula</div>
+        <div class="popover-item" data-theme="solarized"><span class="swatch" style="background:#002b36"></span>Solarized Dark</div>
+        <div class="popover-item" data-theme="nord"><span class="swatch" style="background:#2e3440"></span>Nord</div>
+        <div class="popover-item" data-theme="onedark"><span class="swatch" style="background:#282c34"></span>One Dark</div>
+        <div class="popover-item" data-theme="gruvbox"><span class="swatch" style="background:#282828"></span>Gruvbox Dark</div>
+        <div class="popover-item" data-theme="monokai"><span class="swatch" style="background:#272822"></span>Monokai</div>
+        <div class="popover-item" data-theme="tokyonight"><span class="swatch" style="background:#1a1b26"></span>Tokyo Night</div>
+        <div class="popover-item" data-theme="catppuccin"><span class="swatch" style="background:#1e1e2e"></span>Catppuccin Mocha</div>
+        <div class="popover-item" data-theme="githubdark"><span class="swatch" style="background:#0d1117"></span>GitHub Dark</div>
+        <div class="popover-item" data-theme="solarizedlight"><span class="swatch" style="background:#fdf6e3"></span>Solarized Light</div>
+      </div>
+    </div>
+    <div class="popover-wrap">
+      <button id="accentBtn" class="ghost icon-btn" title="강조 색상"><span data-icon="droplet"></span></button>
+      <div id="accentPopover" class="popover"></div>
+    </div>
   </header>
 
   <div id="tabs">
@@ -273,6 +351,7 @@
 
   <script src="/vendor/xterm/lib/xterm.js"></script>
   <script src="/vendor/addon-fit/lib/addon-fit.js"></script>
+  <script src="/vendor/addon-canvas/lib/addon-canvas.js"></script>
   <script src="/vendor/split/split.min.js"></script>
   <script src="/app.js"></script>
 </body>

@@ -22,6 +22,8 @@ const ICON = {
   back: ic('<path d="M19 12H5M12 19l-7-7 7-7"/>'),
   search: ic('<circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/>'),
   warn: ic('<path d="M12 9v4M12 17h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/>'),
+  palette: ic('<path d="M12 3a9 9 0 1 0 0 18c1.1 0 1.6-.7 1.1-1.6-.3-.6-.1-1.4.6-1.7.5-.2 1-.2 1.5-.2 2 0 3.8-1.7 3.8-4.5C19 6.9 15.9 3 12 3z"/><circle cx="7.5" cy="11.5" r="1.2"/><circle cx="10.5" cy="7.5" r="1.2"/><circle cx="15" cy="8" r="1.2"/>'),
+  droplet: ic('<path d="M12 3s6 6.5 6 11a6 6 0 0 1-12 0c0-4.5 6-11 6-11z"/>'),
 };
 function hydrateIcons(root) {
   (root || document).querySelectorAll('[data-icon]').forEach((el) => {
@@ -31,6 +33,7 @@ function hydrateIcons(root) {
 
 const Terminal = window.Terminal;
 const FitAddon = (window.FitAddon && window.FitAddon.FitAddon) || window.FitAddon;
+const CanvasAddon = (window.CanvasAddon && window.CanvasAddon.CanvasAddon) || window.CanvasAddon;
 const Split = window.Split;
 
 const stage = document.getElementById('stage');
@@ -48,9 +51,21 @@ const statusEl = document.getElementById('status');
 let columns = [];
 let columnSplit = null;
 
-const TERM_THEME_DARK = { background: '#12151f', foreground: '#d7dbe6' };
-const TERM_THEME_LIGHT = { background: '#ffffff', foreground: '#1a1e2b' };
-function currentTermTheme() { return document.body.classList.contains('light') ? TERM_THEME_LIGHT : TERM_THEME_DARK; }
+const TERM_THEMES = {
+  dark: { background: '#12151f', foreground: '#d7dbe6', black: '#000000', red: '#cd3131', green: '#0dbc79', yellow: '#e5e510', blue: '#2472c8', magenta: '#bc3fbc', cyan: '#11a8cd', white: '#e5e5e5', brightBlack: '#666666', brightRed: '#f14c4c', brightGreen: '#23d18b', brightYellow: '#f5f543', brightBlue: '#3b8eea', brightMagenta: '#d670d6', brightCyan: '#29b8db', brightWhite: '#e5e5e5' },
+  light: { background: '#ffffff', foreground: '#1a1e2b', black: '#000000', red: '#cd3131', green: '#00bc00', yellow: '#949800', blue: '#0451a5', magenta: '#bc05bc', cyan: '#0598bc', white: '#555555', brightBlack: '#666666', brightRed: '#cd3131', brightGreen: '#14ce14', brightYellow: '#b5ba00', brightBlue: '#0451a5', brightMagenta: '#bc05bc', brightCyan: '#0598bc', brightWhite: '#a5a5a5' },
+  dracula: { background: '#282a36', foreground: '#f8f8f2', black: '#21222c', red: '#ff5555', green: '#50fa7b', yellow: '#f1fa8c', blue: '#bd93f9', magenta: '#ff79c6', cyan: '#8be9fd', white: '#f8f8f2', brightBlack: '#6272a4', brightRed: '#ff6e6e', brightGreen: '#69ff94', brightYellow: '#ffffa5', brightBlue: '#d6acff', brightMagenta: '#ff92df', brightCyan: '#a4ffff', brightWhite: '#ffffff' },
+  solarized: { background: '#002b36', foreground: '#93a1a1', black: '#073642', red: '#dc322f', green: '#859900', yellow: '#b58900', blue: '#268bd2', magenta: '#d33682', cyan: '#2aa198', white: '#eee8d5', brightBlack: '#002b36', brightRed: '#cb4b16', brightGreen: '#586e75', brightYellow: '#657b83', brightBlue: '#839496', brightMagenta: '#6c71c4', brightCyan: '#93a1a1', brightWhite: '#fdf6e3' },
+  nord: { background: '#2e3440', foreground: '#d8dee9', black: '#3b4252', red: '#bf616a', green: '#a3be8c', yellow: '#ebcb8b', blue: '#81a1c1', magenta: '#b48ead', cyan: '#88c0d0', white: '#e5e9f0', brightBlack: '#4c566a', brightRed: '#bf616a', brightGreen: '#a3be8c', brightYellow: '#ebcb8b', brightBlue: '#81a1c1', brightMagenta: '#b48ead', brightCyan: '#8fbcbb', brightWhite: '#eceff4' },
+  onedark: { background: '#282c34', foreground: '#abb2bf', black: '#282c34', red: '#e06c75', green: '#98c379', yellow: '#e5c07b', blue: '#61afef', magenta: '#c678dd', cyan: '#56b6c2', white: '#abb2bf', brightBlack: '#5c6370', brightRed: '#e06c75', brightGreen: '#98c379', brightYellow: '#d19a66', brightBlue: '#61afef', brightMagenta: '#c678dd', brightCyan: '#56b6c2', brightWhite: '#ffffff' },
+  gruvbox: { background: '#282828', foreground: '#ebdbb2', black: '#282828', red: '#cc241d', green: '#98971a', yellow: '#d79921', blue: '#458588', magenta: '#b16286', cyan: '#689d6a', white: '#a89984', brightBlack: '#928374', brightRed: '#fb4934', brightGreen: '#b8bb26', brightYellow: '#fabd2f', brightBlue: '#83a598', brightMagenta: '#d3869b', brightCyan: '#8ec07c', brightWhite: '#ebdbb2' },
+  monokai: { background: '#272822', foreground: '#f8f8f2', black: '#272822', red: '#f92672', green: '#a6e22e', yellow: '#f4bf75', blue: '#66d9ef', magenta: '#ae81ff', cyan: '#a1efe4', white: '#f8f8f2', brightBlack: '#75715e', brightRed: '#f92672', brightGreen: '#a6e22e', brightYellow: '#f4bf75', brightBlue: '#66d9ef', brightMagenta: '#ae81ff', brightCyan: '#a1efe4', brightWhite: '#f9f8f5' },
+  tokyonight: { background: '#1a1b26', foreground: '#c0caf5', black: '#15161e', red: '#f7768e', green: '#9ece6a', yellow: '#e0af68', blue: '#7aa2f7', magenta: '#bb9af7', cyan: '#7dcfff', white: '#a9b1d6', brightBlack: '#414868', brightRed: '#f7768e', brightGreen: '#9ece6a', brightYellow: '#e0af68', brightBlue: '#7aa2f7', brightMagenta: '#bb9af7', brightCyan: '#7dcfff', brightWhite: '#c0caf5' },
+  catppuccin: { background: '#1e1e2e', foreground: '#cdd6f4', black: '#45475a', red: '#f38ba8', green: '#a6e3a1', yellow: '#f9e2af', blue: '#89b4fa', magenta: '#f5c2e7', cyan: '#94e2d5', white: '#bac2de', brightBlack: '#585b70', brightRed: '#f38ba8', brightGreen: '#a6e3a1', brightYellow: '#f9e2af', brightBlue: '#89b4fa', brightMagenta: '#f5c2e7', brightCyan: '#94e2d5', brightWhite: '#a6adc8' },
+  githubdark: { background: '#0d1117', foreground: '#c9d1d9', black: '#484f58', red: '#ff7b72', green: '#3fb950', yellow: '#d29922', blue: '#58a6ff', magenta: '#bc8cff', cyan: '#39c5cf', white: '#b1bac4', brightBlack: '#6e7681', brightRed: '#ffa198', brightGreen: '#56d364', brightYellow: '#e3b341', brightBlue: '#79c0ff', brightMagenta: '#d2a8ff', brightCyan: '#56d4dd', brightWhite: '#f0f6fc' },
+  solarizedlight: { background: '#fdf6e3', foreground: '#4b5b61', black: '#073642', red: '#dc322f', green: '#859900', yellow: '#b58900', blue: '#268bd2', magenta: '#d33682', cyan: '#2aa198', white: '#eee8d5', brightBlack: '#002b36', brightRed: '#cb4b16', brightGreen: '#586e75', brightYellow: '#657b83', brightBlue: '#839496', brightMagenta: '#6c71c4', brightCyan: '#93a1a1', brightWhite: '#fdf6e3' },
+};
+function currentTermTheme() { return TERM_THEMES[document.body.dataset.theme] || TERM_THEMES.dark; }
 let activePane = null;
 
 /* ---------- 계정 프로필 / 탭 ---------- */
@@ -188,15 +203,52 @@ function uiConfirm(msg, title) {
   });
 }
 
-/* ---------- 테마 (라이트/다크) ---------- */
+/* ---------- 테마 (색상 팔레트) ---------- */
+function closePopovers() { document.querySelectorAll('.popover').forEach((p) => p.classList.remove('open')); }
+function setupPopover(btnId, popId) {
+  const btn = document.getElementById(btnId);
+  const pop = document.getElementById(popId);
+  btn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const willOpen = !pop.classList.contains('open');
+    closePopovers();
+    if (willOpen) pop.classList.add('open');
+  });
+  pop.addEventListener('click', (e) => e.stopPropagation());
+}
+document.addEventListener('click', closePopovers);
+
 function applyTheme(t) {
-  document.body.classList.toggle('light', t === 'light');
-  const btn = document.getElementById('themeToggle');
-  if (btn) btn.innerHTML = t === 'light' ? ICON.sun : ICON.moon;
+  if (!TERM_THEMES[t]) t = 'dark';
+  document.body.dataset.theme = t;
   localStorage.setItem('cth_theme', t);
+  document.querySelectorAll('#themePopover .popover-item').forEach((el) => el.classList.toggle('active', el.dataset.theme === t));
   const termTheme = currentTermTheme();
   columns.forEach((c) => c.panes.forEach((p) => { if (p.term) { try { p.term.options.theme = termTheme; } catch {} } }));
   setTimeout(() => { try { fitAll(); } catch {} }, 60);
+}
+
+const ACCENTS = { blue: '#4c8bf5', purple: '#bd93f9', green: '#3fb950', red: '#e5484d', orange: '#f0a020', pink: '#ff79c6', cyan: '#22d3ee' };
+const ACCENT_LABELS = { blue: '파랑', purple: '보라', green: '초록', red: '빨강', orange: '주황', pink: '핑크', cyan: '시안' };
+function applyAccent(key) {
+  if (!ACCENTS[key]) key = null;
+  if (key) {
+    document.body.style.setProperty('--active', ACCENTS[key]);
+    document.body.style.setProperty('--accent', ACCENTS[key]);
+    localStorage.setItem('cth_accent', key);
+  } else {
+    document.body.style.removeProperty('--active');
+    document.body.style.removeProperty('--accent');
+    localStorage.removeItem('cth_accent');
+  }
+  document.querySelectorAll('#accentPopover .popover-item').forEach((b) => b.classList.toggle('active', b.dataset.accent === key));
+}
+function buildAccentPicker() {
+  const el = document.getElementById('accentPopover');
+  if (!el) return;
+  const items = Object.entries(ACCENTS).map(([k, hex]) => `<div class="popover-item" data-accent="${k}"><span class="swatch" style="background:${hex}"></span>${ACCENT_LABELS[k]}</div>`).join('');
+  el.innerHTML = `<div class="popover-item" data-accent="">테마 기본값</div>${items}`;
+  el.querySelectorAll('.popover-item').forEach((b) => b.addEventListener('click', () => { applyAccent(b.dataset.accent); closePopovers(); }));
 }
 
 function updateStatus() {
@@ -293,6 +345,7 @@ function addPane(cfg, placement) {
   const fit = new FitAddon();
   term.loadAddon(fit);
   term.open(termEl);
+  if (CanvasAddon) { try { term.loadAddon(new CanvasAddon()); } catch {} }
 
   // 복사/붙여넣기 + 제어키 처리
   const pasteFromClipboard = () => {
@@ -903,8 +956,14 @@ document.getElementById('lnbToggle').addEventListener('click', () => {
 });
 document.getElementById('lnbRefresh').addEventListener('click', refreshLnb);
 document.getElementById('addProfile').addEventListener('click', addProfile);
-document.getElementById('themeToggle').addEventListener('click', () => applyTheme(document.body.classList.contains('light') ? 'dark' : 'light'));
+document.querySelectorAll('#themePopover .popover-item').forEach((el) => {
+  el.addEventListener('click', () => { applyTheme(el.dataset.theme); closePopovers(); });
+});
+setupPopover('themeBtn', 'themePopover');
+setupPopover('accentBtn', 'accentPopover');
 applyTheme(localStorage.getItem('cth_theme') || 'dark');
+buildAccentPicker();
+applyAccent(localStorage.getItem('cth_accent') || null);
 
 let rt;
 window.addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(fitAll, 120); });
