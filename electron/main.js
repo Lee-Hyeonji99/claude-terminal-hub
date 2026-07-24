@@ -6,7 +6,7 @@
  * Ctrl+W 가 창을 닫지 않고 터미널(pty)로 그대로 전달되게 한다.
  * 또한 실수로 전체 세션을 날리는 새로고침(F5 / Ctrl+R)을 차단한다.
  */
-const { app, BrowserWindow, Menu, shell } = require('electron');
+const { app, BrowserWindow, Menu, shell, ipcMain, dialog } = require('electron');
 const http = require('http');
 const path = require('path');
 const { spawn } = require('child_process');
@@ -51,7 +51,7 @@ function createWindow(ready) {
     backgroundColor: '#0c0e14',
     title: 'Claude Terminal Hub',
     autoHideMenuBar: true,
-    webPreferences: { contextIsolation: true, spellcheck: false },
+    webPreferences: { contextIsolation: true, spellcheck: false, preload: path.join(__dirname, 'preload.js') },
   });
 
   if (ready) win.loadURL(URL);
@@ -69,6 +69,15 @@ function createWindow(ready) {
 
   return win;
 }
+
+// 네이티브 폴더 선택 다이얼로그 (절대경로 반환, 앱 창 소유 모달 → 항상 최상단)
+ipcMain.handle('pick-folder', async (_e, initial) => {
+  const win = BrowserWindow.getFocusedWindow() || BrowserWindow.getAllWindows()[0];
+  const opts = { title: '작업 폴더 선택', properties: ['openDirectory', 'createDirectory'] };
+  if (initial) opts.defaultPath = initial;
+  const r = win ? await dialog.showOpenDialog(win, opts) : await dialog.showOpenDialog(opts);
+  return (r.canceled || !r.filePaths[0]) ? null : r.filePaths[0];
+});
 
 app.whenReady().then(async () => {
   Menu.setApplicationMenu(null); // Ctrl+W/T/N 등 기본 accelerator 제거 → 키가 터미널로 전달

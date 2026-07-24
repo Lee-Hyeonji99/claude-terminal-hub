@@ -698,21 +698,24 @@ document.getElementById('osPick').addEventListener('click', async () => {
   const btn = document.getElementById('osPick');
   const orig = btn.textContent;
   const note = document.getElementById('fsnote');
-  btn.disabled = true; btn.textContent = '선택기 여는 중…';
-  // 다이얼로그가 다른 창 뒤에 뜰 수 있으니 안내
-  const hint = setTimeout(() => { note.textContent = '💡 폴더 선택 창이 안 보이면 다른 창/작업표시줄 뒤를 확인하세요.'; }, 1500);
   const cur = document.getElementById('curPath').value.trim();
+  btn.disabled = true; btn.textContent = '선택기 여는 중…';
   try {
+    // Electron 앱: 네이티브 다이얼로그(절대경로, 항상 최상단)
+    if (window.claudeHub && window.claudeHub.pickFolder) {
+      const picked = await window.claudeHub.pickFolder(cur);
+      if (picked) { document.getElementById('curPath').value = picked; choosePath(picked); }
+      return;
+    }
+    // 브라우저 모드: 서버측 다이얼로그 폴백
     const res = await fetch(`/api/fs/pick?path=${encodeURIComponent(cur)}`).then((r) => r.json());
     if (res.error) { note.textContent = '⚠ ' + res.error; return; }
-    if (res.canceled || !res.path) { note.textContent = ''; return; }
-    note.textContent = '';
+    if (res.canceled || !res.path) return;
     document.getElementById('curPath').value = res.path;
     choosePath(res.path);
   } catch (e) {
-    note.textContent = '⚠ OS 선택기 호출 실패: ' + e.message;
+    note.textContent = '⚠ 폴더 선택 실패: ' + e.message;
   } finally {
-    clearTimeout(hint);
     btn.disabled = false; btn.textContent = orig;
   }
 });
