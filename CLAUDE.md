@@ -23,7 +23,15 @@ UI/서버 변경 후 가능하면 실제로 확인한다.
 - 서버는 detach 실행 권장: `Start-Process node -ArgumentList server.js -WindowStyle Hidden` (또는 `claude-hub`)
 - Electron 앱은 F5/Ctrl+R 차단(세션 보존) — 새 코드 반영은 **Ctrl+Shift+R**(명시적 새로고침) 또는 앱 재기동.
 
-## 3) 저장 위치
+## 3) 프로세스 종료 금지 (MUST)
+
+`server.js`(node)와 Electron 앱 안에는 사용자가 실제 작업 중인 세션(pty/셸)이 떠 있을 수 있다. 이미지 이름 기준으로 무차별 종료하면(`taskkill /IM node.exe`, `taskkill /IM electron.exe`, `Stop-Process -Name ...` 등) 테스트용이 아닌 실제 작업 세션까지 같이 죽어 복구 불가능한 손실이 생긴다.
+
+- 검증/테스트 목적이라도 **먼저 이미 떠 있는 프로세스가 있는지 확인**하고(`tasklist`, `curl /health`, PID의 `CommandLine` 확인 등), 자신이 방금 띄운 PID인지 특정한 뒤에만 종료한다.
+- 기존에 떠 있던 프로세스인지 애매하면 **종료하기 전에 사용자에게 먼저 물어본다.**
+- 이미지 이름 전체(`/IM`) 기준 강제 종료는 원칙적으로 금지. 반드시 특정 PID로만 종료한다.
+
+## 4) 저장 위치
 
 - 세션 커스텀 이름/프로필: 서버 전역 파일 `~/.claude-terminal-hub/state.json` (localStorage 아님).
 - 세션 제목 우선순위: Claude `/rename`(custom-title) > ai-title > 첫 메시지.
