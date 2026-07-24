@@ -47,6 +47,10 @@ const statusEl = document.getElementById('status');
  * 재배치(드래그 도킹)는 살아있는 pane.el(터미널 포함)을 DOM 이동만 하여 세션을 보존한다. */
 let columns = [];
 let columnSplit = null;
+
+const TERM_THEME_DARK = { background: '#12151f', foreground: '#d7dbe6' };
+const TERM_THEME_LIGHT = { background: '#ffffff', foreground: '#1a1e2b' };
+function currentTermTheme() { return document.body.classList.contains('light') ? TERM_THEME_LIGHT : TERM_THEME_DARK; }
 let activePane = null;
 
 /* ---------- 계정 프로필 / 탭 ---------- */
@@ -190,6 +194,8 @@ function applyTheme(t) {
   const btn = document.getElementById('themeToggle');
   if (btn) btn.innerHTML = t === 'light' ? ICON.sun : ICON.moon;
   localStorage.setItem('cth_theme', t);
+  const termTheme = currentTermTheme();
+  columns.forEach((c) => c.panes.forEach((p) => { if (p.term) { try { p.term.options.theme = termTheme; } catch {} } }));
   setTimeout(() => { try { fitAll(); } catch {} }, 60);
 }
 
@@ -280,7 +286,7 @@ function addPane(cfg, placement) {
     cursorBlink: true,
     fontFamily: 'Consolas, "Cascadia Mono", monospace',
     fontSize: 13,
-    theme: { background: '#12151f', foreground: '#d7dbe6' },
+    theme: currentTermTheme(),
     scrollback: 8000,
     allowProposedApi: true,
   });

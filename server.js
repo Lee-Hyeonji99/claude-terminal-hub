@@ -429,7 +429,7 @@ const wss = new WebSocketServer({ server, path: '/pty' });
 // 허브가 claude 세션 안에서 실행되더라도 spawn 되는 claude 가 '중첩 자식 세션'으로
 // 오작동하지 않도록 CLAUDE_CODE_* 마커를 제거한 깨끗한 env 를 만든다.
 function cleanEnv(profileId) {
-  const env = { ...process.env, TERM: 'xterm-256color' };
+  const env = { ...process.env, TERM: 'xterm-256color', COLORTERM: 'truecolor' };
   for (const k of Object.keys(env)) {
     if (/^CLAUDE_CODE/i.test(k) || k === 'CLAUDECODE') delete env[k];
   }
