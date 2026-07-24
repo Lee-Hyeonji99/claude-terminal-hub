@@ -363,6 +363,45 @@ app.get('/api/sessions', async (req, res) => {
   res.json({ path: target, encoded: encodeProjectPath(target), total: withStat.length, sessions });
 });
 
+// ---- 로컬 파일 미리보기 서빙 + 아티팩트 판별 ----
+const PREVIEW_EXT = {
+  '.html': 'text/html; charset=utf-8', '.htm': 'text/html; charset=utf-8',
+  '.md': 'text/plain; charset=utf-8', '.txt': 'text/plain; charset=utf-8',
+  '.css': 'text/css', '.js': 'text/javascript', '.json': 'application/json; charset=utf-8',
+  '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.gif': 'image/gif',
+  '.svg': 'image/svg+xml', '.webp': 'image/webp', '.pdf': 'application/pdf',
+};
+function isPreviewable(p) { return Object.prototype.hasOwnProperty.call(PREVIEW_EXT, path.extname(String(p)).toLowerCase()); }
+
+app.get('/api/file', (req, res) => {
+  const p = (req.query.path || '').toString();
+  if (!p) return res.status(400).send('path 필요');
+  let st; try { st = fs.statSync(p); } catch { return res.status(404).send('파일 없음'); }
+  if (!st.isFile()) return res.status(400).send('파일 아님');
+  res.setHeader('Content-Type', PREVIEW_EXT[path.extname(p).toLowerCase()] || 'application/octet-stream');
+  res.setHeader('Cache-Control', 'no-store');
+  fs.createReadStream(p).on('error', () => { try { res.end(); } catch {} }).pipe(res);
+});
+
+// 세션 jsonl delta 에서 Claude 가 만든/본 미리보기 가능 파일(아티팩트) 추출
+function extractArtifacts(text) {
+  const out = []; const seen = new Set();
+  for (const line of text.split('\n')) {
+    if (!line || line.indexOf('tool_use') < 0) continue;
+    let obj; try { obj = JSON.parse(line); } catch { continue; }
+    const content = obj.message && obj.message.content;
+    if (!Array.isArray(content)) continue;
+    for (const it of content) {
+      if (it.type !== 'tool_use' || !it.input) continue;
+      const fp = it.input.file_path || it.input.path || it.input.notebook_path;
+      if (!fp || !isPreviewable(fp) || seen.has(fp)) continue;
+      seen.add(fp);
+      out.push({ path: String(fp), tool: it.name || '' });
+    }
+  }
+  return out;
+}
+
 // ---- 사용량 (/status 스크레이프, 요청 시 1회) ----
 function stripAnsi(s) {
   let c = s.replace(/\x1b\[[0-9;?]*[ -/]*[@-~]/g, '').replace(/\x1b[\]P][\s\S]*?(\x07|\x1b\\)/g, '');
@@ -417,23 +456,57 @@ function spawnShell(cwd, cols, rows, profileId) {
 
 wss.on('connection', (ws) => {
   let term = null;
-  let watchedFile = null;
   const safeSend = (obj) => { if (ws.readyState === ws.OPEN) ws.send(JSON.stringify(obj)); };
 
-  // 세션 jsonl 파일이 커지면(새 메시지 append) 클라이언트에 알림
-  function watchSession(cwd, resumeId, profileId) {
-    if (!resumeId) return;
-    const jf = path.join(projectsDirFor(profileId), encodeProjectPath(cwd || os.homedir()), resumeId + '.jsonl');
-    if (!fs.existsSync(jf)) return;
-    watchedFile = jf;
-    let lastSize = 0;
-    try { lastSize = fs.statSync(jf).size; } catch {}
-    fs.watchFile(jf, { interval: 1500 }, (curr) => {
-      if (curr.size > lastSize) { lastSize = curr.size; safeSend({ type: 'changed' }); }
-      else lastSize = curr.size;
+  // 세션 jsonl 감시: resume 세션은 새 메시지 알림('changed'), 모든 세션은 아티팩트('artifact') 추출
+  const watch = { file: null, pos: 0, isResume: false, discoverIv: null };
+  function beginWatch(jsonl, isResume) {
+    watch.file = jsonl; watch.isResume = isResume;
+    try { watch.pos = fs.statSync(jsonl).size; } catch { watch.pos = 0; }
+    fs.watchFile(jsonl, { interval: 1200 }, (curr) => {
+      if (curr.size <= watch.pos) { watch.pos = curr.size; return; }
+      let delta = '';
+      try {
+        const fd = fs.openSync(jsonl, 'r');
+        const len = curr.size - watch.pos;
+        const b = Buffer.alloc(len);
+        fs.readSync(fd, b, 0, len, watch.pos);
+        fs.closeSync(fd);
+        delta = b.toString('utf8');
+      } catch { watch.pos = curr.size; return; }
+      watch.pos = curr.size;
+      if (watch.isResume) safeSend({ type: 'changed' });
+      for (const a of extractArtifacts(delta)) safeSend({ type: 'artifact', path: a.path, tool: a.tool });
     });
   }
-  function unwatch() { if (watchedFile) { try { fs.unwatchFile(watchedFile); } catch {} watchedFile = null; } }
+  function watchSession(cwd, resumeId, profileId) {
+    const dir = path.join(projectsDirFor(profileId), encodeProjectPath(cwd || os.homedir()));
+    if (resumeId) {
+      const jf = path.join(dir, resumeId + '.jsonl');
+      if (fs.existsSync(jf)) beginWatch(jf, true);
+      return;
+    }
+    // 새 대화: 곧 생성될 최신 jsonl 을 탐색해 감시 시작
+    const startT = Date.now();
+    let tries = 0;
+    watch.discoverIv = setInterval(() => {
+      tries++;
+      let newest = null, newestM = 0;
+      try {
+        for (const f of fs.readdirSync(dir)) {
+          if (!f.endsWith('.jsonl')) continue;
+          const s = fs.statSync(path.join(dir, f));
+          if (s.mtimeMs > newestM) { newestM = s.mtimeMs; newest = path.join(dir, f); }
+        }
+      } catch {}
+      if (newest && newestM >= startT - 3000) { clearInterval(watch.discoverIv); watch.discoverIv = null; beginWatch(newest, false); }
+      else if (tries > 15) { clearInterval(watch.discoverIv); watch.discoverIv = null; }
+    }, 800);
+  }
+  function unwatch() {
+    if (watch.file) { try { fs.unwatchFile(watch.file); } catch {} watch.file = null; }
+    if (watch.discoverIv) { clearInterval(watch.discoverIv); watch.discoverIv = null; }
+  }
 
   ws.on('message', (raw) => {
     let msg;

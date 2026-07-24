@@ -81,6 +81,21 @@ ipcMain.handle('pick-folder', async (_e, initial) => {
   return (r.canceled || !r.filePaths[0]) ? null : r.filePaths[0];
 });
 
+// 네이티브 파일 선택 (미리보기용, 절대경로 반환)
+ipcMain.handle('pick-file', async () => {
+  const win = BrowserWindow.getFocusedWindow() || BrowserWindow.getAllWindows()[0];
+  const opts = {
+    title: '미리보기할 파일 선택',
+    properties: ['openFile'],
+    filters: [
+      { name: '미리보기 가능', extensions: ['html', 'htm', 'md', 'txt', 'png', 'jpg', 'jpeg', 'gif', 'svg', 'webp', 'pdf', 'json', 'css', 'js'] },
+      { name: '모든 파일', extensions: ['*'] },
+    ],
+  };
+  const r = win ? await dialog.showOpenDialog(win, opts) : await dialog.showOpenDialog(opts);
+  return (r.canceled || !r.filePaths[0]) ? null : r.filePaths[0];
+});
+
 app.whenReady().then(async () => {
   Menu.setApplicationMenu(null); // Ctrl+W/T/N 등 기본 accelerator 제거 → 키가 터미널로 전달
   const ok = await ensureServer();

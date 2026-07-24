@@ -48,6 +48,9 @@
     .recent-item .rf svg,.fsitem .ico svg,.pane .bar .cwd svg{color:var(--muted)}
     .sesitem .ico svg{color:var(--accent);width:18px;height:18px}
     .pane .bar button svg{width:15px;height:15px}
+    .pane .bar button.artifact{display:inline-flex !important;align-items:center;gap:4px;color:var(--accent);border:1px solid var(--accent);border-radius:10px;font-size:11px;padding:1px 8px;max-width:180px}
+    .pane .bar button.artifact[style*="none"]{display:none !important}
+    .pane .bar button.artifact .alabel{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
     .pane .bar .cwd svg{width:12px;height:12px;vertical-align:-2px}
     .lnb-search{position:relative}
     .lnb-search .search-ico{position:absolute;left:14px;top:50%;transform:translateY(-50%);color:var(--muted);pointer-events:none}
@@ -172,6 +175,7 @@
     <div class="brand">Claude <span>Terminal Hub</span></div>
     <button id="add" class="primary"><span data-icon="plus"></span> 새 세션</button>
     <button id="addWeb" class="ghost" title="웹 미리보기 패널 추가"><span data-icon="globe"></span> 웹 미리보기</button>
+    <button id="addFile" class="ghost" title="로컬 파일 미리보기 (HTML/이미지/MD)"><span data-icon="file"></span> 파일 열기</button>
     <div class="spacer"></div>
     <span class="status" id="status">세션 0</span>
     <button id="themeToggle" class="ghost icon-btn" title="라이트/다크 전환"></button>

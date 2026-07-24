@@ -16,6 +16,8 @@ const ICON = {
   split: ic('<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 12h18"/>'),
   chat: ic('<path d="M21 15a2 2 0 0 1-2 2H8l-5 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>'),
   folder: ic('<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>'),
+  file: ic('<path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6"/>'),
+  eye: ic('<path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/>'),
   external: ic('<path d="M14 3h7v7M10 14 21 3M21 14v5a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h5"/>'),
   back: ic('<path d="M19 12H5M12 19l-7-7 7-7"/>'),
   search: ic('<circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/>'),
@@ -263,6 +265,7 @@ function addPane(cfg, placement) {
       <span class="label" title="${escapeHtml(cfg.cwd)}">
         <span class="ttl">${escapeHtml(title)}</span><span class="cwd">${ICON.folder} ${escapeHtml(shortCwd)}</span>
       </span>
+      <button class="artifact" title="Claude 아티팩트 미리보기" style="display:none"></button>
       <button class="auto" title="새 메시지 자동 새로고침 (유휴 시 자동 반영)">자동</button>
       <button class="reload" title="새로고침 (세션 다시 불러오기)">${ICON.refresh}</button>
       <button class="split" title="아래로 분할">${ICON.split}</button>
@@ -320,6 +323,7 @@ function addPane(cfg, placement) {
   let reloading = false;
   let autoReload = false;
   let lastActivityAt = Date.now();
+  let lastArtifact = null;
   let ws = null;
   const proto = location.protocol === 'https:' ? 'wss' : 'ws';
 
@@ -369,6 +373,7 @@ function addPane(cfg, placement) {
           }
           if (m.type === 'error') { term.write(`\r\n\x1b[31m${m.message}\x1b[0m\r\n`); return; }
           if (m.type === 'changed') { onExternalChange(); return; }
+          if (m.type === 'artifact') { onArtifact(m.path); return; }
         } catch { /* 실제 출력 → write */ }
       }
       term.write(typeof ev.data === 'string' ? ev.data : new Uint8Array(ev.data));
@@ -460,6 +465,17 @@ function addPane(cfg, placement) {
     if (autoReload) pane.classList.remove('has-changes');
   });
 
+  // Claude 아티팩트(만든/본 파일) 감지 → 칩 표시, 클릭 시 옆에 미리보기
+  const artifactBtn = pane.querySelector('.artifact');
+  artifactBtn.addEventListener('click', (e) => { e.stopPropagation(); if (lastArtifact) addFilePreview(lastArtifact, 'column'); });
+  function onArtifact(p) {
+    lastArtifact = p;
+    const base = p.split(/[\\/]/).filter(Boolean).pop() || p;
+    artifactBtn.innerHTML = `${ICON.eye}<span class="alabel">${escapeHtml(base)}</span>`;
+    artifactBtn.title = `미리보기: ${p}`;
+    artifactBtn.style.display = '';
+  }
+
   enablePaneDrag(paneObj, pane.querySelector('.bar'));
 
   ro.observe(termEl);
@@ -482,8 +498,9 @@ function normalizeUrl(u) {
   return u;
 }
 
-function addPreviewPane(url, placement) {
-  url = normalizeUrl(url); // 빈 값이면 '' (빈 패널로 열림)
+function addPreviewPane(url, placement, label) {
+  const isFile = !!label; // 파일 미리보기: label(파일명) 지정, url 은 이미 완성된 /api/file 경로
+  if (!isFile) url = normalizeUrl(url); // 빈 값이면 '' (빈 패널로 열림)
   emptyMsg.style.display = 'none';
 
   let col;
@@ -492,11 +509,11 @@ function addPreviewPane(url, placement) {
 
   const pane = document.createElement('div');
   pane.className = 'pane running';
-  let host = '웹 미리보기'; try { if (url) host = new URL(url).host; } catch {}
+  let host = label || '웹 미리보기'; if (!isFile && url) { try { host = new URL(url).host; } catch {} }
   pane.innerHTML = `
     <div class="bar">
       <span class="dot"></span>
-      <span class="label" title="${escapeHtml(url)}"><span class="ttl">${ICON.globe} ${escapeHtml(host)}</span></span>
+      <span class="label" title="${escapeHtml(isFile ? label : url)}"><span class="ttl">${isFile ? ICON.file : ICON.globe} ${escapeHtml(host)}</span></span>
       <button class="reload" title="새로고침">${ICON.refresh}</button>
       <button class="ext" title="외부 브라우저로 열기">${ICON.external}</button>
       <button class="x" title="닫기">${ICON.x}</button>
@@ -556,6 +573,23 @@ function addPreviewPane(url, placement) {
 
 document.getElementById('addWeb').addEventListener('click', () => {
   addPreviewPane('', 'column'); // URL 은 패널 주소창에서 입력
+});
+
+// 로컬 파일 미리보기 패널 (Claude 산출물/이미지/HTML/MD)
+function addFilePreview(absPath, placement) {
+  if (!absPath) return;
+  const base = absPath.split(/[\\/]/).filter(Boolean).pop() || absPath;
+  addPreviewPane('/api/file?path=' + encodeURIComponent(absPath), placement || 'column', base);
+}
+
+document.getElementById('addFile').addEventListener('click', async () => {
+  if (window.claudeHub && window.claudeHub.pickFile) {
+    const p = await window.claudeHub.pickFile();
+    if (p) addFilePreview(p, 'column');
+  } else {
+    const p = await uiPrompt('미리보기할 파일의 전체 경로', '', '예: C:\\Users\\me\\report.html');
+    if (p && p.trim()) addFilePreview(p.trim(), 'column');
+  }
 });
 
 /* ---------- 드래그 도킹 ---------- */
