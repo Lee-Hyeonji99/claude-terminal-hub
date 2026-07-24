@@ -55,6 +55,7 @@ function createWindow(ready) {
     height: 900,
     backgroundColor: '#0c0e14',
     title: 'Claude Terminal Hub',
+    icon: path.join(__dirname, 'icon.ico'),
     autoHideMenuBar: true,
     webPreferences: { contextIsolation: true, spellcheck: false, preload: path.join(__dirname, 'preload.js') },
   });
