@@ -60,10 +60,12 @@ function createWindow(ready) {
   // 외부 링크는 시스템 기본 브라우저로
   win.webContents.setWindowOpenHandler(({ url }) => { shell.openExternal(url); return { action: 'deny' }; });
 
-  // 실수 새로고침 차단(세션 보존). Ctrl+W 는 건드리지 않음 → 메뉴 없음이라 창 안 닫고 터미널로 전달.
+  // 새로고침 정책: Ctrl+Shift+R = 명시적 앱 새로고침(업데이트 반영). F5/Ctrl+R = 차단(세션 보존, Ctrl+R은 터미널로).
   win.webContents.on('before-input-event', (e, input) => {
+    if (input.type !== 'keyDown') return;
     const k = (input.key || '').toLowerCase();
     const ctrl = input.control || input.meta;
+    if (ctrl && input.shift && k === 'r') { e.preventDefault(); win.webContents.reloadIgnoringCache(); return; }
     if (k === 'f5' || (ctrl && k === 'r')) e.preventDefault();
   });
 

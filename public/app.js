@@ -890,32 +890,34 @@ window.addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(fitA
 setLnb(localStorage.getItem('cth_lnb_collapsed') === '1');
 updateStatus();
 
-// 서버 전역 상태(이름/프로필) 로드 (+ 예전 localStorage 값 1회 마이그레이션)
+// 서버 전역 상태(이름/프로필) 로드 + 예전 localStorage 값을 매 로드마다 서버로 병합
 async function initState() {
   try {
     const s = await fetch('/api/state').then((r) => r.json());
     names = s.names || {};
     if (Array.isArray(s.profiles) && s.profiles.length) profiles = s.profiles;
-
-    // 마이그레이션: 서버가 비어있고 예전 localStorage 값이 있으면 올림
-    let migrated = false;
-    try {
-      const oldNames = JSON.parse(localStorage.getItem('cth_names') || '{}');
-      if (Object.keys(names).length === 0 && Object.keys(oldNames).length) {
-        names = oldNames;
-        Object.entries(oldNames).forEach(([id, name]) => {
-          fetch('/api/name', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, name }) }).catch(() => {});
-        });
-        migrated = true;
-      }
-      const oldProfiles = JSON.parse(localStorage.getItem('cth_profiles') || 'null');
-      if (profiles.length <= 1 && Array.isArray(oldProfiles) && oldProfiles.length > 1) {
-        profiles = oldProfiles;
-        migrated = true;
-      }
-    } catch {}
-    if (migrated) saveProfiles();
   } catch {}
+
+  // 병합 마이그레이션: 이 브라우저 localStorage 의 옛 이름 중 서버에 없는 것을 올림 (매번)
+  try {
+    const oldNames = JSON.parse(localStorage.getItem('cth_names') || '{}');
+    let migratedCount = 0;
+    for (const [id, name] of Object.entries(oldNames)) {
+      if (name && !names[id]) {
+        names[id] = name;
+        fetch('/api/name', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, name }) }).catch(() => {});
+        migratedCount++;
+      }
+    }
+    if (migratedCount) console.log(`[hub] 옛 세션 이름 ${migratedCount}개를 전역 저장소로 병합`);
+    const oldProfiles = JSON.parse(localStorage.getItem('cth_profiles') || 'null');
+    if (Array.isArray(oldProfiles)) {
+      let addedProfile = false;
+      oldProfiles.forEach((op) => { if (op && op.id && op.id !== 'default' && !profiles.find((p) => p.id === op.id)) { profiles.push(op); addedProfile = true; } });
+      if (addedProfile) saveProfiles();
+    }
+  } catch {}
+
   if (!profiles.find((p) => p.id === 'default')) profiles.unshift({ id: 'default', name: '기본' });
   if (!profiles.find((p) => p.id === activeProfileId)) activeProfileId = 'default';
   renderTabs();
