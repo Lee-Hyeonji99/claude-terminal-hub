@@ -91,13 +91,21 @@ app.get('/api/fs/drives', (_req, res) => {
 app.get('/api/fs/pick', (req, res) => {
   if (!IS_WIN) return res.status(400).json({ error: 'OS 폴더 선택기는 Windows 에서만 지원됩니다.' });
   const initial = (req.query.path || '').toString().replace(/'/g, "''"); // PS 문자열 이스케이프
+  // TopMost 이면서 실제로 포커스를 가진 owner 폼을 owner 로 넘겨 다이얼로그를 최상단으로.
   const script = `
 Add-Type -AssemblyName System.Windows.Forms | Out-Null
+Add-Type -AssemblyName System.Drawing | Out-Null
+[System.Windows.Forms.Application]::EnableVisualStyles()
 $owner = New-Object System.Windows.Forms.Form
+$owner.Text = 'Claude Terminal Hub'
 $owner.TopMost = $true
 $owner.ShowInTaskbar = $false
-$owner.Opacity = 0
+$owner.FormBorderStyle = 'FixedToolWindow'
+$owner.Width = 1; $owner.Height = 1
+$owner.StartPosition = 'CenterScreen'
+$owner.Add_Shown({ $owner.Activate(); $owner.BringToFront() })
 $owner.Show() | Out-Null
+[System.Windows.Forms.Application]::DoEvents()
 $dlg = New-Object System.Windows.Forms.FolderBrowserDialog
 $dlg.Description = 'Claude Terminal Hub - 작업 폴더 선택'
 $dlg.ShowNewFolderButton = $true
@@ -106,9 +114,10 @@ $result = $dlg.ShowDialog($owner)
 $owner.Close()
 if ($result -eq [System.Windows.Forms.DialogResult]::OK) { [Console]::Out.Write($dlg.SelectedPath) }
 `;
-  execFile('powershell.exe', ['-NoProfile', '-STA', '-Command', script], { timeout: 180000, windowsHide: true },
+  execFile('powershell.exe', ['-NoProfile', '-STA', '-Command', script], { timeout: 300000, windowsHide: true },
     (err, stdout) => {
       if (err && err.killed) return res.json({ canceled: true, path: '' });
+      if (err && !stdout) return res.json({ error: '선택기 실행 실패: ' + (err.message || 'unknown') });
       const picked = (stdout || '').trim();
       res.json({ path: picked, canceled: !picked });
     });
@@ -230,6 +239,24 @@ app.get('/api/recent', async (req, res) => {
     return { id: s.id, title: meta.summary || meta.title || '(제목 없음)', cwd: meta.cwd || '', mtime: s.mtime, sizeKB: s.sizeKB };
   }));
   res.json({ total: all.length, sessions: sessions.filter((s) => s.cwd) });
+});
+
+// ---- 최근 작업 경로 (distinct cwd, 폴더 선택 추천용) ----
+app.get('/api/recent-paths', async (req, res) => {
+  const limit = Math.min(40, Math.max(1, parseInt(req.query.limit, 10) || 25));
+  const all = listAllSessions(projectsDirFor(req.query.profile)).sort((a, b) => b.mtime - a.mtime);
+  const seen = new Set();
+  const out = [];
+  for (const s of all) {
+    const meta = await getMeta(s.full, s.mtime);
+    const cwd = meta.cwd;
+    if (!cwd || seen.has(cwd)) continue;
+    if (!fs.existsSync(cwd)) continue; // 사라진 폴더는 제외
+    seen.add(cwd);
+    out.push({ path: cwd, mtime: s.mtime });
+    if (out.length >= limit) break;
+  }
+  res.json({ paths: out });
 });
 
 // ---- 세션 검색 (모든 프로젝트, 제목/경로) ----

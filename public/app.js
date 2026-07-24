@@ -646,56 +646,41 @@ function closeOverlay() { overlay.classList.remove('open'); }
 
 async function startNewSession() {
   const defs = await fetch('/api/defaults').then((r) => r.json()).catch(() => ({}));
-  const last = localStorage.getItem('cth_last_path');
-  await loadDrives();
-  await browseTo(last || defs.cwd || defs.home || '');
+  document.getElementById('curPath').value = localStorage.getItem('cth_last_path') || defs.cwd || defs.home || '';
+  document.getElementById('fsnote').textContent = '';
   openOverlay('folder');
+  loadRecentPaths();
 }
 window.startNewSession = startNewSession;
 document.getElementById('add').addEventListener('click', startNewSession);
 
-async function loadDrives() {
-  const box = document.getElementById('drives');
-  const { drives } = await fetch('/api/fs/drives').then((r) => r.json()).catch(() => ({ drives: [] }));
+// 최근 작업 경로 추천 목록
+async function loadRecentPaths() {
+  const box = document.getElementById('recentPaths');
+  box.innerHTML = '<div class="fsnote">불러오는 중…</div>';
+  const res = await fetch(`/api/recent-paths?limit=25&${profileQ()}`).then((r) => r.json()).catch(() => ({ paths: [] }));
   box.innerHTML = '';
-  (drives || []).forEach((d) => {
-    const b = document.createElement('button');
-    b.textContent = d;
-    b.onclick = () => browseTo(d);
-    box.appendChild(b);
-  });
-}
-
-async function browseTo(p) {
-  const res = await fetch(`/api/fs/list?path=${encodeURIComponent(p)}&${profileQ()}`).then((r) => r.json()).catch((e) => ({ error: String(e) }));
-  const list = document.getElementById('fslist');
-  const note = document.getElementById('fsnote');
-  if (res.error) { note.textContent = '⚠ ' + res.error; return; }
-  currentPath = res.path;
-  document.getElementById('curPath').value = res.path;
-  note.textContent = res.hasSessions ? '✓ 이 폴더에 Claude 세션 기록이 있습니다.' : '이 폴더에 저장된 Claude 세션이 없습니다 (새 대화만 가능).';
-  list.innerHTML = '';
-  if (res.parent) {
-    const up = document.createElement('div');
-    up.className = 'fsitem up';
-    up.innerHTML = '<span class="ico">↑</span> .. (상위 폴더)';
-    up.onclick = () => browseTo(res.parent);
-    list.appendChild(up);
+  if (!res.paths || res.paths.length === 0) {
+    box.innerHTML = '<div class="fsnote">최근 작업 경로가 없습니다. 위에 경로를 직접 입력하거나 🗂 폴더 선택기를 쓰세요.</div>';
+    return;
   }
-  if (res.dirs.length === 0) {
-    const e = document.createElement('div'); e.className = 'fsnote'; e.textContent = '하위 폴더 없음';
-    list.appendChild(e);
-  }
-  res.dirs.forEach((name) => {
+  res.paths.forEach((p) => {
+    const folder = p.path.split(/[\\/]/).filter(Boolean).pop() || p.path;
     const it = document.createElement('div');
     it.className = 'fsitem';
-    it.innerHTML = `<span class="ico">📁</span> ${escapeHtml(name)}`;
-    it.onclick = () => browseTo(joinPath(res.path, name));
-    list.appendChild(it);
+    it.title = p.path;
+    it.innerHTML = `
+      <span class="ico">📁</span>
+      <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
+        <b>${escapeHtml(folder)}</b> <span style="color:var(--muted);font-size:11px">${escapeHtml(p.path)}</span>
+      </span>
+      <span style="color:var(--muted);font-size:11px;flex:none">${relTime(p.mtime)}</span>`;
+    it.onclick = () => { document.getElementById('curPath').value = p.path; choosePath(p.path); };
+    box.appendChild(it);
   });
 }
 
-// 경로 "선택 확정" → 검증 후 세션 목록으로 (별도 이동 불필요)
+// 경로 "선택 확정" → 검증 후 세션 목록으로
 async function choosePath(p) {
   p = (p || '').trim();
   if (!p) return;
@@ -705,25 +690,29 @@ async function choosePath(p) {
   openSessionPicker(res.path);
 }
 
-document.getElementById('goPath').addEventListener('click', () => browseTo(document.getElementById('curPath').value.trim()));
 document.getElementById('curPath').addEventListener('keydown', (e) => { if (e.key === 'Enter') choosePath(e.target.value); });
 document.getElementById('pickHere').addEventListener('click', () => choosePath(document.getElementById('curPath').value));
-document.getElementById('changeFolder').addEventListener('click', () => openOverlay('folder'));
+document.getElementById('changeFolder').addEventListener('click', () => { openOverlay('folder'); loadRecentPaths(); });
 
 document.getElementById('osPick').addEventListener('click', async () => {
   const btn = document.getElementById('osPick');
   const orig = btn.textContent;
+  const note = document.getElementById('fsnote');
   btn.disabled = true; btn.textContent = '선택기 여는 중…';
+  // 다이얼로그가 다른 창 뒤에 뜰 수 있으니 안내
+  const hint = setTimeout(() => { note.textContent = '💡 폴더 선택 창이 안 보이면 다른 창/작업표시줄 뒤를 확인하세요.'; }, 1500);
   const cur = document.getElementById('curPath').value.trim();
   try {
     const res = await fetch(`/api/fs/pick?path=${encodeURIComponent(cur)}`).then((r) => r.json());
-    if (res.error) { document.getElementById('fsnote').textContent = '⚠ ' + res.error; return; }
-    if (res.canceled || !res.path) return;
+    if (res.error) { note.textContent = '⚠ ' + res.error; return; }
+    if (res.canceled || !res.path) { note.textContent = ''; return; }
+    note.textContent = '';
     document.getElementById('curPath').value = res.path;
     choosePath(res.path);
   } catch (e) {
-    document.getElementById('fsnote').textContent = '⚠ OS 선택기 호출 실패: ' + e.message;
+    note.textContent = '⚠ OS 선택기 호출 실패: ' + e.message;
   } finally {
+    clearTimeout(hint);
     btn.disabled = false; btn.textContent = orig;
   }
 });

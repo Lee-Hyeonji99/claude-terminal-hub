@@ -200,13 +200,12 @@
         <button class="ghost" data-close>✕</button>
       </div>
       <div class="mbody">
-        <label style="display:block;color:var(--muted);font-size:12px;margin-bottom:5px">경로 붙여넣기 — 붙여넣고 바로 아래 <b>“이 폴더 선택”</b> (또는 아래 목록에서 탐색)</label>
+        <label style="display:block;color:var(--muted);font-size:12px;margin-bottom:5px">작업 폴더를 직접 입력(붙여넣고 Enter)하거나, 아래 최근 경로에서 고르세요. 새 폴더 생성은 상단 <b>🗂 Windows 폴더 선택기</b>.</label>
         <div class="pathbar">
-          <input type="text" id="curPath" spellcheck="false" placeholder="예: C:\projects\my-project" />
-          <button id="goPath" title="이 경로의 하위 폴더 보기">목록 보기</button>
+          <input type="text" id="curPath" spellcheck="false" placeholder="예: C:\projects\my-project — 붙여넣고 Enter" />
         </div>
-        <div class="drives" id="drives"></div>
-        <div class="fslist" id="fslist"></div>
+        <div style="color:var(--muted);font-size:12px;margin:10px 2px 4px">최근 작업 경로</div>
+        <div class="fslist" id="recentPaths"></div>
         <div class="fsnote" id="fsnote"></div>
       </div>
       <div class="mfoot">
