@@ -85,6 +85,27 @@ const wsStash = document.createElement('div');
 wsStash.style.display = 'none';
 document.body.appendChild(wsStash);
 const profileQ = () => `profile=${encodeURIComponent(activeProfileId)}`;
+// LNB(최근/검색)에서 "모든 계정" 보기 토글 — 켜면 모든 프로필 세션을 함께 나열
+let lnbAllProfiles = localStorage.getItem('cth_lnb_all_profiles') === '1';
+const lnbProfileQ = () => (lnbAllProfiles ? 'profile=__all__' : profileQ());
+function profileName(id) { const p = profiles.find((x) => x.id === id); return p ? p.name : (id || '기본'); }
+
+// 세션 열기: 다른 계정 소속이면 그 계정 탭으로 전환 후 열기(원 계정으로 이어가기 = 방식 A)
+function openSession(s, placement) {
+  if (s.profile && s.profile !== activeProfileId && profiles.find((p) => p.id === s.profile)) switchProfile(s.profile);
+  addPane({ cwd: s.cwd, resumeId: s.id, title: s.title, profile: s.profile || activeProfileId }, placement || 'column');
+}
+
+// 다른 계정 대화를 현재 활성 계정으로 복사해서 이어가기(방식 B). 원본은 그대로 유지.
+async function continueHere(s) {
+  const target = activeProfileId;
+  const r = await fetch('/api/session/copy', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ id: s.id, cwd: s.cwd, fromProfile: s.profile || 'default', toProfile: target }),
+  }).then((x) => x.json()).catch(() => ({ error: '요청 실패' }));
+  if (!r || r.error) { await uiConfirm((r && r.error) || '복사에 실패했습니다.', '이어가기 실패'); return; }
+  addPane({ cwd: s.cwd, resumeId: s.id, title: s.title, profile: target }, 'column');
+}
 
 function paneCountOf(id) {
   const cols = id === activeProfileId ? columns : ((profileWorkspaces[id] && profileWorkspaces[id].columns) || []);
@@ -926,29 +947,33 @@ function renderSessionList(sessions, emptyMsg) {
   }
   sessions.forEach((s) => {
     const folder = s.cwd.split(/[\\/]/).filter(Boolean).pop() || s.cwd;
+    const other = s.profile && s.profile !== activeProfileId; // 다른 계정 소속 세션
     const it = document.createElement('div');
     it.className = 'recent-item';
-    it.title = `${s.title}\n${s.cwd}\n클릭 = 새 패널로 열기`;
+    it.title = `${s.title}\n${s.cwd}` + (other ? `\n계정: ${profileName(s.profile)}` : '') + `\n클릭 = 열기`;
     it.innerHTML = `
       <div class="rt">${ICON.chat}<span>${escapeHtml(s.title)}</span></div>
       <div class="rf">${ICON.folder}<span>${escapeHtml(folder)}</span></div>
-      <div class="rs">${relTime(s.mtime)}</div>`;
-    it.onclick = () => addPane({ cwd: s.cwd, resumeId: s.id, title: s.title }, 'column');
+      <div class="rs">${relTime(s.mtime)}${other ? ` · <span class="rprof">${escapeHtml(profileName(s.profile))}</span>` : ''}</div>
+      ${other ? `<button class="rcont" title="이 대화를 현재 계정(${escapeHtml(profileName(activeProfileId))})으로 복사해 이어가기">${escapeHtml(profileName(activeProfileId))} 계정으로 이어가기</button>` : ''}`;
+    it.onclick = () => openSession(s);
+    const cont = it.querySelector('.rcont');
+    if (cont) cont.addEventListener('click', (e) => { e.stopPropagation(); continueHere(s); });
     box.appendChild(it);
   });
 }
 
 async function loadRecent() {
-  document.getElementById('lnbTitle').textContent = '최근 세션';
+  document.getElementById('lnbTitle').textContent = lnbAllProfiles ? '최근 세션 · 모든 계정' : '최근 세션';
   document.getElementById('recentList').innerHTML = '<div class="recent-empty">불러오는 중…</div>';
-  const res = await fetch(`/api/recent?limit=15&${profileQ()}`).then((r) => r.json()).catch(() => ({ sessions: [] }));
-  renderSessionList(res.sessions, '최근 세션이 없습니다.');
+  const res = await fetch(`/api/recent?limit=${lnbAllProfiles ? 40 : 15}&${lnbProfileQ()}`).then((r) => r.json()).catch(() => ({ sessions: [] }));
+  renderSessionList(res.sessions, lnbAllProfiles ? '세션이 없습니다.' : '최근 세션이 없습니다.');
 }
 
 async function searchSessions(q) {
   document.getElementById('lnbTitle').textContent = '검색 중…';
   document.getElementById('recentList').innerHTML = '<div class="recent-empty">검색 중…</div>';
-  const res = await fetch(`/api/search?q=${encodeURIComponent(q)}&limit=60&${profileQ()}`).then((r) => r.json()).catch(() => ({ sessions: [] }));
+  const res = await fetch(`/api/search?q=${encodeURIComponent(q)}&limit=60&${lnbProfileQ()}`).then((r) => r.json()).catch(() => ({ sessions: [] }));
   document.getElementById('lnbTitle').textContent = `검색 결과 (${res.sessions.length})`;
   renderSessionList(res.sessions, `"${q}" 와 일치하는 세션이 없습니다.`);
 }
@@ -981,6 +1006,15 @@ document.getElementById('lnbToggle').addEventListener('click', () => {
   setLnb(!document.body.classList.contains('lnb-collapsed'));
 });
 document.getElementById('lnbRefresh').addEventListener('click', refreshLnb);
+function setLnbAll(on) {
+  lnbAllProfiles = on;
+  localStorage.setItem('cth_lnb_all_profiles', on ? '1' : '0');
+  const b = document.getElementById('lnbAllToggle');
+  if (b) b.classList.toggle('on', on);
+  refreshLnb();
+}
+document.getElementById('lnbAllToggle').addEventListener('click', () => setLnbAll(!lnbAllProfiles));
+document.getElementById('lnbAllToggle').classList.toggle('on', lnbAllProfiles);
 document.getElementById('addProfile').addEventListener('click', addProfile);
 document.querySelectorAll('#themePopover .popover-item').forEach((el) => {
   el.addEventListener('click', () => { applyTheme(el.dataset.theme); closePopovers(); });

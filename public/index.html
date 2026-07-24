@@ -119,7 +119,14 @@
     .recent-item .rt svg,.recent-item .rf svg{flex:none}
     .recent-item .rt span,.recent-item .rf span{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
     .recent-item .rs{color:var(--muted);font-size:10px;margin-top:2px}
+    .recent-item .rs .rprof{color:var(--accent)}
+    .recent-item .rcont{display:block;width:100%;margin-top:6px;padding:4px 8px;font-size:11px;color:var(--accent);background:transparent;border:1px solid var(--accent);border-radius:6px;cursor:pointer}
+    .recent-item .rcont:hover{background:var(--accent);color:#fff}
     .recent-empty{color:var(--muted);font-size:12px;padding:14px;text-align:center}
+    .lnb-head-btns{display:flex;align-items:center;gap:4px;flex:none}
+    .lnb-alltoggle{font-size:10px;color:var(--muted);background:transparent;border:1px solid var(--border);border-radius:10px;padding:2px 8px;cursor:pointer;white-space:nowrap}
+    .lnb-alltoggle:hover{color:var(--text)}
+    .lnb-alltoggle.on{color:var(--accent);border-color:var(--accent)}
     #stage{flex:1;position:relative;display:flex;min-height:0;overflow:hidden}
     .column{display:flex;flex-direction:column;min-width:0;min-height:0;height:100%}
     .pane{display:flex;flex-direction:column;min-height:0;min-width:0;background:var(--panel);border:1px solid var(--border);border-radius:8px;overflow:hidden;margin:4px}
@@ -262,7 +269,10 @@
     <aside id="lnb">
       <div class="lnb-head">
         <span id="lnbTitle">최근 세션</span>
-        <button id="lnbRefresh" class="ghost icon-btn" title="새로고침"><span data-icon="refresh"></span></button>
+        <div class="lnb-head-btns">
+          <button id="lnbAllToggle" class="lnb-alltoggle" title="모든 계정의 세션을 함께 보기 (다른 계정 대화 이어가기)">모든 계정</button>
+          <button id="lnbRefresh" class="ghost icon-btn" title="새로고침"><span data-icon="refresh"></span></button>
+        </div>
       </div>
       <div class="lnb-search">
         <span class="search-ico" data-icon="search"></span>

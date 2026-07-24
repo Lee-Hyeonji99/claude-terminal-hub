@@ -43,6 +43,27 @@ function accountFileFor(profileId) {
   return cfg ? path.join(cfg, '.claude.json') : path.join(os.homedir(), '.claude.json');
 }
 
+// 모든 프로필 id (state.json 의 profiles + 항상 'default')
+function allProfileIds() {
+  const s = readState();
+  const ids = ['default'];
+  if (Array.isArray(s.profiles)) for (const p of s.profiles) if (p && p.id && !ids.includes(p.id)) ids.push(p.id);
+  return ids;
+}
+// profile 파라미터 해석: '__all__' 이면 모든 프로필, 아니면 단일 → [{id, dir}]
+function resolveProfileScope(profileParam) {
+  if (profileParam === '__all__') return allProfileIds().map((id) => ({ id, dir: projectsDirFor(id) }));
+  return [{ id: profileParam || 'default', dir: projectsDirFor(profileParam) }];
+}
+// 여러 프로필의 세션을 profile 태그와 함께 수집(최신순)
+function listSessionsScoped(profileParam) {
+  const all = [];
+  for (const sc of resolveProfileScope(profileParam)) {
+    for (const s of listAllSessions(sc.dir)) { s.profile = sc.id; all.push(s); }
+  }
+  return all.sort((a, b) => b.mtime - a.mtime);
+}
+
 const app = express();
 app.use(express.json({ limit: '256kb' }));
 
@@ -288,11 +309,11 @@ function listAllSessions(projectsDir) {
 // ---- 최근 세션 (모든 프로젝트 통합, LNB 추천용) ----
 app.get('/api/recent', async (req, res) => {
   const limit = Math.min(30, Math.max(1, parseInt(req.query.limit, 10) || 12));
-  const all = listAllSessions(projectsDirFor(req.query.profile)).sort((a, b) => b.mtime - a.mtime);
+  const all = listSessionsScoped(req.query.profile);
   const top = all.slice(0, limit);
   const sessions = await Promise.all(top.map(async (s) => {
     const meta = await getMeta(s.full, s.mtime);
-    return { id: s.id, title: bestTitle(meta), cwd: meta.cwd || '', mtime: s.mtime, sizeKB: s.sizeKB };
+    return { id: s.id, title: bestTitle(meta), cwd: meta.cwd || '', mtime: s.mtime, sizeKB: s.sizeKB, profile: s.profile };
   }));
   res.json({ total: all.length, sessions: sessions.filter((s) => s.cwd) });
 });
@@ -320,7 +341,7 @@ app.get('/api/search', async (req, res) => {
   const q = (req.query.q || '').toString().trim().toLowerCase();
   const limit = Math.min(100, Math.max(1, parseInt(req.query.limit, 10) || 50));
   if (!q) return res.json({ sessions: [], total: 0 });
-  const all = listAllSessions(projectsDirFor(req.query.profile)).sort((a, b) => b.mtime - a.mtime);
+  const all = listSessionsScoped(req.query.profile);
   const out = [];
   for (const s of all) {
     const meta = await getMeta(s.full, s.mtime);
@@ -328,7 +349,7 @@ app.get('/api/search', async (req, res) => {
     const cwd = meta.cwd || '';
     if (!cwd) continue;
     if (title.toLowerCase().includes(q) || cwd.toLowerCase().includes(q)) {
-      out.push({ id: s.id, title: title || '(제목 없음)', cwd, mtime: s.mtime, sizeKB: s.sizeKB });
+      out.push({ id: s.id, title: title || '(제목 없음)', cwd, mtime: s.mtime, sizeKB: s.sizeKB, profile: s.profile });
       if (out.length >= limit) break;
     }
   }
@@ -363,6 +384,33 @@ app.get('/api/sessions', async (req, res) => {
     };
   }));
   res.json({ path: target, encoded: encodeProjectPath(target), total: withStat.length, sessions });
+});
+
+// ---- 세션 트랜스크립트를 다른 프로필로 복사 (계정 간 이어가기) ----
+// 대화 .jsonl 은 재생 파일이라 대상 프로필로 복사만 하면 해당 계정으로 resume 가능.
+// 원본 유지 정책: 원본은 남기고, 대상에 이미 같은 id 가 있으면 덮어쓰지 않는다.
+app.post('/api/session/copy', (req, res) => {
+  const b = req.body || {};
+  const id = (b.id || '').toString();
+  const cwd = (b.cwd || '').toString();
+  const fromProfile = (b.fromProfile || 'default').toString();
+  const toProfile = (b.toProfile || 'default').toString();
+  if (!id || !cwd) return res.status(400).json({ error: 'id, cwd 필요' });
+  if (!/^[a-zA-Z0-9_.-]+$/.test(id)) return res.status(400).json({ error: '잘못된 세션 id' });
+  const enc = encodeProjectPath(cwd);
+  const src = path.join(projectsDirFor(fromProfile), enc, id + '.jsonl');
+  const dstDir = path.join(projectsDirFor(toProfile), enc);
+  const dst = path.join(dstDir, id + '.jsonl');
+  if (!fs.existsSync(src)) return res.status(404).json({ error: '원본 세션을 찾을 수 없습니다.' });
+  if (path.resolve(src) === path.resolve(dst)) return res.json({ ok: true, already: true, id, cwd, profile: toProfile });
+  try {
+    fs.mkdirSync(dstDir, { recursive: true });
+    const exists = fs.existsSync(dst);
+    if (!exists) fs.copyFileSync(src, dst); // 원본 유지: 이미 있으면 그대로 이어감
+    res.json({ ok: true, copied: !exists, already: exists, id, cwd, profile: toProfile });
+  } catch (e) {
+    res.status(500).json({ error: '복사 실패: ' + (e.message || 'unknown') });
+  }
 });
 
 // ---- 로컬 파일 미리보기 서빙 + 아티팩트 판별 ----
