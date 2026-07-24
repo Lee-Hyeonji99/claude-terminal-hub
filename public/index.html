@@ -94,7 +94,6 @@
     header button,#tabs button,.sesactions button,#pickHere,.mhead button,#changeFolder{display:inline-flex;align-items:center;gap:6px}
     button [data-icon]{pointer-events:none}
     .icon-btn{padding:6px 8px !important;line-height:0}
-    .recent-item .rt svg,.recent-item .rf svg{vertical-align:-3px;margin-right:2px}
     .recent-item .rf svg,.fsitem .ico svg,.pane .bar .cwd svg{color:var(--muted)}
     .sesitem .ico svg{color:var(--accent);width:18px;height:18px}
     .pane .bar button svg{width:15px;height:15px}
@@ -104,7 +103,6 @@
     .pane .bar .cwd svg{width:12px;height:12px;vertical-align:-2px}
     .lnb-search{position:relative}
     .lnb-search .search-ico{position:absolute;left:14px;top:50%;transform:translateY(-50%);color:var(--muted);pointer-events:none}
-    .lnb-search input{padding-left:30px}
 
     #tabs{display:flex;align-items:center;gap:4px;padding:4px 8px;background:var(--bg);border-bottom:1px solid var(--border);flex:none;overflow-x:auto}
     #tabList{display:flex;gap:4px}
@@ -119,15 +117,17 @@
     body.lnb-collapsed #lnb{width:0;border-right:none;overflow:hidden}
     #lnb .lnb-head{display:flex;align-items:center;justify-content:space-between;padding:10px 12px;border-bottom:1px solid var(--border);font-weight:600;font-size:12px;color:var(--muted);white-space:nowrap}
     .lnb-search{display:flex;gap:4px;padding:6px 8px;border-bottom:1px solid var(--border)}
-    .lnb-search input{flex:1;font-size:12px;padding:5px 8px}
+    .lnb-search input{flex:1;font-size:12px;padding:5px 8px 5px 30px}
     .lnb-search button{padding:4px 8px}
     .recent-list{flex:1;overflow:auto;padding:6px}
     .recent-item .rename{float:right;color:var(--muted);font-size:12px;padding:0 4px;border:none;background:transparent}
     .recent-item .rename:hover{color:var(--accent)}
     .recent-item{padding:8px 10px;border-radius:7px;cursor:pointer;border:1px solid transparent;margin-bottom:4px}
     .recent-item:hover{background:var(--head);border-color:var(--border)}
-    .recent-item .rt{color:var(--text);font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-    .recent-item .rf{color:var(--accent);font-size:11px;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .recent-item .rt{display:flex;align-items:center;gap:4px;color:var(--text);font-size:12px}
+    .recent-item .rf{display:flex;align-items:center;gap:4px;color:var(--accent);font-size:11px;margin-top:3px}
+    .recent-item .rt svg,.recent-item .rf svg{flex:none}
+    .recent-item .rt span,.recent-item .rf span{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
     .recent-item .rs{color:var(--muted);font-size:10px;margin-top:2px}
     .recent-empty{color:var(--muted);font-size:12px;padding:14px;text-align:center}
     #stage{flex:1;position:relative;display:flex;min-height:0;overflow:hidden}
@@ -293,13 +293,13 @@
     <div class="modal" id="folderModal" style="display:none">
       <div class="mhead">
         <h2>작업 폴더 선택</h2>
-        <button id="osPick" class="primary"><span data-icon="folder"></span> Windows 폴더 선택기</button>
         <button class="ghost icon-btn" data-close><span data-icon="x"></span></button>
       </div>
       <div class="mbody">
-        <label style="display:block;color:var(--muted);font-size:12px;margin-bottom:5px">작업 폴더를 직접 입력(붙여넣고 Enter)하거나, 아래 최근 경로에서 고르세요. 새 폴더 생성은 상단 <b>Windows 폴더 선택기</b>.</label>
+        <label style="display:block;color:var(--muted);font-size:12px;margin-bottom:5px">작업 폴더를 직접 입력(붙여넣고 Enter)하거나, 아래 최근 경로에서 고르세요. 새 폴더 생성은 오른쪽 <b>폴더 선택기</b>.</label>
         <div class="pathbar">
           <input type="text" id="curPath" spellcheck="false" placeholder="예: C:\projects\my-project — 붙여넣고 Enter" />
+          <button id="osPick" class="primary" title="Windows 폴더 선택기"><span data-icon="folder"></span> 선택기</button>
         </div>
         <div style="color:var(--muted);font-size:12px;margin:10px 2px 4px">최근 작업 경로</div>
         <div class="fslist" id="recentPaths"></div>
@@ -317,7 +317,6 @@
       <div class="mbody">
         <div class="seshead">
           <div class="cwd" id="sesCwd"></div>
-          <button class="ghost" id="changeFolder"><span data-icon="back"></span> 폴더 변경</button>
         </div>
         <div class="placement">
           <span style="color:var(--muted);font-size:12px;align-self:center">열기 위치:</span>
@@ -332,7 +331,10 @@
         <div class="seslist" id="seslist"></div>
         <div class="hint">세션을 클릭하면 <code>claude --resume &lt;id&gt;</code> 로 그 대화를 이어서 엽니다.</div>
       </div>
-      <div class="mfoot"><button data-close>닫기</button></div>
+      <div class="mfoot">
+        <button id="changeFolder"><span data-icon="back"></span> 이전</button>
+        <button data-close>닫기</button>
+      </div>
     </div>
     <!-- (end session modal) -->
   </div>

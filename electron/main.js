@@ -11,6 +11,11 @@ const http = require('http');
 const path = require('path');
 const { spawn } = require('child_process');
 
+// Windows 작업표시줄/Alt-Tab이 패키징 안 된 electron.exe 자체 정체성("Electron")으로
+// 뜨는 걸 막기 위해 앱 고유 이름/AppUserModelID를 지정
+app.setName('Claude Terminal Hub');
+if (process.platform === 'win32') app.setAppUserModelId('com.claude-terminal-hub.app');
+
 const PORT = Number(process.env.CLAUDE_HUB_PORT || 4778);
 const URL = `http://localhost:${PORT}`;
 const ROOT = path.join(__dirname, '..');

@@ -904,8 +904,8 @@ function renderSessionList(sessions, emptyMsg) {
     it.className = 'recent-item';
     it.title = `${s.title}\n${s.cwd}\n클릭 = 새 패널로 열기`;
     it.innerHTML = `
-      <div class="rt">${ICON.chat} ${escapeHtml(s.title)}</div>
-      <div class="rf">${ICON.folder} ${escapeHtml(folder)}</div>
+      <div class="rt">${ICON.chat}<span>${escapeHtml(s.title)}</span></div>
+      <div class="rf">${ICON.folder}<span>${escapeHtml(folder)}</span></div>
       <div class="rs">${relTime(s.mtime)}</div>`;
     it.onclick = () => addPane({ cwd: s.cwd, resumeId: s.id, title: s.title }, 'column');
     box.appendChild(it);
@@ -971,6 +971,11 @@ window.addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(fitA
 hydrateIcons();
 setLnb(localStorage.getItem('cth_lnb_collapsed') === '1');
 updateStatus();
+
+fetch('/health').then((r) => r.json()).then((d) => {
+  const brand = document.querySelector('.brand');
+  if (brand && d.version) brand.title = `v${d.version}`;
+}).catch(() => {});
 
 // 서버 전역 상태(프로필) 로드
 async function initState() {

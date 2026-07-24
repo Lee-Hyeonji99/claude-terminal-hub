@@ -68,8 +68,9 @@ app.use('/vendor/addon-fit', express.static(path.join(__dirname, 'node_modules/@
 app.use('/vendor/addon-canvas', express.static(path.join(__dirname, 'node_modules/@xterm/addon-canvas')));
 app.use('/vendor/split', express.static(path.join(__dirname, 'node_modules/split.js/dist')));
 
+const { version: APP_VERSION } = require('./package.json');
 app.get('/health', (_req, res) => {
-  res.json({ ok: true, name: 'claude-terminal-hub', pid: process.pid, platform: process.platform });
+  res.json({ ok: true, name: 'claude-terminal-hub', version: APP_VERSION, pid: process.pid, platform: process.platform });
 });
 
 app.get('/api/defaults', (_req, res) => {

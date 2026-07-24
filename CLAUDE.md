@@ -36,3 +36,13 @@ UI/서버 변경 후 가능하면 실제로 확인한다.
 - 세션 커스텀 이름/프로필: 서버 전역 파일 `~/.claude-terminal-hub/state.json` (localStorage 아님).
 - 세션 제목 우선순위: Claude `/rename`(custom-title) > ai-title > 첫 메시지.
 - 프로필별 계정 분리: `CLAUDE_CONFIG_DIR = ~/.claude-hub-profiles/<id>`.
+
+## 5) 버전 관리
+
+의미 있는 변경(기능 추가/버그 수정 묶음)마다 `package.json` 버전을 올리고 태그를 남긴다.
+
+- 절차: `npm version patch|minor|major -m "vX.Y.Z: 간단 요약"` → package.json 버전 bump + 커밋 + `vX.Y.Z` 태그 자동 생성.
+  - patch: 버그 수정만 / minor: 기능 추가 / major: 호환 깨지는 큰 변경(개인 도구라 사실상 안 씀).
+- 반영: `git push && git push --tags`.
+- 같이 `CHANGELOG.md`에 Added/Fixed 항목 기록(한국어, Keep a Changelog 형식).
+- 실행 중인 서버 버전 확인: `curl http://localhost:4778/health` (`version` 필드) — 앱 헤더 로고에 마우스 올려도 툴팁으로 표시됨.
