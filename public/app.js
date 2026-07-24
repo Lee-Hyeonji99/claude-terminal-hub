@@ -22,12 +22,12 @@ let columnSplit = null;
 let activePane = null;
 
 /* ---------- 계정 프로필 / 탭 ---------- */
-function loadProfiles() { try { return JSON.parse(localStorage.getItem('cth_profiles')) || null; } catch { return null; } }
-let profiles = loadProfiles() || [{ id: 'default', name: '기본' }];
-if (!profiles.find((p) => p.id === 'default')) profiles.unshift({ id: 'default', name: '기본' });
-function saveProfiles() { localStorage.setItem('cth_profiles', JSON.stringify(profiles)); }
+let profiles = [{ id: 'default', name: '기본' }]; // 서버 /api/state 에서 로드됨
+let names = {}; // 세션 커스텀 이름 (서버 전역 저장)
+function saveProfiles() {
+  fetch('/api/profiles', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ profiles }) }).catch(() => {});
+}
 let activeProfileId = localStorage.getItem('cth_active_profile') || 'default';
-if (!profiles.find((p) => p.id === activeProfileId)) activeProfileId = 'default';
 const profileWorkspaces = {}; // id -> { columns, activePane }
 const accountCache = {}; // id -> 계정 라벨 (탭 호버 툴팁)
 function fetchAccount(id) {
@@ -785,14 +785,13 @@ function relTime(ms) {
   return new Date(ms).toLocaleDateString('ko-KR');
 }
 
-/* ---------- 세션 커스텀 이름 (localStorage, resumeId 기준) ---------- */
-function getNames() { try { return JSON.parse(localStorage.getItem('cth_names')) || {}; } catch { return {}; } }
-function getName(id) { return id ? (getNames()[id] || null) : null; }
+/* ---------- 세션 커스텀 이름 (서버 전역 저장, resumeId 기준) ---------- */
+function getName(id) { return id ? (names[id] || null) : null; }
 function setName(id, name) {
   if (!id) return;
-  const m = getNames();
-  if (name && name.trim()) m[id] = name.trim(); else delete m[id];
-  localStorage.setItem('cth_names', JSON.stringify(m));
+  const v = (name || '').trim();
+  if (v) names[id] = v; else delete names[id];
+  fetch('/api/name', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, name: v }) }).catch(() => {});
 }
 
 /* ---------- LNB (최근 세션 + 전체 검색) ---------- */
@@ -889,8 +888,39 @@ let rt;
 window.addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(fitAll, 120); });
 
 setLnb(localStorage.getItem('cth_lnb_collapsed') === '1');
-renderTabs();
-loadRecent();
 updateStatus();
+
+// 서버 전역 상태(이름/프로필) 로드 (+ 예전 localStorage 값 1회 마이그레이션)
+async function initState() {
+  try {
+    const s = await fetch('/api/state').then((r) => r.json());
+    names = s.names || {};
+    if (Array.isArray(s.profiles) && s.profiles.length) profiles = s.profiles;
+
+    // 마이그레이션: 서버가 비어있고 예전 localStorage 값이 있으면 올림
+    let migrated = false;
+    try {
+      const oldNames = JSON.parse(localStorage.getItem('cth_names') || '{}');
+      if (Object.keys(names).length === 0 && Object.keys(oldNames).length) {
+        names = oldNames;
+        Object.entries(oldNames).forEach(([id, name]) => {
+          fetch('/api/name', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, name }) }).catch(() => {});
+        });
+        migrated = true;
+      }
+      const oldProfiles = JSON.parse(localStorage.getItem('cth_profiles') || 'null');
+      if (profiles.length <= 1 && Array.isArray(oldProfiles) && oldProfiles.length > 1) {
+        profiles = oldProfiles;
+        migrated = true;
+      }
+    } catch {}
+    if (migrated) saveProfiles();
+  } catch {}
+  if (!profiles.find((p) => p.id === 'default')) profiles.unshift({ id: 'default', name: '기본' });
+  if (!profiles.find((p) => p.id === activeProfileId)) activeProfileId = 'default';
+  renderTabs();
+  loadRecent();
+}
+initState();
 // 로드 시 모달을 자동으로 열지 않는다 — 모달이 LNB(최근 세션) 클릭을 가리기 때문.
 // 사용자가 좌측 최근 세션을 클릭하거나 "＋ 새 세션"을 눌러 시작한다.

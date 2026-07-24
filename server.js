@@ -44,6 +44,20 @@ function accountFileFor(profileId) {
 }
 
 const app = express();
+app.use(express.json({ limit: '256kb' }));
+
+// ---- 전역 상태(세션 이름/프로필) — 앱 전용 폴더에 저장(브라우저·계정 무관) ----
+const HUB_DATA_DIR = path.join(os.homedir(), '.claude-terminal-hub');
+const STATE_FILE = path.join(HUB_DATA_DIR, 'state.json');
+function readState() {
+  try { return JSON.parse(fs.readFileSync(STATE_FILE, 'utf8')); } catch { return {}; }
+}
+function writeState(s) {
+  try {
+    fs.mkdirSync(HUB_DATA_DIR, { recursive: true });
+    fs.writeFileSync(STATE_FILE, JSON.stringify(s, null, 2));
+  } catch (e) { console.error('state 저장 실패:', e.message); }
+}
 
 app.use(express.static(path.join(__dirname, 'public'), {
   etag: false,
@@ -59,6 +73,26 @@ app.get('/health', (_req, res) => {
 
 app.get('/api/defaults', (_req, res) => {
   res.json({ home: os.homedir(), cwd: process.cwd(), sep: path.sep });
+});
+
+// 전역 상태 조회/저장 (세션 커스텀 이름 + 프로필)
+app.get('/api/state', (_req, res) => {
+  const s = readState();
+  res.json({ names: s.names || {}, profiles: (s.profiles && s.profiles.length) ? s.profiles : [{ id: 'default', name: '기본' }] });
+});
+app.post('/api/name', (req, res) => {
+  const { id, name } = req.body || {};
+  if (!id) return res.status(400).json({ error: 'id 필요' });
+  const s = readState(); s.names = s.names || {};
+  if (name && String(name).trim()) s.names[id] = String(name).trim(); else delete s.names[id];
+  writeState(s);
+  res.json({ ok: true });
+});
+app.post('/api/profiles', (req, res) => {
+  const { profiles } = req.body || {};
+  if (!Array.isArray(profiles)) return res.status(400).json({ error: 'profiles 배열 필요' });
+  const s = readState(); s.profiles = profiles; writeState(s);
+  res.json({ ok: true });
 });
 
 // 프로필(계정) 로그인 정보 — .claude.json 의 oauthAccount
