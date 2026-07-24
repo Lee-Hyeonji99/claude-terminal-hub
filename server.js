@@ -193,27 +193,42 @@ function encodeProjectPath(p) {
   return p.replace(/[^a-zA-Z0-9]/g, '-');
 }
 
-function readSessionMeta(file) {
-  // 파일 앞부분만 스트리밍으로 읽어 제목/요약을 추출 (대용량 대비 early-exit)
-  return new Promise((resolve) => {
-    const meta = { title: null, summary: null, cwd: null };
-    let lines = 0;
-    let stream;
-    try {
-      stream = fs.createReadStream(file, { encoding: 'utf8' });
-    } catch {
-      return resolve(meta);
+// 파일 끝부분(N바이트)에서 마지막 custom-title / ai-title 를 찾는다 (제목은 세션 진행 중 갱신되어 끝에 최신값).
+function readTitlesFromTail(file, size) {
+  const meta = { customTitle: null, aiTitle: null };
+  try {
+    const bytes = Math.min(size, 96 * 1024);
+    const fd = fs.openSync(file, 'r');
+    const buf = Buffer.alloc(bytes);
+    fs.readSync(fd, buf, 0, bytes, Math.max(0, size - bytes));
+    fs.closeSync(fd);
+    const lines = buf.toString('utf8').split('\n');
+    for (const line of lines) {
+      if (!line) continue;
+      let obj; try { obj = JSON.parse(line); } catch { continue; }
+      if (obj.type === 'custom-title' && obj.customTitle) meta.customTitle = String(obj.customTitle).slice(0, 120);
+      else if (obj.type === 'ai-title' && obj.aiTitle) meta.aiTitle = String(obj.aiTitle).slice(0, 120);
     }
+  } catch { /* skip */ }
+  return meta;
+}
+
+function readSessionMeta(file) {
+  // 앞부분: cwd + 첫 user 메시지, 뒷부분: 최신 custom-title(/rename) / ai-title
+  return new Promise((resolve) => {
+    const meta = { title: null, summary: null, cwd: null, customTitle: null, aiTitle: null };
+    let stat; try { stat = fs.statSync(file); } catch { return resolve(meta); }
+    Object.assign(meta, readTitlesFromTail(file, stat.size));
+
+    let lines = 0, stream;
+    try { stream = fs.createReadStream(file, { encoding: 'utf8' }); } catch { return resolve(meta); }
     const rl = readline.createInterface({ input: stream, crlfDelay: Infinity });
     rl.on('line', (line) => {
       lines++;
       if (!line) return;
-      let obj;
-      try { obj = JSON.parse(line); } catch { return; }
+      let obj; try { obj = JSON.parse(line); } catch { return; }
       if (obj.cwd && !meta.cwd) meta.cwd = String(obj.cwd);
-      if (obj.type === 'summary' && obj.summary && !meta.summary) {
-        meta.summary = String(obj.summary).slice(0, 120);
-      }
+      if (obj.type === 'summary' && obj.summary && !meta.summary) meta.summary = String(obj.summary).slice(0, 120);
       if (obj.type === 'user' && !meta.title) {
         const c = obj.message && obj.message.content;
         let text = '';
@@ -222,12 +237,17 @@ function readSessionMeta(file) {
         text = text.replace(/\s+/g, ' ').trim();
         if (text && !text.startsWith('<')) meta.title = text.slice(0, 120);
       }
-      if (meta.cwd && (meta.title || meta.summary) && lines > 3) { rl.close(); }
+      if (meta.cwd && (meta.title || meta.summary) && lines > 3) rl.close();
       if (lines > 200) rl.close();
     });
     rl.on('close', () => resolve(meta));
     rl.on('error', () => resolve(meta));
   });
+}
+
+// 세션의 최선 제목: /rename(custom) > ai-title > summary > 첫 메시지
+function bestTitle(meta) {
+  return meta.customTitle || meta.aiTitle || meta.summary || meta.title || '(제목 없음)';
 }
 
 // 메타 캐시 (경로+mtime) — /api/recent, /api/search 공용
@@ -270,7 +290,7 @@ app.get('/api/recent', async (req, res) => {
   const top = all.slice(0, limit);
   const sessions = await Promise.all(top.map(async (s) => {
     const meta = await getMeta(s.full, s.mtime);
-    return { id: s.id, title: meta.summary || meta.title || '(제목 없음)', cwd: meta.cwd || '', mtime: s.mtime, sizeKB: s.sizeKB };
+    return { id: s.id, title: bestTitle(meta), cwd: meta.cwd || '', mtime: s.mtime, sizeKB: s.sizeKB };
   }));
   res.json({ total: all.length, sessions: sessions.filter((s) => s.cwd) });
 });
@@ -302,7 +322,7 @@ app.get('/api/search', async (req, res) => {
   const out = [];
   for (const s of all) {
     const meta = await getMeta(s.full, s.mtime);
-    const title = meta.summary || meta.title || '';
+    const title = (meta.customTitle || meta.aiTitle || meta.summary || meta.title || '');
     const cwd = meta.cwd || '';
     if (!cwd) continue;
     if (title.toLowerCase().includes(q) || cwd.toLowerCase().includes(q)) {
@@ -335,7 +355,7 @@ app.get('/api/sessions', async (req, res) => {
     const meta = await readSessionMeta(s.full);
     return {
       id: s.id,
-      title: meta.summary || meta.title || '(제목 없음)',
+      title: bestTitle(meta),
       mtime: s.mtime,
       sizeKB: Math.round(s.size / 1024),
     };
