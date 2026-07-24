@@ -890,34 +890,13 @@ window.addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(fitA
 setLnb(localStorage.getItem('cth_lnb_collapsed') === '1');
 updateStatus();
 
-// 서버 전역 상태(이름/프로필) 로드 + 예전 localStorage 값을 매 로드마다 서버로 병합
+// 서버 전역 상태(세션 이름/프로필) 로드
 async function initState() {
   try {
     const s = await fetch('/api/state').then((r) => r.json());
     names = s.names || {};
     if (Array.isArray(s.profiles) && s.profiles.length) profiles = s.profiles;
   } catch {}
-
-  // 병합 마이그레이션: 이 브라우저 localStorage 의 옛 이름 중 서버에 없는 것을 올림 (매번)
-  try {
-    const oldNames = JSON.parse(localStorage.getItem('cth_names') || '{}');
-    let migratedCount = 0;
-    for (const [id, name] of Object.entries(oldNames)) {
-      if (name && !names[id]) {
-        names[id] = name;
-        fetch('/api/name', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, name }) }).catch(() => {});
-        migratedCount++;
-      }
-    }
-    if (migratedCount) console.log(`[hub] 옛 세션 이름 ${migratedCount}개를 전역 저장소로 병합`);
-    const oldProfiles = JSON.parse(localStorage.getItem('cth_profiles') || 'null');
-    if (Array.isArray(oldProfiles)) {
-      let addedProfile = false;
-      oldProfiles.forEach((op) => { if (op && op.id && op.id !== 'default' && !profiles.find((p) => p.id === op.id)) { profiles.push(op); addedProfile = true; } });
-      if (addedProfile) saveProfiles();
-    }
-  } catch {}
-
   if (!profiles.find((p) => p.id === 'default')) profiles.unshift({ id: 'default', name: '기본' });
   if (!profiles.find((p) => p.id === activeProfileId)) activeProfileId = 'default';
   renderTabs();
