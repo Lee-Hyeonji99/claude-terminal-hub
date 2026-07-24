@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.1.1] - 2026-07-24
+
+### Added
+- 앱 아이콘 추가 (`electron/icon.ico`, 터미널 프롬프트 `>_` 모양, 앱 색상 반영) — BrowserWindow·바탕화면 바로가기에 적용
+- Electron 앱에 AppUserModelID 지정 (작업표시줄에 "Electron"이 아닌 앱 이름으로 표시)
+- 바탕화면 바로가기(`Claude Terminal Hub.lnk`) 생성 — 작업표시줄 고정 가능
+- 세션 목록/검색창 레이아웃 버그 수정(아이콘-텍스트 줄바꿈, 검색 아이콘 겹침), 폴더 선택 모달 버튼 위치 개선
+
 ## [1.1.0] - 2026-07-24
 
 ### Added
