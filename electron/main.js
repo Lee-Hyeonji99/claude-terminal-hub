@@ -6,15 +6,27 @@
  * Ctrl+W 가 창을 닫지 않고 터미널(pty)로 그대로 전달되게 한다.
  * 또한 실수로 전체 세션을 날리는 새로고침(F5 / Ctrl+R)을 차단한다.
  */
-const { app, BrowserWindow, Menu, shell, ipcMain, dialog } = require('electron');
+const { app, BrowserWindow, Menu, shell, ipcMain, dialog, nativeImage } = require('electron');
 const http = require('http');
 const path = require('path');
 const { spawn } = require('child_process');
 
-// Windows 작업표시줄/Alt-Tab이 패키징 안 된 electron.exe 자체 정체성("Electron")으로
+// 작업표시줄(Windows)/Dock(macOS)/Alt-Tab이 패키징 안 된 electron 자체 정체성("Electron")으로
 // 뜨는 걸 막기 위해 앱 고유 이름/AppUserModelID를 지정
 app.setName('Claude Terminal Hub');
 if (process.platform === 'win32') app.setAppUserModelId('com.claude-terminal-hub.app');
+
+// 플랫폼별 아이콘: Windows 는 .ico, 그 외(macOS/Linux)는 .png
+const ICON_PATH = path.join(__dirname, process.platform === 'win32' ? 'icon.ico' : 'icon.png');
+
+// macOS Dock 아이콘: 개발 실행(electron 바이너리 그대로)일 때 Dock 이 "Electron" 아이콘으로
+// 뜨는 걸 막고 앱 아이콘으로 교체. (BrowserWindow.icon 은 macOS 에서 무시됨)
+if (process.platform === 'darwin' && app.dock) {
+  try {
+    const img = nativeImage.createFromPath(ICON_PATH);
+    if (!img.isEmpty()) app.dock.setIcon(img);
+  } catch { /* 아이콘 없거나 로드 실패 시 무시 */ }
+}
 
 const PORT = Number(process.env.CLAUDE_HUB_PORT || 4778);
 const URL = `http://localhost:${PORT}`;
@@ -55,7 +67,7 @@ function createWindow(ready) {
     height: 900,
     backgroundColor: '#0c0e14',
     title: 'Claude Terminal Hub',
-    icon: path.join(__dirname, 'icon.ico'),
+    icon: ICON_PATH,
     autoHideMenuBar: true,
     webPreferences: { contextIsolation: true, spellcheck: false, preload: path.join(__dirname, 'preload.js') },
   });

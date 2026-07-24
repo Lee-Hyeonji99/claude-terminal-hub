@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.2.0] - 2026-07-24
+
+### Added
+- **macOS/Linux 지원**: `claude-hub-app.command` 런처 추가(Finder 더블클릭 실행), Dock 아이콘 지정(`app.dock.setIcon`), `electron/icon.png`(ICO에서 추출한 256×256) 추가. 플랫폼별 아이콘 자동 선택(Windows `.ico` / 그 외 `.png`).
+- **웹 미리보기 파일 지원 확대**: 로컬 파일 경로(`C:\...`, UNC `\\`, POSIX `/...`, `~/...`)와 `file:` URL을 서버 `/api/file`로 라우팅해 브라우저·앱 양쪽에서 렌더. `/api/file`이 이미지/오디오/비디오/PDF/텍스트·코드 등 폭넓은 형식을 인라인(`Content-Disposition: inline`)으로 서빙하고, 확장자 미매핑 파일은 앞부분을 읽어 텍스트/바이너리를 판별.
+
+### Fixed
+- 작업표시줄 고정 시 "Electron"이 아닌 앱으로 고정되도록 브랜딩된 exe(`Claude Terminal Hub.exe`) 실행 경로 정리 (Windows).
+- 터미널 세션 패널 헤더의 아이콘-텍스트 줄바꿈 잔여 문제 (flex + `<span>` 래핑으로 정렬 고정).
+
+### Removed
+- 가독성이 나쁜 라이트 테마 2종 제거: `라이트 (기본)`, `Solarized Light` (저장돼 있던 경우 자동으로 다크로 폴백).
+
 ## [1.1.1] - 2026-07-24
 
 ### Added

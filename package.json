@@ -19,6 +19,7 @@
     "ws": "^8.18.0"
   },
   "devDependencies": {
-    "electron": "^43.2.0"
+    "electron": "^43.2.0",
+    "rcedit": "^5.0.2"
   }
 }

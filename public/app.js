@@ -53,7 +53,6 @@ let columnSplit = null;
 
 const TERM_THEMES = {
   dark: { background: '#12151f', foreground: '#d7dbe6', black: '#000000', red: '#cd3131', green: '#0dbc79', yellow: '#e5e510', blue: '#2472c8', magenta: '#bc3fbc', cyan: '#11a8cd', white: '#e5e5e5', brightBlack: '#666666', brightRed: '#f14c4c', brightGreen: '#23d18b', brightYellow: '#f5f543', brightBlue: '#3b8eea', brightMagenta: '#d670d6', brightCyan: '#29b8db', brightWhite: '#e5e5e5' },
-  light: { background: '#ffffff', foreground: '#1a1e2b', black: '#000000', red: '#cd3131', green: '#00bc00', yellow: '#949800', blue: '#0451a5', magenta: '#bc05bc', cyan: '#0598bc', white: '#555555', brightBlack: '#666666', brightRed: '#cd3131', brightGreen: '#14ce14', brightYellow: '#b5ba00', brightBlue: '#0451a5', brightMagenta: '#bc05bc', brightCyan: '#0598bc', brightWhite: '#a5a5a5' },
   dracula: { background: '#282a36', foreground: '#f8f8f2', black: '#21222c', red: '#ff5555', green: '#50fa7b', yellow: '#f1fa8c', blue: '#bd93f9', magenta: '#ff79c6', cyan: '#8be9fd', white: '#f8f8f2', brightBlack: '#6272a4', brightRed: '#ff6e6e', brightGreen: '#69ff94', brightYellow: '#ffffa5', brightBlue: '#d6acff', brightMagenta: '#ff92df', brightCyan: '#a4ffff', brightWhite: '#ffffff' },
   solarized: { background: '#002b36', foreground: '#93a1a1', black: '#073642', red: '#dc322f', green: '#859900', yellow: '#b58900', blue: '#268bd2', magenta: '#d33682', cyan: '#2aa198', white: '#eee8d5', brightBlack: '#002b36', brightRed: '#cb4b16', brightGreen: '#586e75', brightYellow: '#657b83', brightBlue: '#839496', brightMagenta: '#6c71c4', brightCyan: '#93a1a1', brightWhite: '#fdf6e3' },
   nord: { background: '#2e3440', foreground: '#d8dee9', black: '#3b4252', red: '#bf616a', green: '#a3be8c', yellow: '#ebcb8b', blue: '#81a1c1', magenta: '#b48ead', cyan: '#88c0d0', white: '#e5e9f0', brightBlack: '#4c566a', brightRed: '#bf616a', brightGreen: '#a3be8c', brightYellow: '#ebcb8b', brightBlue: '#81a1c1', brightMagenta: '#b48ead', brightCyan: '#8fbcbb', brightWhite: '#eceff4' },
@@ -63,7 +62,6 @@ const TERM_THEMES = {
   tokyonight: { background: '#1a1b26', foreground: '#c0caf5', black: '#15161e', red: '#f7768e', green: '#9ece6a', yellow: '#e0af68', blue: '#7aa2f7', magenta: '#bb9af7', cyan: '#7dcfff', white: '#a9b1d6', brightBlack: '#414868', brightRed: '#f7768e', brightGreen: '#9ece6a', brightYellow: '#e0af68', brightBlue: '#7aa2f7', brightMagenta: '#bb9af7', brightCyan: '#7dcfff', brightWhite: '#c0caf5' },
   catppuccin: { background: '#1e1e2e', foreground: '#cdd6f4', black: '#45475a', red: '#f38ba8', green: '#a6e3a1', yellow: '#f9e2af', blue: '#89b4fa', magenta: '#f5c2e7', cyan: '#94e2d5', white: '#bac2de', brightBlack: '#585b70', brightRed: '#f38ba8', brightGreen: '#a6e3a1', brightYellow: '#f9e2af', brightBlue: '#89b4fa', brightMagenta: '#f5c2e7', brightCyan: '#94e2d5', brightWhite: '#a6adc8' },
   githubdark: { background: '#0d1117', foreground: '#c9d1d9', black: '#484f58', red: '#ff7b72', green: '#3fb950', yellow: '#d29922', blue: '#58a6ff', magenta: '#bc8cff', cyan: '#39c5cf', white: '#b1bac4', brightBlack: '#6e7681', brightRed: '#ffa198', brightGreen: '#56d364', brightYellow: '#e3b341', brightBlue: '#79c0ff', brightMagenta: '#d2a8ff', brightCyan: '#56d4dd', brightWhite: '#f0f6fc' },
-  solarizedlight: { background: '#fdf6e3', foreground: '#4b5b61', black: '#073642', red: '#dc322f', green: '#859900', yellow: '#b58900', blue: '#268bd2', magenta: '#d33682', cyan: '#2aa198', white: '#eee8d5', brightBlack: '#002b36', brightRed: '#cb4b16', brightGreen: '#586e75', brightYellow: '#657b83', brightBlue: '#839496', brightMagenta: '#6c71c4', brightCyan: '#93a1a1', brightWhite: '#fdf6e3' },
 };
 function currentTermTheme() { return TERM_THEMES[document.body.dataset.theme] || TERM_THEMES.dark; }
 let activePane = null;
@@ -321,7 +319,7 @@ function addPane(cfg, placement) {
     <div class="bar">
       <span class="dot"></span>
       <span class="label" title="${escapeHtml(cfg.cwd)}">
-        <span class="ttl">${escapeHtml(title)}</span><span class="cwd">${ICON.folder} ${escapeHtml(shortCwd)}</span>
+        <span class="ttl">${escapeHtml(title)}</span><span class="cwd">${ICON.folder}<span>${escapeHtml(shortCwd)}</span></span>
       </span>
       <button class="artifact" title="Claude 아티팩트 미리보기" style="display:none"></button>
       <button class="auto" title="새 메시지 자동 새로고침 (유휴 시 자동 반영)">자동</button>
@@ -548,13 +546,30 @@ function addPane(cfg, placement) {
 function normalizeUrl(u) {
   u = (u || '').trim();
   if (!u) return '';
-  if (!/^https?:\/\//i.test(u)) {
-    // 로컬/IP/포트지정은 http, 그 외 공개 도메인은 https 기본
-    const head = u.split('/')[0];
-    const isLocal = /^(localhost|127\.0\.0\.1|0\.0\.0\.0|\[?::1\]?|\d{1,3}(\.\d{1,3}){3})(:\d+)?$/i.test(head) || /:\d+$/.test(head);
-    u = (isLocal ? 'http://' : 'https://') + u;
+  // 이미 서버 파일 서빙 경로면 그대로 (재-normalize 시 이중 변환 방지)
+  if (/^\/api\/file\?/.test(u)) return u;
+  // 로컬 파일 경로 → 서버(/api/file)가 올바른 Content-Type 으로 서빙 → 브라우저·앱 모두 렌더.
+  //  (iframe 은 http 문서에서 file:// 을 차단하므로 file:// 대신 서버 서빙 경로를 쓴다)
+  //   - Windows 절대경로:  C:\...  또는 C:/...
+  //   - UNC:               \\host\share
+  //   - POSIX 절대경로:     /Users/... , /home/...
+  //   - 홈 상대경로:        ~/...
+  if (/^[a-zA-Z]:[\\/]/.test(u) || /^\\\\/.test(u) || /^~\//.test(u) || /^\//.test(u)) {
+    return '/api/file?path=' + encodeURIComponent(u);
   }
-  return u;
+  // file: 스킴도 서버 서빙으로 재라우팅
+  const m = u.match(/^file:\/{2,}(.*)$/i);
+  if (m) {
+    let p = decodeURIComponent(m[1]);
+    if (/^\/[a-zA-Z]:/.test(p)) p = p.slice(1); // /C:/... → C:/...
+    return '/api/file?path=' + encodeURIComponent(p);
+  }
+  // 그 외 스킴(data:, about:, blob:, http(s): 등)은 그대로 둔다
+  if (/^[a-z][a-z0-9+.-]*:/i.test(u)) return u;
+  // 스킴 없는 호스트: 로컬/IP/포트지정은 http, 그 외 공개 도메인은 https 기본
+  const head = u.split('/')[0];
+  const isLocal = /^(localhost|127\.0\.0\.1|0\.0\.0\.0|\[?::1\]?|\d{1,3}(\.\d{1,3}){3})(:\d+)?$/i.test(head) || /:\d+$/.test(head);
+  return (isLocal ? 'http://' : 'https://') + u;
 }
 
 function addPreviewPane(url, placement, label) {
@@ -572,14 +587,14 @@ function addPreviewPane(url, placement, label) {
   pane.innerHTML = `
     <div class="bar">
       <span class="dot"></span>
-      <span class="label" title="${escapeHtml(isFile ? label : url)}"><span class="ttl">${isFile ? ICON.file : ICON.globe} ${escapeHtml(host)}</span></span>
+      <span class="label" title="${escapeHtml(isFile ? label : url)}"><span class="ttl">${isFile ? ICON.file : ICON.globe}<span>${escapeHtml(host)}</span></span></span>
       <button class="reload" title="새로고침">${ICON.refresh}</button>
       <button class="ext" title="외부 브라우저로 열기">${ICON.external}</button>
       <button class="x" title="닫기">${ICON.x}</button>
     </div>
     <div class="preview">
       <div class="urlbar">
-        <input type="text" spellcheck="false" placeholder="주소 입력 후 Enter (예: http://localhost:3000)" value="${escapeHtml(url)}" />
+        <input type="text" spellcheck="false" placeholder="URL 또는 파일 경로 입력 후 Enter (예: localhost:3000, C:\\file.pdf, /Users/me/img.png)" value="${escapeHtml(url)}" />
         <button class="go">이동</button>
       </div>
       <iframe referrerpolicy="no-referrer"></iframe>
@@ -614,7 +629,18 @@ function addPreviewPane(url, placement, label) {
     paneObj.cfg.url = u;
     input.value = u;
     iframe.src = u;
-    try { pane.querySelector('.ttl').innerHTML = `${ICON.globe} ${escapeHtml(new URL(u).host)}`; } catch {}
+    try {
+      const fm = u.match(/^\/api\/file\?path=(.+)$/);
+      if (fm) {
+        const p = decodeURIComponent(fm[1]);
+        const base = p.split(/[\\/]/).filter(Boolean).pop() || p;
+        pane.querySelector('.label').title = p;
+        pane.querySelector('.ttl').innerHTML = `${ICON.file}<span>${escapeHtml(base)}</span>`;
+      } else {
+        pane.querySelector('.label').title = u;
+        pane.querySelector('.ttl').innerHTML = `${ICON.globe}<span>${escapeHtml(new URL(u).host)}</span>`;
+      }
+    } catch {}
   }
   input.addEventListener('keydown', (e) => { if (e.key === 'Enter') navigate(e.target.value); });
   pane.querySelector('.go').addEventListener('click', (e) => { e.stopPropagation(); navigate(input.value); });

@@ -12,11 +12,6 @@
       --active:#4c8bf5; --text:#d7dbe6; --muted:#8a91a5; --accent:#4c8bf5; --danger:#e5484d; --ok:#3fb950;
       --sb-thumb:#39415a;
     }
-    body[data-theme="light"]{
-      --bg:#f3f4f7; --panel:#ffffff; --head:#e9ebf0; --border:#d3d8e2;
-      --active:#2f6fe0; --text:#1a1e2b; --muted:#5b6376; --accent:#2f6fe0; --danger:#d5202a; --ok:#1a863f;
-      --sb-thumb:#b8bfce;
-    }
     body[data-theme="dracula"]{
       --bg:#282a36; --panel:#282a36; --head:#21222c; --border:#44475a;
       --active:#bd93f9; --text:#f8f8f2; --muted:#8592b8; --accent:#bd93f9; --danger:#ff5858; --ok:#50fa7b;
@@ -61,11 +56,6 @@
       --bg:#0d1117; --panel:#0d1117; --head:#161b22; --border:#30363d;
       --active:#58a6ff; --text:#c9d1d9; --muted:#8b949e; --accent:#58a6ff; --danger:#ff7b72; --ok:#3fb950;
       --sb-thumb:#30363d;
-    }
-    body[data-theme="solarizedlight"]{
-      --bg:#fdf6e3; --panel:#fdf6e3; --head:#eee8d5; --border:#93a1a1;
-      --active:#2074b0; --text:#4b5b61; --muted:#5f737b; --accent:#2074b0; --danger:#d72724; --ok:#687700;
-      --sb-thumb:#93a1a1;
     }
     *{box-sizing:border-box}
     html,body{height:100%;margin:0}
@@ -140,9 +130,13 @@
     .pane.exited .bar .dot{background:var(--danger)}
     .pane .bar{cursor:grab;user-select:none}
     .pane .bar.grabbing{cursor:grabbing}
-    .pane .bar .label{flex:1;min-width:0;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-    .pane .bar .label .ttl{color:var(--text);font-weight:600}
-    .pane .bar .label .cwd{color:var(--muted);font-size:11px;margin-left:6px}
+    .pane .bar .label{flex:1;min-width:0;display:flex;align-items:center;color:var(--muted);white-space:nowrap;overflow:hidden}
+    .pane .bar .label .ttl{display:inline-flex;align-items:center;gap:4px;min-width:0;color:var(--text);font-weight:600;flex:none}
+    .pane .bar .label .ttl svg{flex:none}
+    .pane .bar .label .ttl span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .pane .bar .label .cwd{display:inline-flex;align-items:center;gap:3px;flex:1;min-width:0;color:var(--muted);font-size:11px;margin-left:6px}
+    .pane .bar .label .cwd span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .pane .bar .label .cwd svg{flex:none}
     .pane.dragging{opacity:.45}
     #dropIndicator{position:fixed;z-index:60;pointer-events:none;display:none;border:2px solid var(--active);background:rgba(76,139,245,.22);border-radius:6px;box-shadow:0 0 0 1px rgba(76,139,245,.5) inset}
     #dropIndicator .dz{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);color:#fff;font-size:12px;font-weight:600;background:var(--active);padding:2px 8px;border-radius:4px;white-space:nowrap}
@@ -240,7 +234,6 @@
       <button id="themeBtn" class="ghost icon-btn" title="색상 테마"><span data-icon="palette"></span></button>
       <div id="themePopover" class="popover">
         <div class="popover-item" data-theme="dark"><span class="swatch" style="background:#0c0e14"></span>다크 (기본)</div>
-        <div class="popover-item" data-theme="light"><span class="swatch" style="background:#f3f4f7"></span>라이트 (기본)</div>
         <div class="popover-item" data-theme="dracula"><span class="swatch" style="background:#282a36"></span>Dracula</div>
         <div class="popover-item" data-theme="solarized"><span class="swatch" style="background:#002b36"></span>Solarized Dark</div>
         <div class="popover-item" data-theme="nord"><span class="swatch" style="background:#2e3440"></span>Nord</div>
@@ -250,7 +243,6 @@
         <div class="popover-item" data-theme="tokyonight"><span class="swatch" style="background:#1a1b26"></span>Tokyo Night</div>
         <div class="popover-item" data-theme="catppuccin"><span class="swatch" style="background:#1e1e2e"></span>Catppuccin Mocha</div>
         <div class="popover-item" data-theme="githubdark"><span class="swatch" style="background:#0d1117"></span>GitHub Dark</div>
-        <div class="popover-item" data-theme="solarizedlight"><span class="swatch" style="background:#fdf6e3"></span>Solarized Light</div>
       </div>
     </div>
     <div class="popover-wrap">

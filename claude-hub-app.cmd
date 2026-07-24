@@ -3,6 +3,7 @@ REM Claude Terminal Hub - Electron app, detached, no console window
 setlocal
 set "ROOT=%~dp0"
 set "ELECTRON_EXE=%ROOT%node_modules\electron\dist\electron.exe"
+set "BRANDED_EXE=%ROOT%node_modules\electron\dist\Claude Terminal Hub.exe"
 
 if not exist "%ELECTRON_EXE%" (
     echo [claude-hub-app] Electron binary not found: %ELECTRON_EXE%
@@ -25,4 +26,14 @@ if not exist "%ELECTRON_EXE%" (
     )
 )
 
-start "" "%ELECTRON_EXE%" "%ROOT%electron\main.js"
+if not exist "%BRANDED_EXE%" (
+    echo [claude-hub-app] Branding app exe...
+    pushd "%ROOT%"
+    call node electron\brand-exe.js
+    popd
+)
+if exist "%BRANDED_EXE%" (
+    start "" "%BRANDED_EXE%" "%ROOT%electron\main.js"
+) else (
+    start "" "%ELECTRON_EXE%" "%ROOT%electron\main.js"
+)

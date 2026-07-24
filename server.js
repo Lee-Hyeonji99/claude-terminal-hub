@@ -366,21 +366,58 @@ app.get('/api/sessions', async (req, res) => {
 });
 
 // ---- 로컬 파일 미리보기 서빙 + 아티팩트 판별 ----
+// 일반 브라우저처럼 폭넓은 형식을 인라인 렌더. 아티팩트 칩(자동 미리보기)은 아래 ARTIFACT_EXT 만 대상.
 const PREVIEW_EXT = {
-  '.html': 'text/html; charset=utf-8', '.htm': 'text/html; charset=utf-8',
-  '.md': 'text/plain; charset=utf-8', '.txt': 'text/plain; charset=utf-8',
-  '.css': 'text/css', '.js': 'text/javascript', '.json': 'application/json; charset=utf-8',
+  // 문서/마크업
+  '.html': 'text/html; charset=utf-8', '.htm': 'text/html; charset=utf-8', '.xhtml': 'application/xhtml+xml',
+  '.pdf': 'application/pdf', '.svg': 'image/svg+xml',
+  // 이미지
   '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.gif': 'image/gif',
-  '.svg': 'image/svg+xml', '.webp': 'image/webp', '.pdf': 'application/pdf',
+  '.webp': 'image/webp', '.bmp': 'image/bmp', '.ico': 'image/x-icon', '.avif': 'image/avif', '.apng': 'image/apng',
+  // 오디오/비디오 (브라우저 내장 플레이어)
+  '.mp4': 'video/mp4', '.webm': 'video/webm', '.ogg': 'video/ogg', '.mov': 'video/quicktime',
+  '.mp3': 'audio/mpeg', '.wav': 'audio/wav', '.m4a': 'audio/mp4', '.flac': 'audio/flac', '.oga': 'audio/ogg',
+  // 텍스트/코드 (text/plain 으로 브라우저에 그대로 표시)
+  '.txt': 'text/plain; charset=utf-8', '.md': 'text/plain; charset=utf-8', '.log': 'text/plain; charset=utf-8',
+  '.css': 'text/css; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.mjs': 'text/javascript; charset=utf-8',
+  '.cjs': 'text/javascript; charset=utf-8', '.json': 'application/json; charset=utf-8',
+  '.ts': 'text/plain; charset=utf-8', '.tsx': 'text/plain; charset=utf-8', '.jsx': 'text/plain; charset=utf-8',
+  '.xml': 'text/xml; charset=utf-8', '.csv': 'text/plain; charset=utf-8', '.tsv': 'text/plain; charset=utf-8',
+  '.yml': 'text/plain; charset=utf-8', '.yaml': 'text/plain; charset=utf-8', '.toml': 'text/plain; charset=utf-8',
+  '.ini': 'text/plain; charset=utf-8', '.sh': 'text/plain; charset=utf-8', '.py': 'text/plain; charset=utf-8',
+  '.rb': 'text/plain; charset=utf-8', '.go': 'text/plain; charset=utf-8', '.rs': 'text/plain; charset=utf-8',
+  '.java': 'text/plain; charset=utf-8', '.c': 'text/plain; charset=utf-8', '.h': 'text/plain; charset=utf-8',
+  '.cpp': 'text/plain; charset=utf-8', '.sql': 'text/plain; charset=utf-8', '.conf': 'text/plain; charset=utf-8',
 };
-function isPreviewable(p) { return Object.prototype.hasOwnProperty.call(PREVIEW_EXT, path.extname(String(p)).toLowerCase()); }
+// 아티팩트 자동 미리보기(칩) 대상 — Claude 산출물로 열어볼 만한 형식만
+const ARTIFACT_EXT = new Set(['.html', '.htm', '.md', '.txt', '.png', '.jpg', '.jpeg', '.gif', '.svg', '.webp', '.pdf', '.json', '.css', '.js']);
+function isPreviewable(p) { return ARTIFACT_EXT.has(path.extname(String(p)).toLowerCase()); }
+
+// 확장자 매핑에 없으면 앞부분을 읽어 텍스트인지 판별 → 텍스트면 그대로 표시, 아니면 다운로드
+function sniffContentType(p) {
+  const ext = path.extname(p).toLowerCase();
+  if (PREVIEW_EXT[ext]) return PREVIEW_EXT[ext];
+  try {
+    const fd = fs.openSync(p, 'r');
+    const buf = Buffer.alloc(4096);
+    const n = fs.readSync(fd, buf, 0, 4096, 0);
+    fs.closeSync(fd);
+    const slice = buf.subarray(0, n);
+    // NUL 바이트가 있으면 바이너리로 간주
+    if (slice.includes(0)) return 'application/octet-stream';
+    return 'text/plain; charset=utf-8';
+  } catch { return 'application/octet-stream'; }
+}
 
 app.get('/api/file', (req, res) => {
   const p = (req.query.path || '').toString();
   if (!p) return res.status(400).send('path 필요');
   let st; try { st = fs.statSync(p); } catch { return res.status(404).send('파일 없음'); }
   if (!st.isFile()) return res.status(400).send('파일 아님');
-  res.setHeader('Content-Type', PREVIEW_EXT[path.extname(p).toLowerCase()] || 'application/octet-stream');
+  const ct = sniffContentType(p);
+  res.setHeader('Content-Type', ct);
+  // 브라우저 탭처럼 렌더러가 처리(다운로드 강제 X). 렌더 못하는 형식만 저장 대화상자로.
+  res.setHeader('Content-Disposition', 'inline; filename="' + encodeURIComponent(path.basename(p)) + '"');
   res.setHeader('Cache-Control', 'no-store');
   fs.createReadStream(p).on('error', () => { try { res.end(); } catch {} }).pipe(res);
 });
