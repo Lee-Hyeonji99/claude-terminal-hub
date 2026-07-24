@@ -38,6 +38,20 @@
     button.primary{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600}
     button.primary:hover{filter:brightness(1.1)}
     button.ghost{background:transparent}
+    /* 아이콘 (SVG, currentColor) */
+    svg{display:block}
+    [data-icon],.i{display:inline-flex;align-items:center}
+    header button,#tabs button,.sesactions button,#pickHere,.mhead button,#changeFolder{display:inline-flex;align-items:center;gap:6px}
+    button [data-icon]{pointer-events:none}
+    .icon-btn{padding:6px 8px !important;line-height:0}
+    .recent-item .rt svg,.recent-item .rf svg{vertical-align:-3px;margin-right:2px}
+    .recent-item .rf svg,.fsitem .ico svg,.pane .bar .cwd svg{color:var(--muted)}
+    .sesitem .ico svg{color:var(--accent);width:18px;height:18px}
+    .pane .bar button svg{width:15px;height:15px}
+    .pane .bar .cwd svg{width:12px;height:12px;vertical-align:-2px}
+    .lnb-search{position:relative}
+    .lnb-search .search-ico{position:absolute;left:14px;top:50%;transform:translateY(-50%);color:var(--muted);pointer-events:none}
+    .lnb-search input{padding-left:30px}
 
     #tabs{display:flex;align-items:center;gap:4px;padding:4px 8px;background:#0e1119;border-bottom:1px solid var(--border);flex:none;overflow-x:auto}
     #tabList{display:flex;gap:4px}
@@ -154,18 +168,18 @@
 </head>
 <body>
   <header>
-    <button id="lnbToggle" class="ghost" title="사이드바 접기/펼치기" style="padding:6px 10px">☰</button>
+    <button id="lnbToggle" class="ghost icon-btn" title="사이드바 접기/펼치기"><span data-icon="menu"></span></button>
     <div class="brand">Claude <span>Terminal Hub</span></div>
-    <button id="add" class="primary">＋ 새 세션</button>
-    <button id="addWeb" class="ghost" title="웹 미리보기 패널 추가">🌐 웹 미리보기</button>
+    <button id="add" class="primary"><span data-icon="plus"></span> 새 세션</button>
+    <button id="addWeb" class="ghost" title="웹 미리보기 패널 추가"><span data-icon="globe"></span> 웹 미리보기</button>
     <div class="spacer"></div>
     <span class="status" id="status">세션 0</span>
-    <button id="themeToggle" class="ghost" title="라이트/다크 전환" style="padding:6px 10px">🌙</button>
+    <button id="themeToggle" class="ghost icon-btn" title="라이트/다크 전환"></button>
   </header>
 
   <div id="tabs">
     <div id="tabList"></div>
-    <button id="addProfile" class="ghost" title="새 계정(프로필) 추가">＋ 프로필</button>
+    <button id="addProfile" class="ghost" title="새 계정(프로필) 추가"><span data-icon="plus"></span> 프로필</button>
   </div>
 
   <div id="dropIndicator"><span class="dz"></span></div>
@@ -174,18 +188,19 @@
     <aside id="lnb">
       <div class="lnb-head">
         <span id="lnbTitle">최근 세션</span>
-        <button id="lnbRefresh" class="ghost" title="새로고침" style="padding:2px 7px">⟳</button>
+        <button id="lnbRefresh" class="ghost icon-btn" title="새로고침"><span data-icon="refresh"></span></button>
       </div>
       <div class="lnb-search">
-        <input type="text" id="lnbSearch" spellcheck="false" placeholder="🔍 모든 세션 이름/경로 검색…" autocomplete="off" />
-        <button id="lnbSearchClear" class="ghost" title="지우기" style="display:none">✕</button>
+        <span class="search-ico" data-icon="search"></span>
+        <input type="text" id="lnbSearch" spellcheck="false" placeholder="모든 세션 이름/경로 검색…" autocomplete="off" />
+        <button id="lnbSearchClear" class="ghost icon-btn" title="지우기" style="display:none"><span data-icon="x"></span></button>
       </div>
       <div id="recentList" class="recent-list"></div>
     </aside>
     <div id="stage">
       <div id="empty">
         <div>열린 세션이 없습니다.</div>
-        <button class="primary" onclick="startNewSession()">＋ 새 세션 열기</button>
+        <button class="primary" onclick="startNewSession()"><span data-icon="plus"></span> 새 세션 열기</button>
       </div>
     </div>
   </div>
@@ -196,11 +211,11 @@
     <div class="modal" id="folderModal" style="display:none">
       <div class="mhead">
         <h2>작업 폴더 선택</h2>
-        <button id="osPick" class="primary" style="padding:6px 12px">🗂 Windows 폴더 선택기</button>
-        <button class="ghost" data-close>✕</button>
+        <button id="osPick" class="primary"><span data-icon="folder"></span> Windows 폴더 선택기</button>
+        <button class="ghost icon-btn" data-close><span data-icon="x"></span></button>
       </div>
       <div class="mbody">
-        <label style="display:block;color:var(--muted);font-size:12px;margin-bottom:5px">작업 폴더를 직접 입력(붙여넣고 Enter)하거나, 아래 최근 경로에서 고르세요. 새 폴더 생성은 상단 <b>🗂 Windows 폴더 선택기</b>.</label>
+        <label style="display:block;color:var(--muted);font-size:12px;margin-bottom:5px">작업 폴더를 직접 입력(붙여넣고 Enter)하거나, 아래 최근 경로에서 고르세요. 새 폴더 생성은 상단 <b>Windows 폴더 선택기</b>.</label>
         <div class="pathbar">
           <input type="text" id="curPath" spellcheck="false" placeholder="예: C:\projects\my-project — 붙여넣고 Enter" />
         </div>
@@ -210,17 +225,17 @@
       </div>
       <div class="mfoot">
         <button data-close>취소</button>
-        <button class="primary" id="pickHere">이 폴더 선택 →</button>
+        <button class="primary" id="pickHere">이 폴더 선택</button>
       </div>
     </div>
 
     <!-- 2단계: 세션 목록 -->
     <div class="modal" id="sessionModal" style="display:none">
-      <div class="mhead"><h2>세션</h2><button class="ghost" data-close>✕</button></div>
+      <div class="mhead"><h2>세션</h2><button class="ghost icon-btn" data-close><span data-icon="x"></span></button></div>
       <div class="mbody">
         <div class="seshead">
           <div class="cwd" id="sesCwd"></div>
-          <button class="ghost" id="changeFolder">← 폴더 변경</button>
+          <button class="ghost" id="changeFolder"><span data-icon="back"></span> 폴더 변경</button>
         </div>
         <div class="placement">
           <span style="color:var(--muted);font-size:12px;align-self:center">열기 위치:</span>
@@ -228,7 +243,7 @@
           <label><input type="radio" name="placement" value="row" /> 활성 패널 아래(세로 분할)</label>
         </div>
         <div class="sesactions">
-          <button class="primary" id="newChat">＋ 새 대화 시작 (claude)</button>
+          <button class="primary" id="newChat"><span data-icon="plus"></span> 새 대화 시작 (claude)</button>
           <button id="customCmd">명령 직접 입력…</button>
         </div>
         <div style="color:var(--muted);font-size:12px;margin-bottom:6px">이어서 진행할 세션 <span id="sesCount"></span></div>
@@ -237,6 +252,7 @@
       </div>
       <div class="mfoot"><button data-close>닫기</button></div>
     </div>
+    <!-- (end session modal) -->
   </div>
 
   <div id="promptOverlay">

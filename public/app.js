@@ -1,6 +1,32 @@
 'use strict';
 /* Claude Terminal Hub — 폴더 선택 → 세션 목록(재개) → split/도킹 뷰 */
 
+/* ---------- SVG 아이콘 (이모지 대체, currentColor) ---------- */
+function ic(inner) {
+  return `<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${inner}</svg>`;
+}
+const ICON = {
+  plus: ic('<path d="M12 5v14M5 12h14"/>'),
+  globe: ic('<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.5 2.7 2.5 15.3 0 18M12 3c-2.5 2.7-2.5 15.3 0 18"/>'),
+  moon: ic('<path d="M21 12.8A9 9 0 1 1 11.2 3 7 7 0 0 0 21 12.8z"/>'),
+  sun: ic('<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M19.1 4.9l-1.4 1.4M6.3 17.7l-1.4 1.4"/>'),
+  menu: ic('<path d="M3 6h18M3 12h18M3 18h18"/>'),
+  x: ic('<path d="M6 6l12 12M18 6L6 18"/>'),
+  refresh: ic('<path d="M21 12a9 9 0 1 1-2.64-6.36M21 4v5h-5"/>'),
+  split: ic('<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 12h18"/>'),
+  chat: ic('<path d="M21 15a2 2 0 0 1-2 2H8l-5 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>'),
+  folder: ic('<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>'),
+  external: ic('<path d="M14 3h7v7M10 14 21 3M21 14v5a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h5"/>'),
+  back: ic('<path d="M19 12H5M12 19l-7-7 7-7"/>'),
+  search: ic('<circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/>'),
+  warn: ic('<path d="M12 9v4M12 17h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/>'),
+};
+function hydrateIcons(root) {
+  (root || document).querySelectorAll('[data-icon]').forEach((el) => {
+    if (!el.dataset.done) { el.innerHTML = ICON[el.dataset.icon] || ''; el.dataset.done = '1'; }
+  });
+}
+
 const Terminal = window.Terminal;
 const FitAddon = (window.FitAddon && window.FitAddon.FitAddon) || window.FitAddon;
 const Split = window.Split;
@@ -23,7 +49,6 @@ let activePane = null;
 
 /* ---------- 계정 프로필 / 탭 ---------- */
 let profiles = [{ id: 'default', name: '기본' }]; // 서버 /api/state 에서 로드됨
-let names = {}; // 세션 커스텀 이름 (서버 전역 저장)
 function saveProfiles() {
   fetch('/api/profiles', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ profiles }) }).catch(() => {});
 }
@@ -79,7 +104,7 @@ function renderTabs() {
     const n = paneCountOf(p.id);
     t.innerHTML = `<span class="tname">${escapeHtml(p.name)}</span>` +
       (n ? `<span class="cnt">${n}</span>` : '') +
-      (p.id !== 'default' ? `<button class="tclose" title="프로필 삭제">✕</button>` : '');
+      (p.id !== 'default' ? `<button class="tclose" title="프로필 삭제">${ICON.x}</button>` : '');
     if (!(p.id in accountCache)) fetchAccount(p.id);
     const acct = accountCache[p.id] || '계정 확인 중…';
     t.title = acct + (p.id !== 'default' ? '\n더블클릭 = 이름 변경' : '');
@@ -161,7 +186,7 @@ function uiConfirm(msg, title) {
 function applyTheme(t) {
   document.body.classList.toggle('light', t === 'light');
   const btn = document.getElementById('themeToggle');
-  if (btn) btn.textContent = t === 'light' ? '☀️' : '🌙';
+  if (btn) btn.innerHTML = t === 'light' ? ICON.sun : ICON.moon;
   localStorage.setItem('cth_theme', t);
   setTimeout(() => { try { fitAll(); } catch {} }, 60);
 }
@@ -231,18 +256,17 @@ function addPane(cfg, placement) {
   const pane = document.createElement('div');
   pane.className = 'pane';
   const shortCwd = cfg.cwd.split(/[\\/]/).filter(Boolean).pop() || cfg.cwd;
-  const title = getName(cfg.resumeId) || cfg.title || (cfg.resumeId ? '재개한 세션' : (cfg.command && cfg.command !== 'claude' ? cfg.command : 'claude 새 대화'));
+  const title = cfg.title || (cfg.resumeId ? '재개한 세션' : (cfg.command && cfg.command !== 'claude' ? cfg.command : 'claude 새 대화'));
   pane.innerHTML = `
     <div class="bar">
       <span class="dot"></span>
-      <span class="label" title="${escapeHtml(cfg.cwd)}\n더블클릭 = 이름 변경">
-        <span class="ttl">${escapeHtml(title)}</span><span class="cwd">📁 ${escapeHtml(shortCwd)}</span>
+      <span class="label" title="${escapeHtml(cfg.cwd)}">
+        <span class="ttl">${escapeHtml(title)}</span><span class="cwd">${ICON.folder} ${escapeHtml(shortCwd)}</span>
       </span>
-      <button class="prename" title="세션 이름 변경">✎</button>
       <button class="auto" title="새 메시지 자동 새로고침 (유휴 시 자동 반영)">자동</button>
-      <button class="reload" title="새로고침 (세션 다시 불러오기)">⟳</button>
-      <button class="split" title="아래로 분할">▤</button>
-      <button class="x" title="세션 종료">✕</button>
+      <button class="reload" title="새로고침 (세션 다시 불러오기)">${ICON.refresh}</button>
+      <button class="split" title="아래로 분할">${ICON.split}</button>
+      <button class="x" title="세션 종료">${ICON.x}</button>
     </div>
     <div class="term"></div>`;
   col.el.appendChild(pane);
@@ -310,7 +334,7 @@ function addPane(cfg, placement) {
     hideBanner();
     const b = document.createElement('div');
     b.className = 'disc-banner';
-    b.innerHTML = `<span>${escapeHtml(msg)}</span> <button>재연결</button>`;
+    b.innerHTML = `<span class="i">${ICON.warn}</span><span>${escapeHtml(msg)}</span> <button>재연결</button>`;
     b.querySelector('button').onclick = () => { hideBanner(); connect(true); };
     termEl.appendChild(b);
   }
@@ -352,7 +376,7 @@ function addPane(cfg, placement) {
     ws.onclose = () => {
       pane.classList.remove('running');
       if (reloading) { reloading = false; return; } // 새로고침으로 인한 의도된 종료
-      if (!disposed) showBanner('⚠ 연결이 끊겼습니다 (서버 재시작 등). 입력이 전달되지 않습니다.');
+      if (!disposed) showBanner('연결이 끊겼습니다 (서버 재시작 등). 입력이 전달되지 않습니다.');
     };
   }
 
@@ -404,7 +428,7 @@ function addPane(cfg, placement) {
     lastActivityAt = Date.now();
     pane.classList.remove('has-changes'); // 내가 입력 중 → 알림 해제
     if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: 'input', data: d }));
-    else showBanner('⚠ 연결이 끊겨 입력이 전달되지 않습니다.');
+    else showBanner('연결이 끊겨 입력이 전달되지 않습니다.');
   });
   termEl.addEventListener('mousedown', () => setActive(paneObj));
   if (term.textarea) term.textarea.addEventListener('focus', () => setActive(paneObj));
@@ -432,21 +456,9 @@ function addPane(cfg, placement) {
     autoReload = !autoReload;
     autoBtn.classList.toggle('on', autoReload);
     autoBtn.textContent = autoReload ? '자동 ●' : '자동';
-    autoBtn.title = autoReload ? '자동 새로고침: 켜짐 (유휴 시 새 메시지 자동 반영)' : '자동 새로고침: 꺼짐 (새 메시지 오면 ⟳ 가 깜빡임)';
+    autoBtn.title = autoReload ? '자동 새로고침: 켜짐 (유휴 시 새 메시지 자동 반영)' : '자동 새로고침: 꺼짐 (새 메시지 오면 새로고침 버튼이 깜빡임)';
     if (autoReload) pane.classList.remove('has-changes');
   });
-  // 이름 변경 — 제목 더블클릭 또는 ✎ 버튼
-  async function renamePane() {
-    const ttlEl = pane.querySelector('.ttl');
-    const v = await uiPrompt('세션 이름 변경', ttlEl.textContent);
-    if (v === null) return;
-    const name = v.trim() || cfg.title || 'claude 새 대화';
-    ttlEl.textContent = name;
-    cfg.title = name;
-    if (cfg.resumeId) { setName(cfg.resumeId, v.trim()); refreshLnb(); }
-  }
-  pane.querySelector('.label').addEventListener('dblclick', (e) => { e.stopPropagation(); renamePane(); });
-  pane.querySelector('.prename').addEventListener('click', (e) => { e.stopPropagation(); setActive(paneObj); renamePane(); });
 
   enablePaneDrag(paneObj, pane.querySelector('.bar'));
 
@@ -484,10 +496,10 @@ function addPreviewPane(url, placement) {
   pane.innerHTML = `
     <div class="bar">
       <span class="dot"></span>
-      <span class="label" title="${escapeHtml(url)}"><span class="ttl">🌐 ${escapeHtml(host)}</span></span>
-      <button class="reload" title="새로고침">⟳</button>
-      <button class="ext" title="외부 브라우저로 열기">↗</button>
-      <button class="x" title="닫기">✕</button>
+      <span class="label" title="${escapeHtml(url)}"><span class="ttl">${ICON.globe} ${escapeHtml(host)}</span></span>
+      <button class="reload" title="새로고침">${ICON.refresh}</button>
+      <button class="ext" title="외부 브라우저로 열기">${ICON.external}</button>
+      <button class="x" title="닫기">${ICON.x}</button>
     </div>
     <div class="preview">
       <div class="urlbar">
@@ -526,7 +538,7 @@ function addPreviewPane(url, placement) {
     paneObj.cfg.url = u;
     input.value = u;
     iframe.src = u;
-    try { pane.querySelector('.ttl').textContent = '🌐 ' + new URL(u).host; } catch {}
+    try { pane.querySelector('.ttl').innerHTML = `${ICON.globe} ${escapeHtml(new URL(u).host)}`; } catch {}
   }
   input.addEventListener('keydown', (e) => { if (e.key === 'Enter') navigate(e.target.value); });
   pane.querySelector('.go').addEventListener('click', (e) => { e.stopPropagation(); navigate(input.value); });
@@ -614,7 +626,7 @@ function showDropIndicator(el, zone) {
   else if (zone === 'top') height = r.height / 2;
   else if (zone === 'bottom') { top = r.top + r.height / 2; height = r.height / 2; }
   Object.assign(dropIndicator.style, { display: 'block', left: left + 'px', top: top + 'px', width: width + 'px', height: height + 'px' });
-  dropIndicator.querySelector('.dz').textContent = { left: '◧ 왼쪽', right: '오른쪽 ▶', top: '▲ 위', bottom: '▼ 아래' }[zone] || '';
+  dropIndicator.querySelector('.dz').textContent = { left: '왼쪽', right: '오른쪽', top: '위', bottom: '아래' }[zone] || '';
 }
 function dockPane(src, target, zone) {
   const srcCol = findColumnOf(src);
@@ -661,7 +673,7 @@ async function loadRecentPaths() {
   const res = await fetch(`/api/recent-paths?limit=25&${profileQ()}`).then((r) => r.json()).catch(() => ({ paths: [] }));
   box.innerHTML = '';
   if (!res.paths || res.paths.length === 0) {
-    box.innerHTML = '<div class="fsnote">최근 작업 경로가 없습니다. 위에 경로를 직접 입력하거나 🗂 폴더 선택기를 쓰세요.</div>';
+    box.innerHTML = '<div class="fsnote">최근 작업 경로가 없습니다. 위에 경로를 직접 입력하거나 폴더 선택기를 쓰세요.</div>';
     return;
   }
   res.paths.forEach((p) => {
@@ -670,7 +682,7 @@ async function loadRecentPaths() {
     it.className = 'fsitem';
     it.title = p.path;
     it.innerHTML = `
-      <span class="ico">📁</span>
+      <span class="ico">${ICON.folder}</span>
       <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
         <b>${escapeHtml(folder)}</b> <span style="color:var(--muted);font-size:11px">${escapeHtml(p.path)}</span>
       </span>
@@ -685,7 +697,7 @@ async function choosePath(p) {
   p = (p || '').trim();
   if (!p) return;
   const res = await fetch(`/api/fs/list?path=${encodeURIComponent(p)}&${profileQ()}`).then((r) => r.json()).catch(() => ({ error: '경로 조회 실패' }));
-  if (res.error) { document.getElementById('fsnote').textContent = '⚠ ' + res.error; return; }
+  if (res.error) { document.getElementById('fsnote').textContent = res.error; return; }
   localStorage.setItem('cth_last_path', res.path);
   openSessionPicker(res.path);
 }
@@ -709,12 +721,12 @@ document.getElementById('osPick').addEventListener('click', async () => {
     }
     // 브라우저 모드: 서버측 다이얼로그 폴백
     const res = await fetch(`/api/fs/pick?path=${encodeURIComponent(cur)}`).then((r) => r.json());
-    if (res.error) { note.textContent = '⚠ ' + res.error; return; }
+    if (res.error) { note.textContent = res.error; return; }
     if (res.canceled || !res.path) return;
     document.getElementById('curPath').value = res.path;
     choosePath(res.path);
   } catch (e) {
-    note.textContent = '⚠ 폴더 선택 실패: ' + e.message;
+    note.textContent = '폴더 선택 실패: ' + e.message;
   } finally {
     btn.disabled = false; btn.textContent = orig;
   }
@@ -736,7 +748,7 @@ async function openSessionPicker(p) {
     const it = document.createElement('div');
     it.className = 'sesitem';
     it.innerHTML = `
-      <span class="ico">💬</span>
+      <span class="ico">${ICON.chat}</span>
       <div class="meta">
         <div class="title">${escapeHtml(s.title)}</div>
         <div class="sub">${relTime(s.mtime)} · ${s.sizeKB}KB · ${s.id.slice(0, 8)}</div>
@@ -785,15 +797,6 @@ function relTime(ms) {
   return new Date(ms).toLocaleDateString('ko-KR');
 }
 
-/* ---------- 세션 커스텀 이름 (서버 전역 저장, resumeId 기준) ---------- */
-function getName(id) { return id ? (names[id] || null) : null; }
-function setName(id, name) {
-  if (!id) return;
-  const v = (name || '').trim();
-  if (v) names[id] = v; else delete names[id];
-  fetch('/api/name', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, name: v }) }).catch(() => {});
-}
-
 /* ---------- LNB (최근 세션 + 전체 검색) ---------- */
 function renderSessionList(sessions, emptyMsg) {
   const box = document.getElementById('recentList');
@@ -804,24 +807,14 @@ function renderSessionList(sessions, emptyMsg) {
   }
   sessions.forEach((s) => {
     const folder = s.cwd.split(/[\\/]/).filter(Boolean).pop() || s.cwd;
-    const name = getName(s.id) || s.title;
     const it = document.createElement('div');
     it.className = 'recent-item';
-    it.title = `${name}\n${s.cwd}\n클릭 = 새 패널로 열기 / ✎ = 이름 변경`;
+    it.title = `${s.title}\n${s.cwd}\n클릭 = 새 패널로 열기`;
     it.innerHTML = `
-      <button class="rename" title="이름 변경">✎</button>
-      <div class="rt">💬 ${escapeHtml(name)}</div>
-      <div class="rf">📁 ${escapeHtml(folder)}</div>
+      <div class="rt">${ICON.chat} ${escapeHtml(s.title)}</div>
+      <div class="rf">${ICON.folder} ${escapeHtml(folder)}</div>
       <div class="rs">${relTime(s.mtime)}</div>`;
-    it.querySelector('.rename').onclick = async (e) => {
-      e.stopPropagation();
-      const v = await uiPrompt('세션 이름 변경', getName(s.id) || s.title, '비우면 기본 이름으로 되돌립니다.');
-      if (v === null) return;
-      setName(s.id, v);
-      applyNameToOpenPanes(s.id);
-      refreshLnb();
-    };
-    it.onclick = () => addPane({ cwd: s.cwd, resumeId: s.id, title: getName(s.id) || s.title }, 'column');
+    it.onclick = () => addPane({ cwd: s.cwd, resumeId: s.id, title: s.title }, 'column');
     box.appendChild(it);
   });
 }
@@ -844,17 +837,6 @@ async function searchSessions(q) {
 function refreshLnb() {
   const q = document.getElementById('lnbSearch').value.trim();
   if (q) searchSessions(q); else loadRecent();
-}
-
-// 열려있는 패널 중 해당 세션 제목을 커스텀 이름으로 갱신
-function applyNameToOpenPanes(id) {
-  const nm = getName(id);
-  columns.forEach((c) => c.panes.forEach((p) => {
-    if (p.cfg.resumeId === id) {
-      const ttl = p.el.querySelector('.ttl');
-      if (ttl) ttl.textContent = nm || p.cfg.title || '재개한 세션';
-    }
-  }));
 }
 
 let searchTimer;
@@ -887,14 +869,14 @@ applyTheme(localStorage.getItem('cth_theme') || 'dark');
 let rt;
 window.addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(fitAll, 120); });
 
+hydrateIcons();
 setLnb(localStorage.getItem('cth_lnb_collapsed') === '1');
 updateStatus();
 
-// 서버 전역 상태(세션 이름/프로필) 로드
+// 서버 전역 상태(프로필) 로드
 async function initState() {
   try {
     const s = await fetch('/api/state').then((r) => r.json());
-    names = s.names || {};
     if (Array.isArray(s.profiles) && s.profiles.length) profiles = s.profiles;
   } catch {}
   if (!profiles.find((p) => p.id === 'default')) profiles.unshift({ id: 'default', name: '기본' });
