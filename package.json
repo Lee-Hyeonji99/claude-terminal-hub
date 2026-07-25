@@ -5,6 +5,9 @@
   "description": "여러 Claude Code / 셸 세션을 한 브라우저 화면에서 보는 통합 터미널",
   "type": "commonjs",
   "main": "server.js",
+  "bin": {
+    "claude-hub": "bin/claude-hub"
+  },
   "scripts": {
     "start": "node server.js",
     "app": "electron electron/main.js"

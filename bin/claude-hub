@@ -1,0 +1,53 @@
+#!/usr/bin/env bash
+# Claude Terminal Hub launcher (macOS/Linux)
+# Reuse server if already running, otherwise start it in background.
+# Default opens Chrome in --app mode (standalone window). Use "claude-hub tab" for a normal browser tab.
+set -uo pipefail
+
+PORT="${CLAUDE_HUB_PORT:-4778}"
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+URL="http://localhost:$PORT"
+MODE="${1:-app}"
+
+is_running() {
+  curl -s -m 1 "$URL/health" 2>/dev/null | grep -q 'claude-terminal-hub'
+}
+
+open_hub() {
+  if [ "$MODE" = "tab" ]; then
+    open "$URL"
+    return
+  fi
+  CHROME="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+  if [ -x "$CHROME" ]; then
+    PROFILE_DIR="$HOME/.claude-hub-appmac"
+    "$CHROME" --app="$URL" --window-size=1500,950 --user-data-dir="$PROFILE_DIR" >/dev/null 2>&1 &
+    disown 2>/dev/null || true
+  else
+    open "$URL"
+  fi
+}
+
+if is_running; then
+  echo "[claude-hub] already running -> reuse port $PORT ($MODE)"
+  open_hub
+  exit 0
+fi
+
+echo "[claude-hub] starting server on port $PORT ..."
+export CLAUDE_HUB_PORT="$PORT"
+( cd "$ROOT" && nohup node server.js >/dev/null 2>&1 & disown ) 2>/dev/null
+
+ok=0
+for _ in $(seq 1 30); do
+  sleep 0.5
+  if is_running; then ok=1; break; fi
+done
+
+if [ "$ok" = "1" ]; then
+  echo "[claude-hub] ready -> $URL ($MODE)"
+  open_hub
+else
+  echo "[claude-hub] failed to start. Try manually: node $ROOT/server.js" >&2
+  exit 1
+fi
