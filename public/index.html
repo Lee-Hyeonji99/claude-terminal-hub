@@ -84,6 +84,9 @@
     header button,#tabs button,.sesactions button,#pickHere,.mhead button,#changeFolder{display:inline-flex;align-items:center;gap:6px}
     button [data-icon]{pointer-events:none}
     .icon-btn{padding:6px 8px !important;line-height:0}
+    .fontsize-group{display:flex;align-items:center;gap:2px;border:1px solid var(--border);border-radius:6px;padding:2px}
+    .fontsize-group button{border:none;padding:4px 8px;font-size:12px;font-weight:700;border-radius:4px}
+    .fontsize-group #fontSizeLabel{color:var(--muted);font-size:11px;min-width:20px;text-align:center;user-select:none}
     .recent-item .rf svg,.fsitem .ico svg,.pane .bar .cwd svg{color:var(--muted)}
     .sesitem .ico svg{color:var(--accent);width:18px;height:18px}
     .pane .bar button svg{width:15px;height:15px}
@@ -255,6 +258,11 @@
     <div class="popover-wrap">
       <button id="accentBtn" class="ghost icon-btn" title="강조 색상"><span data-icon="droplet"></span></button>
       <div id="accentPopover" class="popover"></div>
+    </div>
+    <div class="fontsize-group">
+      <button id="fontDown" title="터미널 글자 크기 작게 (Ctrl+-)">A−</button>
+      <span id="fontSizeLabel">13</span>
+      <button id="fontUp" title="터미널 글자 크기 크게 (Ctrl++)">A+</button>
     </div>
   </header>
 

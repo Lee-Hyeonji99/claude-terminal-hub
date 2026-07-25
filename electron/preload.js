@@ -6,4 +6,5 @@ contextBridge.exposeInMainWorld('claudeHub', {
   isApp: true,
   pickFolder: (initial) => ipcRenderer.invoke('pick-folder', initial),
   pickFile: () => ipcRenderer.invoke('pick-file'),
+  notify: (payload) => ipcRenderer.send('cth-notify', payload),
 });

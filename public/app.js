@@ -66,6 +66,33 @@ const TERM_THEMES = {
 function currentTermTheme() { return TERM_THEMES[document.body.dataset.theme] || TERM_THEMES.dark; }
 let activePane = null;
 
+/* ---------- 새 메시지 알림 (OS 알림 / 브라우저 알림) ---------- */
+function ensureNotifyPermission() {
+  if (window.claudeHub && window.claudeHub.isApp) return; // Electron: 메인 프로세스가 OS 알림 담당
+  if (!('Notification' in window) || Notification.permission !== 'default') return;
+  Notification.requestPermission().catch(() => {});
+}
+function notifyNewMessage(cfg) {
+  const title = (cfg.title || 'Claude').trim();
+  const shortCwd = cfg.cwd ? (cfg.cwd.split(/[\\/]/).filter(Boolean).pop() || cfg.cwd) : '';
+  const body = `${title}${shortCwd ? ' · ' + shortCwd : ''} 에 새 메시지가 도착했습니다.`;
+  if (window.claudeHub && window.claudeHub.notify) { window.claudeHub.notify({ title: 'Claude Terminal Hub', body }); return; }
+  if (!('Notification' in window) || Notification.permission !== 'granted' || document.hasFocus()) return;
+  try { new Notification('Claude Terminal Hub', { body }); } catch {}
+}
+
+/* ---------- 터미널 글자 크기 조절 ---------- */
+const FONT_MIN = 9, FONT_MAX = 28;
+let termFontSize = Math.max(FONT_MIN, Math.min(FONT_MAX, parseInt(localStorage.getItem('cth_font_size'), 10) || 13));
+function applyFontSize(px) {
+  termFontSize = Math.max(FONT_MIN, Math.min(FONT_MAX, px));
+  localStorage.setItem('cth_font_size', String(termFontSize));
+  const label = document.getElementById('fontSizeLabel');
+  if (label) label.textContent = termFontSize;
+  columns.forEach((c) => c.panes.forEach((p) => { if (p.term) { try { p.term.options.fontSize = termFontSize; } catch {} } }));
+  setTimeout(() => { try { fitAll(); } catch {} }, 30);
+}
+
 /* ---------- 계정 프로필 / 탭 ---------- */
 let profiles = [{ id: 'default', name: '기본' }]; // 서버 /api/state 에서 로드됨
 function saveProfiles() {
@@ -356,7 +383,7 @@ function addPane(cfg, placement) {
   const term = new Terminal({
     cursorBlink: true,
     fontFamily: 'Consolas, "Cascadia Mono", monospace',
-    fontSize: 13,
+    fontSize: termFontSize,
     theme: currentTermTheme(),
     scrollback: 8000,
     allowProposedApi: true,
@@ -410,6 +437,7 @@ function addPane(cfg, placement) {
     if (Date.now() - lastActivityAt < 5000) return;
     if (autoReload) { reload(); return; }
     pane.classList.add('has-changes');
+    notifyNewMessage(cfg);
   }
 
   function showBanner(msg) {
@@ -1024,6 +1052,17 @@ setupPopover('accentBtn', 'accentPopover');
 applyTheme(localStorage.getItem('cth_theme') || 'dark');
 buildAccentPicker();
 applyAccent(localStorage.getItem('cth_accent') || null);
+
+document.getElementById('fontDown').addEventListener('click', () => applyFontSize(termFontSize - 1));
+document.getElementById('fontUp').addEventListener('click', () => applyFontSize(termFontSize + 1));
+document.addEventListener('keydown', (e) => {
+  if (!(e.ctrlKey || e.metaKey) || e.altKey) return;
+  if (e.key === '=' || e.key === '+') { e.preventDefault(); applyFontSize(termFontSize + 1); }
+  else if (e.key === '-' || e.key === '_') { e.preventDefault(); applyFontSize(termFontSize - 1); }
+  else if (e.key === '0') { e.preventDefault(); applyFontSize(13); }
+});
+applyFontSize(termFontSize);
+ensureNotifyPermission();
 
 let rt;
 window.addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(fitAll, 120); });

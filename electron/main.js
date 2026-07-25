@@ -6,7 +6,7 @@
  * Ctrl+W 가 창을 닫지 않고 터미널(pty)로 그대로 전달되게 한다.
  * 또한 실수로 전체 세션을 날리는 새로고침(F5 / Ctrl+R)을 차단한다.
  */
-const { app, BrowserWindow, Menu, shell, ipcMain, dialog, nativeImage } = require('electron');
+const { app, BrowserWindow, Menu, shell, ipcMain, dialog, nativeImage, Notification } = require('electron');
 const http = require('http');
 const path = require('path');
 const { spawn } = require('child_process');
@@ -112,6 +112,24 @@ ipcMain.handle('pick-file', async () => {
   };
   const r = win ? await dialog.showOpenDialog(win, opts) : await dialog.showOpenDialog(opts);
   return (r.canceled || !r.filePaths[0]) ? null : r.filePaths[0];
+});
+
+// 새 메시지 알림: 창이 포커스 상태면 인앱 펄스(reload 버튼)로 충분하므로 생략하고,
+// 백그라운드일 때만 OS 알림 + 작업표시줄 아이콘 깜빡임(flashFrame)으로 존재를 알린다.
+ipcMain.on('cth-notify', (e, payload) => {
+  const win = BrowserWindow.fromWebContents(e.sender);
+  if (!win || win.isFocused()) return;
+  if (Notification.isSupported()) {
+    const n = new Notification({
+      title: (payload && payload.title) || 'Claude Terminal Hub',
+      body: (payload && payload.body) || '새 메시지가 도착했습니다.',
+      icon: ICON_PATH,
+    });
+    n.on('click', () => { win.show(); win.focus(); });
+    n.show();
+  }
+  win.flashFrame(true);
+  win.once('focus', () => win.flashFrame(false));
 });
 
 app.whenReady().then(async () => {
