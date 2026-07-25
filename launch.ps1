@@ -52,7 +52,16 @@ if (Test-Hub) {
 
 Write-Host "[claude-hub] starting server on port $Port ..." -ForegroundColor Cyan
 $env:CLAUDE_HUB_PORT = "$Port"
-Start-Process -FilePath "node" -ArgumentList "`"$Root\server.js`"" -WorkingDirectory $Root -WindowStyle Hidden
+
+# node-pty 는 postinstall 에서 Electron ABI 로 리빌드되므로, 브라우저 모드도 시스템 node 대신
+# Electron 의 node 런타임(ELECTRON_RUN_AS_NODE)으로 서버를 띄워 ABI 를 맞춘다.
+$ElectronExe = Join-Path $Root 'node_modules\electron\dist\electron.exe'
+if (Test-Path $ElectronExe) {
+    $env:ELECTRON_RUN_AS_NODE = '1'
+    Start-Process -FilePath $ElectronExe -ArgumentList "`"$Root\server.js`"" -WorkingDirectory $Root -WindowStyle Hidden
+} else {
+    Start-Process -FilePath "node" -ArgumentList "`"$Root\server.js`"" -WorkingDirectory $Root -WindowStyle Hidden
+}
 
 $ok = $false
 for ($i = 0; $i -lt 30; $i++) {

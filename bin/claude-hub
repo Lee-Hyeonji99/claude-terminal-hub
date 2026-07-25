@@ -47,9 +47,21 @@ if is_running; then
   exit 0
 fi
 
+electron_bin="$ROOT/node_modules/.bin/electron"
+if [ ! -x "$electron_bin" ]; then
+  echo "[claude-hub] Electron 이 없어 설치합니다 (npm install)…"
+  ( cd "$ROOT" && npm install )
+fi
+
 echo "[claude-hub] starting server on port $PORT ..."
 export CLAUDE_HUB_PORT="$PORT"
-( cd "$ROOT" && nohup node server.js >/dev/null 2>&1 & disown ) 2>/dev/null
+if [ -x "$electron_bin" ]; then
+  # node-pty 는 postinstall 에서 Electron ABI 로 리빌드되므로, 브라우저 tab 모드도
+  # 시스템 node 대신 Electron 의 node 런타임(ELECTRON_RUN_AS_NODE)으로 서버를 띄운다.
+  ( cd "$ROOT" && ELECTRON_RUN_AS_NODE=1 nohup "$electron_bin" server.js >/dev/null 2>&1 & disown ) 2>/dev/null
+else
+  ( cd "$ROOT" && nohup node server.js >/dev/null 2>&1 & disown ) 2>/dev/null
+fi
 
 ok=0
 for _ in $(seq 1 30); do

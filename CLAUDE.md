@@ -20,7 +20,7 @@
 
 UI/서버 변경 후 가능하면 실제로 확인한다.
 - 서버 헬스: `curl -s http://localhost:4778/health`
-- 서버는 detach 실행 권장: `Start-Process node -ArgumentList server.js -WindowStyle Hidden` (또는 `claude-hub`)
+- 서버는 `claude-hub` / `claude-hub tab` 로 띄우는 걸 권장. `node-pty` 는 `postinstall`에서 Electron ABI 로 리빌드되므로, 수동으로 띄울 때도 시스템 `node`가 아니라 `ELECTRON_RUN_AS_NODE=1 <node_modules 안 electron 바이너리> server.js` 로 실행해야 PTY 가 정상 동작한다.
 - Electron 앱은 F5/Ctrl+R 차단(세션 보존) — 새 코드 반영은 **Ctrl+Shift+R**(명시적 새로고침) 또는 앱 재기동.
 
 ## 3) 프로세스 종료 금지 (MUST)
