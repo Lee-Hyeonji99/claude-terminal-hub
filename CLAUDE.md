@@ -6,6 +6,13 @@
 - 앱 래퍼: `electron/` (`claude-hub-app`)
 - 실행: `claude-hub`(브라우저 앱창) / `claude-hub-app`(Electron) / `claude-hub tab`(탭)
 
+## 0) 작업 시작 전 pull 필수 (MUST)
+
+파일을 읽거나 코드를 수정하기 전에 **항상 먼저 `git pull`** 로 최신 상태를 받는다. 로컬이 원격보다 오래된 상태로 읽거나 작업을 시작하지 않는다.
+
+- 절차: `git fetch origin && git pull origin main`
+- 로컬에 반영 안 된 변경사항이 있으면 먼저 stash/commit 후 pull.
+
 ## 1) 코드 변경 시 커밋·푸시 필수 (MUST)
 
 이 저장소의 **코드/파일을 변경하면 반드시 git 커밋 후 push** 한다. 예외 없이 지속적으로 반영한다.
