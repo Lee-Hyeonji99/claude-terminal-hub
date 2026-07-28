@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.5.0] - 2026-07-28
+
+### Added
+- **터미널 글꼴 선택**: 헤더에 글꼴 드롭다운 추가(Cascadia Code / Cascadia Mono / JetBrains Mono / Fira Code / D2Coding / Consolas). 기본값을 Cascadia Code 스택으로 개선. 모든 열린 패널에 즉시 반영 + `localStorage` 저장.
+
+### Changed
+- **알림을 "작업 완료" 시에만 발생하도록 변경**: 기존에는 세션에 새 메시지가 감지될 때마다(매 메시지) 알림이 떠서 과도했음. 이제 **터미널 벨(`\x07`, Claude 가 턴 완료/입력 대기 시 울림)에서만** 알림(1.5s 디바운스). 벨을 울리지 않는 환경에서는 알림이 발생하지 않음.
+
 ## [1.4.0] - 2026-07-25
 
 ### Added

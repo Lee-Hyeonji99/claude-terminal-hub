@@ -72,12 +72,18 @@ function ensureNotifyPermission() {
   if (!('Notification' in window) || Notification.permission !== 'default') return;
   Notification.requestPermission().catch(() => {});
 }
-function notifyNewMessage(cfg) {
+// 작업 완료 알림 — 터미널 벨(\x07)에서만 발생. Claude 는 턴 완료/입력 대기 시 벨을 울린다.
+// (벨을 안 울리는 환경이면 알림은 그냥 발생하지 않음)
+let _lastNotifyAt = 0;
+function notifyDone(cfg) {
+  const now = Date.now();
+  if (now - _lastNotifyAt < 1500) return; // 벨 연타 디바운스
+  _lastNotifyAt = now;
   const title = (cfg.title || 'Claude').trim();
   const shortCwd = cfg.cwd ? (cfg.cwd.split(/[\\/]/).filter(Boolean).pop() || cfg.cwd) : '';
-  const body = `${title}${shortCwd ? ' · ' + shortCwd : ''} 에 새 메시지가 도착했습니다.`;
+  const body = `작업 완료 — ${title}${shortCwd ? ' · ' + shortCwd : ''}`;
   if (window.claudeHub && window.claudeHub.notify) { window.claudeHub.notify({ title: 'Claude Terminal Hub', body }); return; }
-  if (!('Notification' in window) || Notification.permission !== 'granted' || document.hasFocus()) return;
+  if (!('Notification' in window) || Notification.permission !== 'granted') return;
   try { new Notification('Claude Terminal Hub', { body }); } catch {}
 }
 
@@ -90,6 +96,23 @@ function applyFontSize(px) {
   const label = document.getElementById('fontSizeLabel');
   if (label) label.textContent = termFontSize;
   columns.forEach((c) => c.panes.forEach((p) => { if (p.term) { try { p.term.options.fontSize = termFontSize; } catch {} } }));
+  setTimeout(() => { try { fitAll(); } catch {} }, 30);
+}
+
+/* ---------- 터미널 글꼴(폰트) 선택 ---------- */
+const FONT_FAMILIES = [
+  { label: 'Cascadia Code', css: "'Cascadia Code','Cascadia Mono',Consolas,monospace" },
+  { label: 'Cascadia Mono', css: "'Cascadia Mono',Consolas,monospace" },
+  { label: 'JetBrains Mono', css: "'JetBrains Mono',Consolas,monospace" },
+  { label: 'Fira Code', css: "'Fira Code',Consolas,monospace" },
+  { label: 'D2Coding', css: "'D2Coding',Consolas,monospace" },
+  { label: 'Consolas', css: "Consolas,'Courier New',monospace" },
+];
+let termFontFamily = localStorage.getItem('cth_font_family') || FONT_FAMILIES[0].css;
+function applyFontFamily(css) {
+  termFontFamily = css;
+  localStorage.setItem('cth_font_family', css);
+  columns.forEach((c) => c.panes.forEach((p) => { if (p.term) { try { p.term.options.fontFamily = css; } catch {} } }));
   setTimeout(() => { try { fitAll(); } catch {} }, 30);
 }
 
@@ -382,7 +405,7 @@ function addPane(cfg, placement) {
   termEl.style.position = 'relative';
   const term = new Terminal({
     cursorBlink: true,
-    fontFamily: 'Consolas, "Cascadia Mono", monospace',
+    fontFamily: termFontFamily,
     fontSize: termFontSize,
     theme: currentTermTheme(),
     scrollback: 8000,
@@ -392,6 +415,8 @@ function addPane(cfg, placement) {
   term.loadAddon(fit);
   term.open(termEl);
   if (CanvasAddon) { try { term.loadAddon(new CanvasAddon()); } catch {} }
+  // 작업 완료 알림: Claude 가 턴 완료 시 울리는 터미널 벨에서만
+  try { term.onBell(() => notifyDone(cfg)); } catch {}
 
   // 복사/붙여넣기 + 제어키 처리
   const pasteFromClipboard = () => {
@@ -437,7 +462,7 @@ function addPane(cfg, placement) {
     if (Date.now() - lastActivityAt < 5000) return;
     if (autoReload) { reload(); return; }
     pane.classList.add('has-changes');
-    notifyNewMessage(cfg);
+    // 알림은 여기서 보내지 않음 — 작업 완료(터미널 벨)에서만 notifyDone 발생
   }
 
   function showBanner(msg) {
@@ -1062,6 +1087,20 @@ document.addEventListener('keydown', (e) => {
   else if (e.key === '0') { e.preventDefault(); applyFontSize(13); }
 });
 applyFontSize(termFontSize);
+
+// 글꼴 선택 채우기 + 배선
+(function initFontFamily() {
+  const sel = document.getElementById('fontFamily');
+  if (!sel) return;
+  sel.innerHTML = FONT_FAMILIES.map((f) => `<option value="${f.css.replace(/"/g, '&quot;')}">${f.label}</option>`).join('');
+  if (!FONT_FAMILIES.some((f) => f.css === termFontFamily)) {
+    // 저장값이 목록에 없으면 첫 항목으로 정규화
+    termFontFamily = FONT_FAMILIES[0].css;
+  }
+  sel.value = termFontFamily;
+  sel.addEventListener('change', () => applyFontFamily(sel.value));
+})();
+
 ensureNotifyPermission();
 
 let rt;
