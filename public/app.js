@@ -73,18 +73,16 @@ function ensureNotifyPermission() {
   Notification.requestPermission().catch(() => {});
 }
 // 작업 완료 알림 — 터미널 벨(\x07)에서만 발생. Claude 는 턴 완료/입력 대기 시 벨을 울린다.
-// (벨을 안 울리는 환경이면 알림은 그냥 발생하지 않음)
-let _lastNotifyAt = 0;
+// (벨을 안 울리는 환경이면 알림은 그냥 발생하지 않음). 디바운스는 세션(패널)별로 호출부에서 처리.
 function notifyDone(cfg) {
-  const now = Date.now();
-  if (now - _lastNotifyAt < 1500) return; // 벨 연타 디바운스
-  _lastNotifyAt = now;
   const title = (cfg.title || 'Claude').trim();
   const shortCwd = cfg.cwd ? (cfg.cwd.split(/[\\/]/).filter(Boolean).pop() || cfg.cwd) : '';
   const body = `작업 완료 — ${title}${shortCwd ? ' · ' + shortCwd : ''}`;
-  if (window.claudeHub && window.claudeHub.notify) { window.claudeHub.notify({ title: 'Claude Terminal Hub', body }); return; }
+  // 세션별 구분을 위해 tag 사용(Electron/브라우저 모두) — 같은 세션 알림은 갱신, 다른 세션은 별도로 쌓임
+  const tag = 'cth-' + (cfg.resumeId || title || Math.random().toString(36).slice(2));
+  if (window.claudeHub && window.claudeHub.notify) { window.claudeHub.notify({ title: '작업 완료', body, tag }); return; }
   if (!('Notification' in window) || Notification.permission !== 'granted') return;
-  try { new Notification('Claude Terminal Hub', { body }); } catch {}
+  try { new Notification('작업 완료', { body, tag }); } catch {}
 }
 
 /* ---------- 터미널 글자 크기 조절 ---------- */
@@ -370,7 +368,7 @@ function newColumn(atIndex) {
 function setActive(pane) {
   if (activePane && activePane.el) activePane.el.classList.remove('active');
   activePane = pane;
-  if (pane && pane.el) { pane.el.classList.add('active'); if (pane.term) { try { pane.term.focus(); } catch {} } }
+  if (pane && pane.el) { pane.el.classList.add('active'); pane.el.classList.remove('done'); if (pane.term) { try { pane.term.focus(); } catch {} } }
 }
 
 /* ---------- 패널(세션) 생성 ---------- */
@@ -415,8 +413,15 @@ function addPane(cfg, placement) {
   term.loadAddon(fit);
   term.open(termEl);
   if (CanvasAddon) { try { term.loadAddon(new CanvasAddon()); } catch {} }
-  // 작업 완료 알림: Claude 가 턴 완료 시 울리는 터미널 벨에서만
-  try { term.onBell(() => notifyDone(cfg)); } catch {}
+  // 작업 완료 알림: Claude 가 턴 완료 시 울리는 터미널 벨에서만 (세션별 1.5s 디바운스)
+  // + 앱을 보고 있어도 어느 세션이 끝났는지 보이도록 패널에 완료 표시(활성 패널 제외)
+  let lastBellAt = 0;
+  try {
+    term.onBell(() => {
+      if (!pane.classList.contains('active')) pane.classList.add('done');
+      const now = Date.now(); if (now - lastBellAt < 1500) return; lastBellAt = now; notifyDone(cfg);
+    });
+  } catch {}
 
   // 복사/붙여넣기 + 제어키 처리
   const pasteFromClipboard = () => {
@@ -455,6 +460,9 @@ function addPane(cfg, placement) {
   let lastActivityAt = Date.now();
   let lastArtifact = null;
   let ws = null;
+  let reconnectTries = 0;
+  let reconnectTimer = null;
+  const RECONNECT_MAX = 6;
   const proto = location.protocol === 'https:' ? 'wss' : 'ws';
 
   // 세션 파일이 외부에서 커졌을 때 (새 메시지). 최근 내 입력이면 내 세션 자체 쓰기일 수 있어 무시.
@@ -465,15 +473,29 @@ function addPane(cfg, placement) {
     // 알림은 여기서 보내지 않음 — 작업 완료(터미널 벨)에서만 notifyDone 발생
   }
 
-  function showBanner(msg) {
+  function showBanner(msg, btnLabel) {
     hideBanner();
     const b = document.createElement('div');
     b.className = 'disc-banner';
-    b.innerHTML = `<span class="i">${ICON.warn}</span><span>${escapeHtml(msg)}</span> <button>재연결</button>`;
-    b.querySelector('button').onclick = () => { hideBanner(); connect(true); };
+    b.innerHTML = `<span class="i">${ICON.warn}</span><span>${escapeHtml(msg)}</span>` + (btnLabel ? ` <button>${escapeHtml(btnLabel)}</button>` : '');
+    const btn = b.querySelector('button');
+    if (btn) btn.onclick = () => { reconnectTries = 0; if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; } hideBanner(); connect(true); };
     termEl.appendChild(b);
   }
   function hideBanner() { const b = termEl.querySelector('.disc-banner'); if (b) b.remove(); }
+
+  // 끊김 시 자동 백오프 재연결 (서버가 다시 뜨면 자동 복구). 서버 pty 는 ws close 시 종료되므로 중복 세션 없음.
+  function scheduleReconnect() {
+    if (disposed || reconnectTimer) return;
+    if (reconnectTries >= RECONNECT_MAX) {
+      showBanner('연결 끊김 — 자동 재연결 실패(서버 꺼짐?). 수동으로 재시도하세요.', '재연결');
+      return;
+    }
+    reconnectTries++;
+    const delay = Math.min(8000, 1000 * Math.pow(2, Math.min(reconnectTries - 1, 3)));
+    showBanner(`연결 끊김 — ${Math.round(delay / 1000)}초 후 재연결 시도 (${reconnectTries}/${RECONNECT_MAX})`, '지금 재시도');
+    reconnectTimer = setTimeout(() => { reconnectTimer = null; connect(true); }, delay);
+  }
 
   function connect(isReconnect) {
     ws = new WebSocket(`${proto}://${location.host}/pty`);
@@ -481,6 +503,8 @@ function addPane(cfg, placement) {
     paneObj.ws = ws;
     ws.onopen = () => {
       hideBanner();
+      reconnectTries = 0;
+      if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
       if (isReconnect) term.write('\r\n\x1b[90m[재연결됨]\x1b[0m\r\n');
       paneObj.fit();
       ws.send(JSON.stringify({
@@ -512,7 +536,7 @@ function addPane(cfg, placement) {
     ws.onclose = () => {
       pane.classList.remove('running');
       if (reloading) { reloading = false; return; } // 새로고침으로 인한 의도된 종료
-      if (!disposed) showBanner('연결이 끊겼습니다 (서버 재시작 등). 입력이 전달되지 않습니다.');
+      if (!disposed) scheduleReconnect(); // 자동 백오프 재연결 (서버 복구 시 자동)
     };
   }
 
@@ -539,6 +563,7 @@ function addPane(cfg, placement) {
     connect,
     dispose() {
       disposed = true;
+      if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
       try { ro.disconnect(); } catch {}
       try { if (ws) ws.close(); } catch {}
       try { term.dispose(); } catch {}
@@ -562,7 +587,7 @@ function addPane(cfg, placement) {
 
   term.onData((d) => {
     lastActivityAt = Date.now();
-    pane.classList.remove('has-changes'); // 내가 입력 중 → 알림 해제
+    pane.classList.remove('has-changes', 'done'); // 내가 입력 중 → 알림/완료표시 해제
     if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: 'input', data: d }));
     else showBanner('연결이 끊겨 입력이 전달되지 않습니다.');
   });
