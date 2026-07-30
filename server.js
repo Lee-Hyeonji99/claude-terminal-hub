@@ -542,98 +542,128 @@ function spawnShell(cwd, cols, rows, profileId) {
   });
 }
 
-wss.on('connection', (ws) => {
-  let term = null;
-  const safeSend = (obj) => { if (ws.readyState === ws.OPEN) ws.send(JSON.stringify(obj)); };
+// 영속 PTY 세션 저장소 (key -> session). ws 가 끊겨도 pty 는 유지 → 재연결 시 재부착(reattach).
+// 실제 종료는 클라이언트가 패널 X 로 보내는 {type:'kill'} 또는 프로세스 자체 exit 시에만.
+const ptyStore = new Map();
+const MAX_BUF = 256 * 1024; // 재부착 시 재생할 최근 출력 버퍼 상한
+function broadcast(session, str) {
+  for (const c of session.subs) { if (c.readyState === c.OPEN) { try { c.send(str); } catch {} } }
+}
+function broadcastJson(session, obj) { broadcast(session, JSON.stringify(obj)); }
+function stopWatch(session) {
+  const w = session.watch;
+  if (w.file) { try { fs.unwatchFile(w.file); } catch {} w.file = null; }
+  if (w.discoverIv) { clearInterval(w.discoverIv); w.discoverIv = null; }
+}
+function beginWatch(session, jsonl, isResume) {
+  const w = session.watch;
+  w.file = jsonl; w.isResume = isResume;
+  try { w.pos = fs.statSync(jsonl).size; } catch { w.pos = 0; }
+  fs.watchFile(jsonl, { interval: 1200 }, (curr) => {
+    if (curr.size <= w.pos) { w.pos = curr.size; return; }
+    let delta = '';
+    try {
+      const fd = fs.openSync(jsonl, 'r');
+      const len = curr.size - w.pos;
+      const b = Buffer.alloc(len);
+      fs.readSync(fd, b, 0, len, w.pos);
+      fs.closeSync(fd);
+      delta = b.toString('utf8');
+    } catch { w.pos = curr.size; return; }
+    w.pos = curr.size;
+    if (w.isResume) broadcastJson(session, { type: 'changed' });
+    for (const a of extractArtifacts(delta)) broadcastJson(session, { type: 'artifact', path: a.path, tool: a.tool });
+  });
+}
+function startWatch(session) {
+  const dir = path.join(projectsDirFor(session.profile), encodeProjectPath(session.cwd || os.homedir()));
+  if (session.resumeId) {
+    const jf = path.join(dir, session.resumeId + '.jsonl');
+    if (fs.existsSync(jf)) beginWatch(session, jf, true);
+    return;
+  }
+  const startT = Date.now();
+  let tries = 0;
+  session.watch.discoverIv = setInterval(() => {
+    tries++;
+    let newest = null, newestM = 0;
+    try {
+      for (const f of fs.readdirSync(dir)) {
+        if (!f.endsWith('.jsonl')) continue;
+        const st = fs.statSync(path.join(dir, f));
+        if (st.mtimeMs > newestM) { newestM = st.mtimeMs; newest = path.join(dir, f); }
+      }
+    } catch {}
+    if (newest && newestM >= startT - 3000) { clearInterval(session.watch.discoverIv); session.watch.discoverIv = null; beginWatch(session, newest, false); }
+    else if (tries > 15) { clearInterval(session.watch.discoverIv); session.watch.discoverIv = null; }
+  }, 800);
+}
+function killSession(key) {
+  const s = ptyStore.get(key);
+  if (!s) return;
+  stopWatch(s);
+  try { s.term.kill(); } catch {}
+  ptyStore.delete(key);
+}
 
-  // 세션 jsonl 감시: resume 세션은 새 메시지 알림('changed'), 모든 세션은 아티팩트('artifact') 추출
-  const watch = { file: null, pos: 0, isResume: false, discoverIv: null };
-  function beginWatch(jsonl, isResume) {
-    watch.file = jsonl; watch.isResume = isResume;
-    try { watch.pos = fs.statSync(jsonl).size; } catch { watch.pos = 0; }
-    fs.watchFile(jsonl, { interval: 1200 }, (curr) => {
-      if (curr.size <= watch.pos) { watch.pos = curr.size; return; }
-      let delta = '';
-      try {
-        const fd = fs.openSync(jsonl, 'r');
-        const len = curr.size - watch.pos;
-        const b = Buffer.alloc(len);
-        fs.readSync(fd, b, 0, len, watch.pos);
-        fs.closeSync(fd);
-        delta = b.toString('utf8');
-      } catch { watch.pos = curr.size; return; }
-      watch.pos = curr.size;
-      if (watch.isResume) safeSend({ type: 'changed' });
-      for (const a of extractArtifacts(delta)) safeSend({ type: 'artifact', path: a.path, tool: a.tool });
-    });
-  }
-  function watchSession(cwd, resumeId, profileId) {
-    const dir = path.join(projectsDirFor(profileId), encodeProjectPath(cwd || os.homedir()));
-    if (resumeId) {
-      const jf = path.join(dir, resumeId + '.jsonl');
-      if (fs.existsSync(jf)) beginWatch(jf, true);
-      return;
-    }
-    // 새 대화: 곧 생성될 최신 jsonl 을 탐색해 감시 시작
-    const startT = Date.now();
-    let tries = 0;
-    watch.discoverIv = setInterval(() => {
-      tries++;
-      let newest = null, newestM = 0;
-      try {
-        for (const f of fs.readdirSync(dir)) {
-          if (!f.endsWith('.jsonl')) continue;
-          const s = fs.statSync(path.join(dir, f));
-          if (s.mtimeMs > newestM) { newestM = s.mtimeMs; newest = path.join(dir, f); }
-        }
-      } catch {}
-      if (newest && newestM >= startT - 3000) { clearInterval(watch.discoverIv); watch.discoverIv = null; beginWatch(newest, false); }
-      else if (tries > 15) { clearInterval(watch.discoverIv); watch.discoverIv = null; }
-    }, 800);
-  }
-  function unwatch() {
-    if (watch.file) { try { fs.unwatchFile(watch.file); } catch {} watch.file = null; }
-    if (watch.discoverIv) { clearInterval(watch.discoverIv); watch.discoverIv = null; }
-  }
+wss.on('connection', (ws) => {
+  let boundKey = null;
+  const safeSend = (obj) => { if (ws.readyState === ws.OPEN) ws.send(JSON.stringify(obj)); };
 
   ws.on('message', (raw) => {
     let msg;
     try { msg = JSON.parse(raw.toString()); } catch { return; }
 
     if (msg.type === 'init') {
-      if (term) return;
-      const cwd = (msg.cwd || '').trim();
-      try {
-        term = spawnShell(cwd, msg.cols, msg.rows, msg.profile); // 크기 + 프로필(계정) 반영
-      } catch (err) {
-        safeSend({ type: 'error', message: `PTY 생성 실패: ${err.message}` });
+      const key = String(msg.key || ('auto_' + Date.now() + '_' + Math.random().toString(36).slice(2)));
+      const cols = Math.max(2, msg.cols | 0) || 80;
+      const rows = Math.max(1, msg.rows | 0) || 24;
+      const existing = ptyStore.get(key);
+      if (existing && !existing.exited) {
+        // 재부착: 살아있는 세션에 다시 붙는다 (claude 그대로 유지, 재시작 아님)
+        boundKey = key;
+        existing.subs.add(ws);
+        safeSend({ type: 'ready', pid: existing.term.pid, cwd: existing.cwd, reattached: true });
+        if (existing.buf) { try { ws.send(existing.buf); } catch {} } // 최근 화면 재생 → 재부착 클라이언트 상태 복원
+        try { existing.term.resize(cols, rows); } catch {}
         return;
       }
-      term.onData((data) => { if (ws.readyState === ws.OPEN) ws.send(data); });
-      term.onExit(({ exitCode }) => safeSend({ type: 'exit', code: exitCode }));
-      safeSend({ type: 'ready', pid: term.pid, cwd: cwd || os.homedir() });
-
-      // 실행 명령 결정: resume > runClaude(claude) > (없음, 셸만)
+      // 신규 세션 생성
+      const cwd = (msg.cwd || '').trim();
+      let term;
+      try { term = spawnShell(cwd, cols, rows, msg.profile); }
+      catch (err) { safeSend({ type: 'error', message: `PTY 생성 실패: ${err.message}` }); return; }
+      const session = {
+        key, term, cwd: cwd || os.homedir(), profile: msg.profile, resumeId: msg.resumeId,
+        buf: '', subs: new Set([ws]), exited: false, watch: { file: null, pos: 0, isResume: false, discoverIv: null },
+      };
+      ptyStore.set(key, session);
+      boundKey = key;
+      term.onData((data) => {
+        session.buf += data;
+        if (session.buf.length > MAX_BUF) session.buf = session.buf.slice(-MAX_BUF);
+        broadcast(session, data);
+      });
+      term.onExit(({ exitCode }) => { session.exited = true; broadcastJson(session, { type: 'exit', code: exitCode }); stopWatch(session); ptyStore.delete(key); });
+      safeSend({ type: 'ready', pid: term.pid, cwd: session.cwd });
       let cmd = null;
       if (msg.resumeId) cmd = `claude --resume ${msg.resumeId}`;
       else if (msg.runClaude) cmd = (msg.command && msg.command.trim()) || 'claude';
-      if (cmd) setTimeout(() => { if (term) term.write(`${cmd}\r`); }, 400);
-      watchSession(cwd, msg.resumeId, msg.profile);
+      if (cmd) setTimeout(() => { try { term.write(`${cmd}\r`); } catch {} }, 400);
+      startWatch(session);
       return;
     }
 
-    if (!term) return;
-    if (msg.type === 'input') term.write(msg.data);
-    else if (msg.type === 'resize') {
-      const cols = Math.max(2, msg.cols | 0);
-      const rows = Math.max(1, msg.rows | 0);
-      try { term.resize(cols, rows); } catch {}
-    }
+    const s = boundKey ? ptyStore.get(boundKey) : null;
+    if (!s || s.exited) return;
+    if (msg.type === 'input') { try { s.term.write(msg.data); } catch {} }
+    else if (msg.type === 'resize') { try { s.term.resize(Math.max(2, msg.cols | 0) || 80, Math.max(1, msg.rows | 0) || 24); } catch {} }
+    else if (msg.type === 'kill') { killSession(boundKey); } // 사용자가 패널 종료 → 실제 pty 종료
   });
 
+  // ws 가 끊겨도 pty 는 죽이지 않는다 (재부착 대비). 구독만 해제.
   ws.on('close', () => {
-    unwatch();
-    if (term) { try { term.kill(); } catch {} term = null; }
+    if (boundKey) { const s = ptyStore.get(boundKey); if (s) s.subs.delete(ws); }
   });
 });
 

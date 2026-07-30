@@ -43,6 +43,7 @@ UI/서버 변경 후 가능하면 실제로 확인한다.
 - 세션 커스텀 이름/프로필: 서버 전역 파일 `~/.claude-terminal-hub/state.json` (localStorage 아님).
 - 세션 제목 우선순위: Claude `/rename`(custom-title) > ai-title > 첫 메시지.
 - 프로필별 계정 분리: `CLAUDE_CONFIG_DIR = ~/.claude-hub-profiles/<id>`.
+- **세션 영속(reattach)**: pty 는 ws 에 종속되지 않고 `ptyStore`(key→session)로 유지된다. ws 가 끊겨도 pty 는 살아있고 재연결 시 같은 key 로 재부착한다. 실제 종료는 클라이언트의 `{type:'kill'}`(패널 X) 또는 프로세스 exit 뿐 — 따라서 **서버 프로세스를 죽이면 살아있는 모든 세션이 사라진다**(§3 더욱 중요).
 
 ## 5) 버전 관리
 

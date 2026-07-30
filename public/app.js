@@ -375,6 +375,7 @@ function setActive(pane) {
 function addPane(cfg, placement) {
   emptyMsg.style.display = 'none';
   if (!cfg.profile) cfg.profile = activeProfileId; // 현재 계정 프로필에 소속
+  if (!cfg.key) cfg.key = 'k_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8); // 재부착용 안정 키
 
   let col;
   if (placement === 'row' && activePane && findColumnOf(activePane)) col = findColumnOf(activePane);
@@ -508,7 +509,7 @@ function addPane(cfg, placement) {
       if (isReconnect) term.write('\r\n\x1b[90m[재연결됨]\x1b[0m\r\n');
       paneObj.fit();
       ws.send(JSON.stringify({
-        type: 'init', cwd: cfg.cwd, runClaude: cfg.runClaude, command: cfg.command,
+        type: 'init', key: cfg.key, cwd: cfg.cwd, runClaude: cfg.runClaude, command: cfg.command,
         resumeId: cfg.resumeId, profile: cfg.profile, cols: term.cols || 80, rows: term.rows || 24,
       }));
     };
@@ -518,6 +519,8 @@ function addPane(cfg, placement) {
           const m = JSON.parse(ev.data);
           if (m.type === 'ready') {
             pane.classList.remove('exited'); pane.classList.add('running');
+            // 재부착이면 곧 서버가 최근 출력 버퍼를 재생 → 중복 방지 위해 화면 비우고 받는다
+            if (m.reattached) { try { term.reset(); } catch {} }
             // claude 등 TUI 기동 후 한 번 더 크기 동기화 (입력줄 정렬)
             setTimeout(() => paneObj.fit(), 800);
             return;
@@ -545,7 +548,12 @@ function addPane(cfg, placement) {
     reloading = true;
     pane.classList.remove('has-changes');
     lastActivityAt = Date.now();
+    // 기존 pty 를 실제 종료하고, 새 key 로 재시작(단순 재부착이 아니라 --resume 재실행)
+    try { if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: 'kill' })); } catch {}
     try { if (ws) ws.close(); } catch {}
+    cfg.key = 'k_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+    reconnectTries = 0;
+    if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
     term.reset();
     term.write('\r\n\x1b[90m[세션 새로고침 중…]\x1b[0m\r\n');
     connect(true);
@@ -565,6 +573,8 @@ function addPane(cfg, placement) {
       disposed = true;
       if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
       try { ro.disconnect(); } catch {}
+      // 서버 pty 를 실제로 종료(패널 닫기 = 세션 종료). ws close 만으로는 이제 pty 가 안 죽음.
+      try { if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: 'kill' })); } catch {}
       try { if (ws) ws.close(); } catch {}
       try { term.dispose(); } catch {}
       const c = findColumnOf(paneObj);
