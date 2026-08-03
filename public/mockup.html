@@ -1,0 +1,281 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Claude Terminal Hub — 업데이트 미리보기(목업)</title>
+</head>
+<body>
+<style>
+  /* 실제 앱의 다크 테마 토큰을 그대로 사용 (사용자가 좋아하는 그 색) — 의도적으로 다크 단일 */
+  .m{
+    --bg:#0c0e14; --panel:#12151f; --head:#1a1e2b; --border:#262c3d;
+    --accent:#4c8bf5; --text:#d7dbe6; --muted:#8a91a5; --ok:#3fb950; --danger:#e5484d;
+    --new:#f0a020; /* 신규 표시(앰버) — 기존 파란 UI와 구분 */
+    --mono:"Cascadia Mono","Consolas",ui-monospace,monospace;
+    --ui:"Segoe UI",system-ui,-apple-system,sans-serif;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:#07080c;color:#d7dbe6;font-family:"Segoe UI",system-ui,sans-serif}
+  .wrap{max-width:1180px;margin:0 auto;padding:22px 18px 60px}
+  .lead h1{font-size:20px;margin:0 0 4px;letter-spacing:.2px}
+  .lead p{color:#8a91a5;font-size:13px;margin:0 0 14px;line-height:1.5}
+  .controls{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin:0 0 14px;padding:10px 12px;background:#12151f;border:1px solid #262c3d;border-radius:10px}
+  .controls .lbl{font-size:12px;color:#8a91a5;margin-right:2px}
+  .tg{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;padding:5px 10px;border:1px solid #2b3550;border-radius:20px;cursor:pointer;user-select:none;background:#0f1320}
+  .tg input{accent-color:#f0a020;margin:0}
+  .tg.on{border-color:#f0a020;color:#ffd9a0}
+  .hint{font-size:11.5px;color:#6f7891;margin-left:auto}
+
+  /* NEW 뱃지/아웃라인 */
+  .newtag{font-size:9px;font-weight:800;letter-spacing:.4px;color:#0c0e14;background:var(--new);border-radius:4px;padding:1px 5px;vertical-align:middle}
+  .newbox{position:relative;outline:2px dashed var(--new);outline-offset:-1px}
+  .newbox::before{content:"NEW";position:absolute;top:-9px;left:10px;z-index:3;font-size:9px;font-weight:800;color:#0c0e14;background:var(--new);border-radius:4px;padding:1px 6px}
+  .newic{color:var(--new) !important}
+
+  /* 최소화 트레이 (NEW) */
+  .tray{display:flex;align-items:center;gap:7px;padding:5px 8px;background:#0e1119;border-bottom:1px solid var(--border);flex-wrap:wrap}
+  .tray .tl{font-size:10.5px;color:var(--muted);font-weight:700;letter-spacing:.3px}
+  .chip{display:inline-flex;align-items:center;gap:6px;font-size:11px;padding:3px 9px 3px 8px;border:1px solid var(--border);border-radius:16px;background:var(--panel);color:var(--text);cursor:pointer}
+  .chip:hover{border-color:var(--accent)}
+  .chip .cd{width:7px;height:7px;border-radius:50%}
+  .chip .cd.run{background:var(--ok)} .chip .cd.done{background:var(--new)}
+  .chip .rs{color:var(--muted);font-size:12px}
+  .traytog{margin-left:auto;font-size:10.5px;color:var(--muted);border:1px solid var(--border);border-radius:6px;padding:2px 8px;cursor:pointer}
+
+  /* ---- 앱 프레임 ---- */
+  .m{background:var(--bg);border:1px solid var(--border);border-radius:12px;overflow:hidden;font-family:var(--ui);box-shadow:0 20px 60px rgba(0,0,0,.5)}
+  .hdr{display:flex;align-items:center;gap:10px;padding:8px 12px;background:var(--head);border-bottom:1px solid var(--border);flex-wrap:wrap}
+  .brand{font-weight:600;font-size:13px}.brand b{color:var(--accent)}
+  .btn{display:inline-flex;align-items:center;gap:5px;font-size:12px;padding:5px 9px;border:1px solid var(--border);border-radius:6px;background:var(--panel);color:var(--text)}
+  .btn.pri{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600}
+  .btn.gh{background:transparent}
+  .sp{flex:1}
+  .stat{font-size:11.5px;color:var(--muted)}
+  .tabs{display:flex;gap:4px;padding:4px 8px;background:var(--bg);border-bottom:1px solid var(--border)}
+  .tab{font-size:12px;padding:5px 12px;border:1px solid var(--border);border-radius:7px 7px 0 0;background:var(--panel);color:var(--muted)}
+  .tab.act{color:var(--text);background:var(--head);border-color:var(--accent);border-bottom-color:var(--head)}
+  .tab .cnt{color:var(--accent);font-size:10px;margin-left:5px}
+
+  .body{display:flex;height:560px;min-height:0}
+  .lnb{width:210px;flex:none;border-right:1px solid var(--border);background:var(--panel);display:flex;flex-direction:column}
+  .lnb .lh{padding:9px 11px;font-size:11px;font-weight:700;color:var(--muted);border-bottom:1px solid var(--border);display:flex;justify-content:space-between}
+  .search{margin:7px;padding:5px 9px;border:1px solid var(--border);border-radius:6px;color:var(--muted);font-size:11.5px;background:var(--bg)}
+  .ri{padding:7px 9px;border-radius:7px;margin:0 6px 4px;font-size:11.5px}
+  .ri:hover{background:var(--head)}
+  .ri .t{color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .ri .f{color:var(--accent);font-size:10px;margin-top:2px}
+
+  .stage{flex:1;display:flex;gap:8px;padding:8px;min-width:0}
+  .col{display:flex;flex-direction:column;gap:8px;min-width:0}
+  .col.left{flex:1.15}
+  .col.right{flex:1}
+  .pane{display:flex;flex-direction:column;background:var(--panel);border:1px solid var(--border);border-radius:8px;overflow:hidden;min-height:0}
+  .pane.active{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent)}
+  .bar{display:flex;align-items:center;gap:7px;padding:5px 8px;background:var(--head);border-bottom:1px solid var(--border);font-size:11.5px}
+  .dot{width:8px;height:8px;border-radius:50%;background:var(--ok);flex:none}
+  .bar .ttl{color:var(--text);font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .bar .cwd{color:var(--muted);font-size:10px}
+  .bar .grow{flex:1}
+  .ic{font-size:12px;color:var(--muted);border:1px solid transparent;border-radius:4px;padding:1px 4px}
+  .ic.pill{border-color:var(--border);border-radius:10px;padding:1px 7px;font-size:10px}
+
+  .term{flex:1;padding:8px 10px;font-family:var(--mono);font-size:12px;line-height:1.55;color:#cfe3d6;overflow:hidden;background:#0e1119}
+  .term .u{color:#7aa2f7}.term .a{color:#cdd6f4}.term .g{color:#6f7891}.term .ok{color:var(--ok)}
+  .cursor{display:inline-block;width:7px;height:14px;background:var(--accent);vertical-align:-2px;animation:bl 1s steps(1) infinite}
+  @keyframes bl{50%{opacity:0}}
+
+  /* 컴포즈 입력창 (NEW) */
+  .compose{flex:none;border-top:1px solid var(--border);background:var(--panel);padding:8px}
+  .compose .ta{min-height:46px;border:1px solid var(--border);border-radius:7px;background:var(--bg);color:var(--text);font-family:var(--ui);font-size:12.5px;padding:8px 10px;color:var(--muted)}
+  .compose .row{display:flex;align-items:center;gap:6px;margin-top:7px}
+  .cbtn{font-size:11px;padding:4px 9px;border:1px solid var(--border);border-radius:6px;color:var(--text);background:var(--bg)}
+  .cbtn.send{margin-left:auto;background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600}
+
+  /* 세션 뷰어 (NEW) */
+  .viewer{flex:1}
+  .viewer .vbar{display:flex;align-items:center;gap:7px;padding:6px 9px;background:var(--head);border-bottom:1px solid var(--border);font-size:11.5px;color:var(--text);font-weight:600}
+  .vbody{flex:1;overflow:hidden;padding:10px;display:flex;flex-direction:column;gap:9px;font-size:12px}
+  .msg{display:flex;gap:7px}
+  .msg .who{font-size:10px;color:var(--muted);flex:none;width:34px;text-align:right;padding-top:2px}
+  .bub{background:var(--head);border:1px solid var(--border);border-radius:8px;padding:6px 9px;color:var(--text);line-height:1.5;max-width:100%}
+  .bub.user{background:#152033;border-color:#284163}
+  .card{border:1px solid var(--border);border-radius:7px;overflow:hidden}
+  .card .ch{display:flex;align-items:center;gap:6px;padding:5px 9px;background:#0f1320;font-size:11px;color:var(--muted)}
+  .card.task .ch{color:#c9b6f5}
+  .card .cc{padding:7px 10px;font-size:11.5px;color:var(--text);line-height:1.5;border-top:1px solid var(--border)}
+  .imgph{height:66px;border:1px solid var(--border);border-radius:6px;background:repeating-linear-gradient(45deg,#151a26,#151a26 8px,#11151f 8px,#11151f 16px);display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:11px}
+  .artlink{display:inline-flex;align-items:center;gap:6px;font-size:11.5px;color:var(--accent);border:1px solid #284163;border-radius:6px;padding:4px 9px;background:#0f1626}
+
+  /* 도움말 오버레이 (NEW) */
+  .help{margin-top:14px}
+  .help .hb{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:16px 18px}
+  .help h3{margin:0 0 10px;font-size:14px}
+  .cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:14px}
+  .cols h4{margin:0 0 7px;font-size:11px;color:var(--new);letter-spacing:.4px;text-transform:uppercase}
+  .kv{display:flex;justify-content:space-between;gap:10px;font-size:12px;padding:3px 0;border-bottom:1px dashed #222a3b}
+  .kv .k{color:var(--text);font-family:var(--mono);font-size:11.5px}
+  .kv .v{color:var(--muted);text-align:right}
+  .off{display:none !important}
+  .legend{font-size:11.5px;color:#8a91a5;margin-top:12px;display:flex;align-items:center;gap:8px}
+  .swatch{display:inline-block;width:22px;height:0;border-top:2px dashed var(--new);vertical-align:middle}
+  .cap{font-size:11px;color:#5f677d;margin-top:6px}
+</style>
+
+<div class="wrap m" id="root">
+  <div class="lead" style="background:none;border:none;padding:0;box-shadow:none">
+    <h1>Claude Terminal Hub — 제안 업데이트 미리보기 <span class="newtag">MOCKUP</span></h1>
+    <p>실제 앱이 아니라 <b>제안 레이아웃 목업</b>입니다. 색은 지금 쓰시는 다크 테마 그대로.
+       아래 토글로 신규 요소를 켜고 꺼보세요 — <b>전부 끄면 지금 화면과 동일</b>합니다.<br>
+       패널 바의 <b style="color:#f0a020">─</b> = <b>최소화</b>(눈에서 숨기지만 claude 는 백그라운드에서 계속 실행) ↔ <b>✕</b> = 종료. 최소화된 세션은 위 <b>트레이 칩</b>을 눌러 다시 꺼냅니다.</p>
+  </div>
+
+  <div class="controls">
+    <span class="lbl">신규 요소:</span>
+    <label class="tg on" id="t_compose"><input type="checkbox" checked onchange="tog('compose',this)"> 컴포즈 입력창</label>
+    <label class="tg on" id="t_viewer"><input type="checkbox" checked onchange="tog('viewer',this)"> 세션 뷰어</label>
+    <label class="tg on" id="t_help"><input type="checkbox" checked onchange="tog('help',this)"> 도움말</label>
+    <label class="tg on" id="t_minimize"><input type="checkbox" checked onchange="tog('minimize',this)"> 최소화 트레이</label>
+    <span class="hint">토글 = 실제 앱에서도 켜고 끄는 옵션. 끄면 기존과 100% 동일</span>
+  </div>
+
+  <div class="m">
+    <!-- 헤더 -->
+    <div class="hdr">
+      <span class="btn gh">☰</span>
+      <span class="brand">Claude <b>Terminal Hub</b></span>
+      <span class="btn pri">＋ 새 세션</span>
+      <span class="btn gh">🌐 웹</span>
+      <span class="btn gh">📄 파일 열기</span>
+      <span class="sp"></span>
+      <span class="stat">세션 3</span>
+      <span class="btn gh">🌙</span>
+      <span class="btn gh">글꼴 ▾</span>
+      <span class="btn gh newbox" data-new="help" style="border-color:var(--new);color:#ffd9a0">? 도움말</span>
+    </div>
+    <!-- 탭 -->
+    <div class="tabs">
+      <span class="tab act">기본 <span class="cnt">2</span></span>
+      <span class="tab">회사 · puim <span class="cnt">1</span></span>
+    </div>
+    <!-- 최소화 트레이 (NEW) -->
+    <div class="tray newbox" data-new="minimize">
+      <span class="tl">최소화됨</span>
+      <span class="chip"><span class="cd run"></span>지라 MCP 업무 등록 <span class="rs">▢</span></span>
+      <span class="chip"><span class="cd done"></span>오즈 뷰어 다운로드 <span class="rs">▢</span></span>
+      <span class="traytog">트레이 숨기기 ▾</span>
+    </div>
+
+    <div class="body">
+      <!-- LNB -->
+      <div class="lnb">
+        <div class="lh"><span>최근 세션</span><span>⟳</span></div>
+        <div class="search">🔍 세션 검색…</div>
+        <div class="ri"><div class="t">💬 CYN-603 프론트엔드 전수조사</div><div class="f">📁 inov.lexfarm.web</div></div>
+        <div class="ri"><div class="t">💬 렉스팜 프로세스 분석</div><div class="f">📁 inov.lexfarm.workspace</div></div>
+        <div class="ri"><div class="t">💬 지라 MCP 업무 등록</div><div class="f">📁 inov.lexfarm.workspace</div></div>
+        <div class="ri"><div class="t">💬 오즈 뷰어 다운로드 구현</div><div class="f">📁 inov.lexfarm.web</div></div>
+      </div>
+
+      <!-- 스테이지 -->
+      <div class="stage">
+        <!-- 왼쪽: 터미널 + 컴포즈 -->
+        <div class="col left">
+          <div class="pane active" style="flex:1">
+            <div class="bar">
+              <span class="dot"></span>
+              <span class="ttl">CYN-603 프론트엔드 전수조사</span>
+              <span class="cwd">📁 inov.lexfarm.web</span>
+              <span class="grow"></span>
+              <span class="ic pill newbox" data-new="viewer" style="border-color:var(--new);color:#ffd9a0">🔎 뷰어</span>
+              <span class="ic pill">자동</span>
+              <span class="ic">⟳</span><span class="ic">▤</span>
+              <span class="ic newic" data-new="minimize" title="최소화(숨김, 계속 실행)">─</span>
+              <span class="ic">✕</span>
+            </div>
+            <div class="term">
+              <div><span class="u">❯</span> 이 화면 계산식 ASIS랑 대조해줘</div>
+              <div class="a">계산식 3곳에서 반올림 차이를 찾았습니다. 상세 검토 후…</div>
+              <div class="g">  ⎿ Read  UNT_204.tsx</div>
+              <div class="g">  ⎿ Task(reviewer) 실행 중…</div>
+              <div class="ok">● 완료 — 입력 대기</div>
+              <div><span class="u">❯</span> <span class="cursor"></span></div>
+            </div>
+            <!-- 컴포즈 입력창 (NEW) -->
+            <div class="compose newbox" data-new="compose">
+              <div class="ta">메시지 입력…  (Enter 전송 · Shift+Enter 줄바꿈 · 이미지 드롭/붙여넣기 지원)</div>
+              <div class="row">
+                <span class="cbtn">Esc 중단</span>
+                <span class="cbtn">⇧Tab 모드</span>
+                <span class="cbtn">/clear</span>
+                <span class="cbtn">📎 이미지</span>
+                <span class="cbtn send">보내기 ⏎</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 오른쪽: 세션 뷰어 (NEW) -->
+        <div class="col right">
+          <div class="pane viewer newbox" data-new="viewer" style="flex:1">
+            <div class="vbar">🔎 세션 뷰어 · 전체 기록(무손실) <span class="grow" style="flex:1"></span><span style="font-size:10px;color:var(--muted)">자동 갱신</span></div>
+            <div class="vbody">
+              <div class="msg"><div class="who">나</div><div class="bub user">이 화면 계산식 ASIS랑 대조해줘. 스크린샷도 참고.</div></div>
+              <div class="msg"><div class="who" style="color:var(--accent)">AI</div><div class="bub">3곳에서 반올림 차이를 찾았습니다. 서브에이전트로 교차검증합니다.</div></div>
+              <div class="card"><div class="ch">🛠 Edit · src/pages/UNT_204.tsx</div></div>
+              <div class="card task"><div class="ch">🧩 Task &nbsp;reviewer &nbsp;▾ &nbsp;<span style="color:var(--muted)">(펼치면 프롬프트/결과)</span></div><div class="cc">리뷰 결과: commAmount 반올림이 ASIS(toFixed)와 달라 경계값 1원 차이. blogAmount는 일치.</div></div>
+              <div class="msg"><div class="who">나</div><div class="bub user">이거 봐봐 &nbsp;<span style="color:var(--muted)">(붙여넣은 이미지)</span></div></div>
+              <div class="imgph">🖼 붙여넣은 스크린샷 — 클릭 시 확대</div>
+              <div class="artlink">📄 diff-report.html · 미리보기 →</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 도움말 오버레이 내용 (NEW) -->
+  <div class="help newbox" data-new="help">
+    <div class="hb">
+      <h3>? 도움말 — 단축키 &amp; 유용한 커맨드 <span class="newtag">NEW</span></h3>
+      <div class="cols">
+        <div>
+          <h4>Claude Code (터미널)</h4>
+          <div class="kv"><span class="k">Esc</span><span class="v">작업 중단</span></div>
+          <div class="kv"><span class="k">Ctrl+R</span><span class="v">펼쳐보기 / 역검색</span></div>
+          <div class="kv"><span class="k">Shift+Tab</span><span class="v">모드 전환</span></div>
+          <div class="kv"><span class="k">@</span><span class="v">파일 멘션</span></div>
+          <div class="kv"><span class="k">/  !  #</span><span class="v">명령 / bash / 메모리</span></div>
+        </div>
+        <div>
+          <h4>허브</h4>
+          <div class="kv"><span class="k">Ctrl+Shift+R</span><span class="v">앱 새로고침</span></div>
+          <div class="kv"><span class="k">Ctrl + / -</span><span class="v">글자 크기</span></div>
+          <div class="kv"><span class="k">Ctrl+V / 우클릭</span><span class="v">붙여넣기</span></div>
+          <div class="kv"><span class="k">바 더블클릭·드래그</span><span class="v">이름/이동(도킹)</span></div>
+        </div>
+        <div>
+          <h4>유용한 claude 명령</h4>
+          <div class="kv"><span class="k">/rename</span><span class="v">세션 이름 → 탭/목록 반영</span></div>
+          <div class="kv"><span class="k">/resume</span><span class="v">이전 대화 이어가기</span></div>
+          <div class="kv"><span class="k">/agents</span><span class="v">서브에이전트 관리</span></div>
+          <div class="kv"><span class="k">/status /clear</span><span class="v">상태 / 대화 비우기</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="legend"><span class="swatch"></span> 앰버 점선/뱃지 = <b style="color:#ffd9a0">신규 추가분</b> · 나머지는 현재 앱 그대로</div>
+  <div class="cap">유지: 색상 테마 · /rename · 스플릿/도킹 · 세션 영속/재부착 · 프로필/계정 분리 · 폰트 선택 · 완료 알림 · 파일 미리보기 · 폴더 선택기 · 전역 명령 — 누락 없음.</div>
+</div>
+
+<script>
+  function tog(name, el){
+    var on = el.checked;
+    document.querySelectorAll('[data-new="'+name+'"]').forEach(function(n){ n.classList.toggle('off', !on); });
+    var chip = document.getElementById('t_'+name); if(chip) chip.classList.toggle('on', on);
+  }
+</script>
+
+</body>
+</html>
