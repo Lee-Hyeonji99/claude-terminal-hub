@@ -463,8 +463,45 @@ function addPane(cfg, placement) {
   let ws = null;
   let reconnectTries = 0;
   let reconnectTimer = null;
+  let hbTimer = null;       // 하트비트 인터벌
+  let missedPongs = 0;      // 연속 무응답 ping 횟수
   const RECONNECT_MAX = 6;
+  const HB_INTERVAL = 10000;
   const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+
+  // 하트비트: 주기적으로 ping → 서버 pong 이 안 오면(좀비 소켓) 강제 재연결.
+  // 브라우저 WebSocket 은 JS 에서 프로토콜 ping 을 못 보내므로 앱 레벨 ping/pong 으로 감지한다.
+  function stopHeartbeat() { if (hbTimer) { clearInterval(hbTimer); hbTimer = null; } }
+  function startHeartbeat() {
+    stopHeartbeat();
+    missedPongs = 0;
+    hbTimer = setInterval(() => {
+      if (!ws || ws.readyState !== WebSocket.OPEN) return;
+      if (missedPongs >= 2) { forceReconnect('무응답'); return; } // ~20s 무응답 = 죽음
+      missedPongs++;
+      try { ws.send(JSON.stringify({ type: 'ping' })); } catch {}
+    }, HB_INTERVAL);
+  }
+
+  // 강제 재연결: 좀비 소켓이어도 옛 소켓을 확실히 폐기하고 새 소켓으로 즉시 연결(백오프 무시).
+  function forceReconnect(reason) {
+    if (disposed) return;
+    stopHeartbeat();
+    if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
+    reconnectTries = 0;
+    missedPongs = 0;
+    try { if (ws) { ws.onclose = null; ws.onmessage = null; ws.onopen = null; ws.close(); } } catch {}
+    ws = null;
+    connect(true);
+  }
+
+  // 절전/잠금에서 깨어나거나 창에 복귀했을 때: 연결이 살아있으면 ping 으로 확인, 죽었으면 즉시 강제 재연결.
+  function onWake() {
+    if (disposed) return;
+    if (!ws || ws.readyState !== WebSocket.OPEN) forceReconnect('복귀');
+    else { missedPongs = 0; try { ws.send(JSON.stringify({ type: 'ping' })); } catch {} }
+  }
+  function onVisible() { if (document.visibilityState === 'visible') onWake(); }
 
   // 세션 파일이 외부에서 커졌을 때 (새 메시지). 최근 내 입력이면 내 세션 자체 쓰기일 수 있어 무시.
   function onExternalChange() {
@@ -480,7 +517,7 @@ function addPane(cfg, placement) {
     b.className = 'disc-banner';
     b.innerHTML = `<span class="i">${ICON.warn}</span><span>${escapeHtml(msg)}</span>` + (btnLabel ? ` <button>${escapeHtml(btnLabel)}</button>` : '');
     const btn = b.querySelector('button');
-    if (btn) btn.onclick = () => { reconnectTries = 0; if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; } hideBanner(); connect(true); };
+    if (btn) btn.onclick = () => { hideBanner(); forceReconnect('수동'); };
     termEl.appendChild(b);
   }
   function hideBanner() { const b = termEl.querySelector('.disc-banner'); if (b) b.remove(); }
@@ -506,6 +543,7 @@ function addPane(cfg, placement) {
       hideBanner();
       reconnectTries = 0;
       if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
+      startHeartbeat();
       if (isReconnect) term.write('\r\n\x1b[90m[재연결됨]\x1b[0m\r\n');
       paneObj.fit();
       ws.send(JSON.stringify({
@@ -530,6 +568,7 @@ function addPane(cfg, placement) {
             term.write(`\r\n\x1b[90m[프로세스 종료됨 (code ${m.code})]\x1b[0m\r\n`); return;
           }
           if (m.type === 'error') { term.write(`\r\n\x1b[31m${m.message}\x1b[0m\r\n`); return; }
+          if (m.type === 'pong') { missedPongs = 0; return; } // 하트비트 응답 → 살아있음
           if (m.type === 'changed') { onExternalChange(); return; }
           if (m.type === 'artifact') { onArtifact(m.path); return; }
         } catch { /* 실제 출력 → write */ }
@@ -538,10 +577,16 @@ function addPane(cfg, placement) {
     };
     ws.onclose = () => {
       pane.classList.remove('running');
+      stopHeartbeat();
       if (reloading) { reloading = false; return; } // 새로고침으로 인한 의도된 종료
       if (!disposed) scheduleReconnect(); // 자동 백오프 재연결 (서버 복구 시 자동)
     };
   }
+
+  // 깨어남/복귀 감지 (절전·잠금·백그라운드 → 복귀 시 자동 재연결). pane 당 1회 등록, dispose 시 해제.
+  window.addEventListener('online', onWake);
+  window.addEventListener('focus', onWake);
+  document.addEventListener('visibilitychange', onVisible);
 
   // 세션 새로고침: 현재 프로세스를 끝내고 같은 세션을 다시 불러온다 (최신 메시지 반영)
   function reload() {
@@ -571,7 +616,11 @@ function addPane(cfg, placement) {
     connect,
     dispose() {
       disposed = true;
+      stopHeartbeat();
       if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
+      try { window.removeEventListener('online', onWake); } catch {}
+      try { window.removeEventListener('focus', onWake); } catch {}
+      try { document.removeEventListener('visibilitychange', onVisible); } catch {}
       try { ro.disconnect(); } catch {}
       // 서버 pty 를 실제로 종료(패널 닫기 = 세션 종료). ws close 만으로는 이제 pty 가 안 죽음.
       try { if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: 'kill' })); } catch {}
@@ -599,7 +648,7 @@ function addPane(cfg, placement) {
     lastActivityAt = Date.now();
     pane.classList.remove('has-changes', 'done'); // 내가 입력 중 → 알림/완료표시 해제
     if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: 'input', data: d }));
-    else showBanner('연결이 끊겨 입력이 전달되지 않습니다.');
+    else { showBanner('연결이 끊겨 입력이 전달되지 않습니다 — 재연결 중…'); onWake(); }
   });
   termEl.addEventListener('mousedown', () => setActive(paneObj));
   if (term.textarea) term.textarea.addEventListener('focus', () => setActive(paneObj));

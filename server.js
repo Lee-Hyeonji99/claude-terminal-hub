@@ -609,10 +609,14 @@ function killSession(key) {
 wss.on('connection', (ws) => {
   let boundKey = null;
   const safeSend = (obj) => { if (ws.readyState === ws.OPEN) ws.send(JSON.stringify(obj)); };
+  ws.isAlive = true;
+  ws.on('pong', () => { ws.isAlive = true; }); // 프로토콜 레벨 keepalive (죽은 소켓 정리용)
 
   ws.on('message', (raw) => {
     let msg;
     try { msg = JSON.parse(raw.toString()); } catch { return; }
+
+    if (msg.type === 'ping') { ws.isAlive = true; safeSend({ type: 'pong' }); return; } // 앱 레벨 하트비트 (좀비 소켓 감지)
 
     if (msg.type === 'init') {
       const key = String(msg.key || ('auto_' + Date.now() + '_' + Math.random().toString(36).slice(2)));
@@ -666,6 +670,16 @@ wss.on('connection', (ws) => {
     if (boundKey) { const s = ptyStore.get(boundKey); if (s) s.subs.delete(ws); }
   });
 });
+
+// 프로토콜 ping 으로 좀비 소켓 감지 → 정리(구독 해제). pty 자체는 유지(재부착 대비).
+const wssHeartbeat = setInterval(() => {
+  wss.clients.forEach((ws) => {
+    if (ws.isAlive === false) { try { ws.terminate(); } catch {} return; }
+    ws.isAlive = false;
+    try { ws.ping(); } catch {}
+  });
+}, 15000);
+wss.on('close', () => clearInterval(wssHeartbeat));
 
 server.on('error', (err) => {
   if (err.code === 'EADDRINUSE') {
