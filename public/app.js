@@ -27,6 +27,7 @@ const ICON = {
   minimize: ic('<path d="M5 12h14"/>'),
   restore: ic('<path d="M8 3H5a2 2 0 0 0-2 2v3M16 3h3a2 2 0 0 1 2 2v3M8 21H5a2 2 0 0 1-2-2v-3M16 21h3a2 2 0 0 1 2-2v-3"/>'),
   help: ic('<circle cx="12" cy="12" r="9"/><path d="M9.1 9a3 3 0 0 1 5.8 1c0 2-3 2.5-3 4"/><path d="M12 17h.01"/>'),
+  keyboard: ic('<rect x="2" y="6" width="20" height="12" rx="2"/><path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M6 14h12"/>'),
 };
 function hydrateIcons(root) {
   (root || document).querySelectorAll('[data-icon]').forEach((el) => {
@@ -487,7 +488,18 @@ function addPane(cfg, placement) {
       <button class="min" title="최소화 (숨김 — claude 는 계속 실행)">${ICON.minimize}</button>
       <button class="x" title="세션 종료">${ICON.x}</button>
     </div>
-    <div class="term"></div>`;
+    <div class="term"></div>
+    <div class="compose">
+      <textarea rows="1" spellcheck="false" placeholder="메시지 입력…   Enter 전송 · Shift+Enter 줄바꿈"></textarea>
+      <div class="crow">
+        <button class="cbtn" data-act="esc" title="중단 (Esc)">Esc</button>
+        <button class="cbtn" data-act="shifttab" title="모드 전환 (Shift+Tab)">모드</button>
+        <button class="cbtn" data-act="clear" title="/clear 전송">/clear</button>
+        <button class="cbtn" data-act="image" title="이미지 파일 경로 추가">이미지</button>
+        <span class="chint">터미널 단축키·붙여넣기는 그대로 사용 가능</span>
+        <button class="cbtn send" data-act="send">보내기</button>
+      </div>
+    </div>`;
   col.el.appendChild(pane);
 
   const termEl = pane.querySelector('.term');
@@ -746,6 +758,42 @@ function addPane(cfg, placement) {
   });
   termEl.addEventListener('mousedown', () => setActive(paneObj));
   if (term.textarea) term.textarea.addEventListener('focus', () => setActive(paneObj));
+
+  // 컴포즈 입력창 (선택) — 터미널은 그대로 두고 GUI 식 입력을 추가로 제공.
+  (function wireCompose() {
+    const box = pane.querySelector('.compose');
+    if (!box) return;
+    const ta = box.querySelector('textarea');
+    const sendToPty = (data) => {
+      if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: 'input', data }));
+      else { showBanner('연결이 끊겨 전달되지 않습니다 — 재연결 중…'); onWake(); }
+    };
+    const autoGrow = () => { ta.style.height = 'auto'; ta.style.height = Math.min(160, ta.scrollHeight) + 'px'; };
+    const insertAtCursor = (t) => {
+      const s = ta.selectionStart || 0, e = ta.selectionEnd || 0;
+      ta.value = ta.value.slice(0, s) + t + ta.value.slice(e);
+      ta.selectionStart = ta.selectionEnd = s + t.length; autoGrow(); ta.focus();
+    };
+    const submit = () => { const v = ta.value; sendToPty(v ? v + '\r' : '\r'); ta.value = ''; autoGrow(); };
+    ta.addEventListener('focus', () => setActive(paneObj));
+    ta.addEventListener('input', autoGrow);
+    ta.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submit(); }
+    });
+    box.querySelectorAll('.cbtn').forEach((b) => b.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      const act = b.dataset.act;
+      if (act === 'send') { submit(); ta.focus(); }
+      else if (act === 'esc') { sendToPty('\x1b'); }
+      else if (act === 'shifttab') { sendToPty('\x1b[Z'); }
+      else if (act === 'clear') { sendToPty('/clear\r'); }
+      else if (act === 'image') {
+        if (window.claudeHub && window.claudeHub.pickFile) {
+          try { const p = await window.claudeHub.pickFile(); if (p) insertAtCursor(p + ' '); } catch {}
+        } else { insertAtCursor(''); ta.focus(); }
+      }
+    }));
+  })();
 
   pane.querySelector('.x').addEventListener('click', async (e) => {
     e.stopPropagation();
@@ -1272,6 +1320,23 @@ applyAccent(localStorage.getItem('cth_accent') || null);
   if (close) close.addEventListener('click', hide);
   ov.addEventListener('click', (e) => { if (e.target === ov) hide(); });
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && ov.classList.contains('open')) hide(); });
+})();
+
+// 컴포즈 입력창 토글 (기본 꺼짐 → 켜면 기존과 동일하지 않고 입력창 추가)
+(function initCompose() {
+  const btn = document.getElementById('composeBtn');
+  const on = localStorage.getItem('cth_compose') === '1';
+  document.body.classList.toggle('compose-on', on);
+  if (btn) {
+    btn.classList.toggle('on', on);
+    btn.addEventListener('click', () => {
+      const now = !document.body.classList.contains('compose-on');
+      document.body.classList.toggle('compose-on', now);
+      btn.classList.toggle('on', now);
+      localStorage.setItem('cth_compose', now ? '1' : '0');
+      setTimeout(() => { try { fitAll(); } catch {} }, 60);
+    });
+  }
 })();
 
 document.getElementById('fontDown').addEventListener('click', () => applyFontSize(termFontSize - 1));

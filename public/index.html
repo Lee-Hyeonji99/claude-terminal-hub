@@ -253,6 +253,18 @@
     .min-chip .mx:hover{background:rgba(255,255,255,.08);color:var(--text)}
     .min-chip .mx svg{width:12px;height:12px}
 
+    /* 컴포즈 입력창 (토글 시에만 표시 — 끄면 기존과 동일) */
+    .compose{display:none;flex-direction:column;gap:6px;padding:8px;border-top:1px solid var(--border);background:var(--head);flex:none}
+    body.compose-on .compose{display:flex}
+    .compose textarea{width:100%;resize:none;min-height:38px;max-height:160px;background:var(--panel);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:8px 10px;font:13px/1.4 "Segoe UI",system-ui,sans-serif;outline:none}
+    .compose textarea:focus{border-color:var(--accent)}
+    .compose .crow{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+    .compose .cbtn{font-size:11px;color:var(--muted);background:var(--panel);border:1px solid var(--border);border-radius:6px;padding:3px 9px}
+    .compose .cbtn:hover{border-color:var(--accent);color:var(--text)}
+    .compose .cbtn.send{margin-left:auto;color:#fff;background:var(--accent);border-color:var(--accent);font-weight:600}
+    .compose .chint{font-size:10.5px;color:var(--muted)}
+    #composeBtn.on{color:var(--accent)}
+
     /* 도움말 오버레이 */
     #helpOverlay{position:fixed;inset:0;background:rgba(0,0,0,.55);display:none;align-items:center;justify-content:center;z-index:80}
     #helpOverlay.open{display:flex}
@@ -303,6 +315,7 @@
       <span id="fontSizeLabel">13</span>
       <button id="fontUp" title="터미널 글자 크기 크게 (Ctrl++)">A+</button>
     </div>
+    <button id="composeBtn" class="ghost icon-btn" title="입력창(컴포즈) 켜기/끄기 — 터미널 아래 GUI 입력"><span data-icon="keyboard"></span></button>
     <button id="helpBtn" class="ghost icon-btn" title="단축키 · 명령어 도움말 (?)"><span data-icon="help"></span></button>
   </header>
 
