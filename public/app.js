@@ -24,6 +24,9 @@ const ICON = {
   warn: ic('<path d="M12 9v4M12 17h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/>'),
   palette: ic('<path d="M12 3a9 9 0 1 0 0 18c1.1 0 1.6-.7 1.1-1.6-.3-.6-.1-1.4.6-1.7.5-.2 1-.2 1.5-.2 2 0 3.8-1.7 3.8-4.5C19 6.9 15.9 3 12 3z"/><circle cx="7.5" cy="11.5" r="1.2"/><circle cx="10.5" cy="7.5" r="1.2"/><circle cx="15" cy="8" r="1.2"/>'),
   droplet: ic('<path d="M12 3s6 6.5 6 11a6 6 0 0 1-12 0c0-4.5 6-11 6-11z"/>'),
+  minimize: ic('<path d="M5 12h14"/>'),
+  restore: ic('<path d="M8 3H5a2 2 0 0 0-2 2v3M16 3h3a2 2 0 0 1 2 2v3M8 21H5a2 2 0 0 1-2-2v-3M16 21h3a2 2 0 0 1 2-2v-3"/>'),
+  help: ic('<circle cx="12" cy="12" r="9"/><path d="M9.1 9a3 3 0 0 1 5.8 1c0 2-3 2.5-3 4"/><path d="M12 17h.01"/>'),
 };
 function hydrateIcons(root) {
   (root || document).querySelectorAll('[data-icon]').forEach((el) => {
@@ -50,6 +53,11 @@ const statusEl = document.getElementById('status');
  * 재배치(드래그 도킹)는 살아있는 pane.el(터미널 포함)을 DOM 이동만 하여 세션을 보존한다. */
 let columns = [];
 let columnSplit = null;
+const minimized = [];              // 최소화된 패널 목록 (claude 는 계속 실행, DOM 만 숨김 보관)
+const minStash = document.createElement('div'); // 최소화 패널 DOM 을 살려두는 숨김 보관소 (term/ws 유지)
+minStash.id = 'minStash'; minStash.style.display = 'none';
+document.addEventListener('DOMContentLoaded', () => document.body.appendChild(minStash));
+if (document.body) document.body.appendChild(minStash);
 
 const TERM_THEMES = {
   dark: { background: '#12151f', foreground: '#d7dbe6', black: '#000000', red: '#cd3131', green: '#0dbc79', yellow: '#e5e510', blue: '#2472c8', magenta: '#bc3fbc', cyan: '#11a8cd', white: '#e5e5e5', brightBlack: '#666666', brightRed: '#f14c4c', brightGreen: '#23d18b', brightYellow: '#f5f543', brightBlue: '#3b8eea', brightMagenta: '#d670d6', brightCyan: '#29b8db', brightWhite: '#e5e5e5' },
@@ -292,7 +300,37 @@ function applyTheme(t) {
   document.querySelectorAll('#themePopover .popover-item').forEach((el) => el.classList.toggle('active', el.dataset.theme === t));
   const termTheme = currentTermTheme();
   columns.forEach((c) => c.panes.forEach((p) => { if (p.term) { try { p.term.options.theme = termTheme; } catch {} } }));
+  applyCursors();
   setTimeout(() => { try { fitAll(); } catch {} }, 60);
+}
+
+// 게임풍 커서: 뾰족한 각진 화살표를 테마 강조색으로 칠해 body 및 클릭요소에 동적 주입.
+// (CSS 정적 data-URI 는 CSS 변수를 못 읽으므로 테마색을 따라가려면 JS 로 생성해야 한다)
+function lightenHex(hex, amt) {
+  const m = /^#?([0-9a-f]{6})$/i.exec((hex || '').trim());
+  if (!m) return hex || '#4c8bf5';
+  const n = parseInt(m[1], 16);
+  let r = (n >> 16) & 255, g = (n >> 8) & 255, b = n & 255;
+  r = Math.round(r + (255 - r) * amt); g = Math.round(g + (255 - g) * amt); b = Math.round(b + (255 - b) * amt);
+  return '#' + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1);
+}
+function cursorUri(fill, glow) {
+  const enc = (c) => String(c).replace('#', '%23');
+  const D = "M4 2 L4 21 L9.2 16.3 L12.4 22.6 L15.4 21.2 L12.2 15 L19 15 Z";
+  const shadow = `<path d='${D}' fill='%2300000055' transform='translate(0.8 1)'/>`;
+  const main = `<path d='${D}' fill='${enc(fill)}' stroke='%23ffffff' stroke-width='${glow ? 1.7 : 1.3}' stroke-linejoin='round'/>`;
+  return `url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='26' height='26' viewBox='0 0 24 24'>${shadow}${main}</svg>") 4 2`;
+}
+function applyCursors() {
+  const accent = (getComputedStyle(document.body).getPropertyValue('--accent') || '').trim() || '#4c8bf5';
+  const arrow = cursorUri(accent, false);
+  const point = cursorUri(lightenHex(accent, 0.4), true);
+  let st = document.getElementById('cthCursorStyle');
+  if (!st) { st = document.createElement('style'); st.id = 'cthCursorStyle'; document.head.appendChild(st); }
+  st.textContent =
+    `body{cursor:${arrow},auto}\n` +
+    `a,button,summary,select,[role="button"],.tab,.ic,.chip,.recent-item,.sesitem,.fsitem,` +
+    `.popover-item,.lnb-alltoggle,.disc-banner button,.placement label,.rcont{cursor:${point},pointer}`;
 }
 
 const ACCENTS = { blue: '#4c8bf5', purple: '#bd93f9', green: '#3fb950', red: '#e5484d', orange: '#f0a020', pink: '#ff79c6', cyan: '#22d3ee' };
@@ -309,6 +347,7 @@ function applyAccent(key) {
     localStorage.removeItem('cth_accent');
   }
   document.querySelectorAll('#accentPopover .popover-item').forEach((b) => b.classList.toggle('active', b.dataset.accent === key));
+  applyCursors();
 }
 function buildAccentPicker() {
   const el = document.getElementById('accentPopover');
@@ -327,6 +366,56 @@ function updateStatus() {
 
 function fitAll() { columns.forEach((c) => c.panes.forEach((p) => p.fit())); }
 function findColumnOf(pane) { return columns.find((c) => c.panes.includes(pane)) || null; }
+
+/* ---------- 세션 최소화 / 복원 ---------- */
+// 최소화: 레이아웃에서 빼서 숨김 보관소로 이동. term/ws 를 그대로 두므로 claude 는 백그라운드에서 계속 실행.
+function minimizePane(paneObj) {
+  if (!paneObj || paneObj.minimized) return;
+  const c = findColumnOf(paneObj);
+  if (c) {
+    const ci = c.panes.indexOf(paneObj);
+    if (ci >= 0) c.panes.splice(ci, 1);
+    if (c.panes.length === 0) { const idx = columns.indexOf(c); if (idx >= 0) columns.splice(idx, 1); c.el.remove(); }
+  }
+  paneObj.minimized = true;
+  minStash.appendChild(paneObj.el); // DOM 유지 → term/ws 살아있음
+  minimized.push(paneObj);
+  if (activePane === paneObj) setActive(columns[0] ? columns[0].panes[0] : null);
+  rebuildAll(); renderTray(); updateStatus();
+}
+// 복원: 활성 컬럼(없으면 새 컬럼)으로 되돌리고 크기 재조정.
+function restorePane(paneObj) {
+  const mi = minimized.indexOf(paneObj);
+  if (mi < 0) return;
+  minimized.splice(mi, 1);
+  paneObj.minimized = false;
+  emptyMsg.style.display = 'none';
+  const col = (activePane && findColumnOf(activePane)) || newColumn();
+  col.panes.push(paneObj);
+  col.el.appendChild(paneObj.el);
+  rebuildAll(); renderTray(); updateStatus();
+  setActive(paneObj);
+  requestAnimationFrame(() => paneObj.fit());
+}
+function renderTray() {
+  const tray = document.getElementById('minTray');
+  if (!tray) return;
+  if (minimized.length === 0) { tray.style.display = 'none'; tray.innerHTML = ''; return; }
+  tray.style.display = 'flex';
+  tray.innerHTML = '<span class="min-tray-label">최소화됨</span>';
+  minimized.forEach((p) => {
+    const done = p.el.classList.contains('done');
+    const chip = document.createElement('span');
+    chip.className = 'min-chip' + (done ? ' done' : '');
+    chip.title = '클릭하면 다시 꺼냅니다';
+    const t = (p.cfg && p.cfg.title) || 'claude';
+    chip.innerHTML = `<span class="cd"></span><span class="mt"></span><button class="mx" title="세션 종료">${ICON.x}</button>`;
+    chip.querySelector('.mt').textContent = t;
+    chip.addEventListener('click', () => restorePane(p));
+    chip.querySelector('.mx').addEventListener('click', (e) => { e.stopPropagation(); p.dispose(); });
+    tray.appendChild(chip);
+  });
+}
 
 // 모델 순서 기준으로 DOM 순서를 맞추고 split.js 를 재생성한다.
 function rebuildAll() {
@@ -395,6 +484,7 @@ function addPane(cfg, placement) {
       <button class="auto" title="새 메시지 자동 새로고침 (유휴 시 자동 반영)">자동</button>
       <button class="reload" title="새로고침 (세션 다시 불러오기)">${ICON.refresh}</button>
       <button class="split" title="아래로 분할">${ICON.split}</button>
+      <button class="min" title="최소화 (숨김 — claude 는 계속 실행)">${ICON.minimize}</button>
       <button class="x" title="세션 종료">${ICON.x}</button>
     </div>
     <div class="term"></div>`;
@@ -420,6 +510,7 @@ function addPane(cfg, placement) {
   try {
     term.onBell(() => {
       if (!pane.classList.contains('active')) pane.classList.add('done');
+      if (pane.parentElement === minStash) renderTray(); // 최소화 상태면 트레이 칩에 완료 표시
       const now = Date.now(); if (now - lastBellAt < 1500) return; lastBellAt = now; notifyDone(cfg);
     });
   } catch {}
@@ -626,6 +717,8 @@ function addPane(cfg, placement) {
       try { if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: 'kill' })); } catch {}
       try { if (ws) ws.close(); } catch {}
       try { term.dispose(); } catch {}
+      const mi = minimized.indexOf(paneObj); // 최소화 상태에서 종료하는 경우
+      if (mi >= 0) minimized.splice(mi, 1);
       const c = findColumnOf(paneObj);
       if (c) {
         const ci = c.panes.indexOf(paneObj);
@@ -638,6 +731,7 @@ function addPane(cfg, placement) {
       }
       pane.remove();
       rebuildAll();
+      if (mi >= 0) renderTray();
       if (activePane === paneObj) setActive(columns[0] ? columns[0].panes[0] : null);
       updateStatus();
     },
@@ -656,6 +750,10 @@ function addPane(cfg, placement) {
   pane.querySelector('.x').addEventListener('click', async (e) => {
     e.stopPropagation();
     if (await uiConfirm('이 세션을 종료할까요?', '세션 종료')) paneObj.dispose();
+  });
+  pane.querySelector('.min').addEventListener('click', (e) => {
+    e.stopPropagation();
+    minimizePane(paneObj);
   });
   pane.querySelector('.split').addEventListener('click', (e) => {
     e.stopPropagation();
@@ -1161,6 +1259,20 @@ setupPopover('accentBtn', 'accentPopover');
 applyTheme(localStorage.getItem('cth_theme') || 'dark');
 buildAccentPicker();
 applyAccent(localStorage.getItem('cth_accent') || null);
+
+// 도움말 오버레이 (단축키 · 명령어)
+(function initHelp() {
+  const btn = document.getElementById('helpBtn');
+  const ov = document.getElementById('helpOverlay');
+  const close = document.getElementById('helpClose');
+  if (!ov) return;
+  const open = () => ov.classList.add('open');
+  const hide = () => ov.classList.remove('open');
+  if (btn) btn.addEventListener('click', open);
+  if (close) close.addEventListener('click', hide);
+  ov.addEventListener('click', (e) => { if (e.target === ov) hide(); });
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && ov.classList.contains('open')) hide(); });
+})();
 
 document.getElementById('fontDown').addEventListener('click', () => applyFontSize(termFontSize - 1));
 document.getElementById('fontUp').addEventListener('click', () => applyFontSize(termFontSize + 1));

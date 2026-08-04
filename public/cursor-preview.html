@@ -3,24 +3,25 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>귀여운 커서 미리보기 — Claude Terminal Hub</title>
+<title>커서 미리보기 — Claude Terminal Hub</title>
 <style>
   :root{
     --bg:#0c0e14; --panel:#141824; --head:#1b2030; --border:#2a3142;
-    --text:#e6e9f0; --muted:#8b93a7; --pink:#ff9ec4; --spark:#ffcf5c;
+    --text:#e6e9f0; --muted:#8b93a7; --accent:#4c8bf5; --accent2:#a6c4fb;
   }
   *{box-sizing:border-box}
   html,body{margin:0;height:100%}
   body{
     background:radial-gradient(1200px 600px at 20% -10%, #171c2b 0%, var(--bg) 55%);
     color:var(--text); font:14px/1.5 "Segoe UI",system-ui,sans-serif;
-    padding:36px; display:flex; flex-direction:column; gap:26px;
-    /* 이 페이지 전체 기본 커서 = 앱과 동일한 파스텔 화살표 */
-    cursor: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='30' height='30' viewBox='0 0 30 30'><path d='M5 3.5 Q4 3 4.4 4.2 L10.4 21 Q10.9 22.3 11.8 21.2 L14.2 17.6 L19.2 22.6 Q20 23.4 20.8 22.6 L22.2 21.2 Q23 20.4 22.2 19.6 L17.3 14.6 L21.4 12.6 Q22.7 12 21.4 11.4 Z' fill='%23ff9ec4' stroke='%23ffffff' stroke-width='1.6' stroke-linejoin='round'/><g fill='%23fff3b0' stroke='%23ffcf5c' stroke-width='.7'><path d='M25 4 l1 2 2 1 -2 1 -1 2 -1 -2 -2 -1 2 -1 z'/></g></svg>") 4 3, auto;
+    padding:36px; display:flex; flex-direction:column; gap:24px;
+    cursor: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='26' height='26' viewBox='0 0 24 24'><path d='M4 2 L4 21 L9.2 16.3 L12.4 22.6 L15.4 21.2 L12.2 15 L19 15 Z' fill='%2300000055' transform='translate(0.8 1)'/><path d='M4 2 L4 21 L9.2 16.3 L12.4 22.6 L15.4 21.2 L12.2 15 L19 15 Z' fill='%234c8bf5' stroke='%23ffffff' stroke-width='1.3' stroke-linejoin='round'/></svg>") 4 2, auto;
   }
-  h1{font-size:20px;margin:0;font-weight:700}
-  h1 b{color:var(--pink)}
-  .sub{color:var(--muted);margin-top:-16px}
+  h1{font-size:20px;margin:0;font-weight:700;display:flex;align-items:center;gap:10px}
+  h1 b{color:var(--accent)}
+  .sub{color:var(--muted);margin-top:-14px;max-width:70ch}
+  .accent-note{color:var(--muted);font-size:12.5px;background:var(--head);border:1px solid var(--border);border-radius:10px;padding:10px 14px;max-width:70ch}
+  .accent-note b{color:var(--accent)}
   .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:20px}
   .card{background:var(--panel);border:1px solid var(--border);border-radius:16px;padding:22px;display:flex;flex-direction:column;gap:14px}
   .card h2{margin:0;font-size:15px;font-weight:600}
@@ -30,47 +31,50 @@
   .chip small{color:var(--muted);font-size:11px}
   .zone{flex:1;min-width:180px;min-height:120px;border:1px dashed var(--border);border-radius:12px;
     display:flex;align-items:center;justify-content:center;text-align:center;color:var(--muted);font-size:12.5px;background:#10131d}
-  .zone.paw{
-    cursor: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='30' height='30' viewBox='0 0 30 30'><g fill='%23ff9ec4' stroke='%23ffffff' stroke-width='1.3'><ellipse cx='15' cy='20' rx='6.5' ry='5.4'/><ellipse cx='6.6' cy='13' rx='2.7' ry='3'/><ellipse cx='11.6' cy='8.6' rx='2.7' ry='3.1'/><ellipse cx='18.4' cy='8.6' rx='2.7' ry='3.1'/><ellipse cx='23.4' cy='13' rx='2.7' ry='3'/></g></svg>") 15 8, pointer;
+  .zone.point{
+    cursor: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='26' height='26' viewBox='0 0 24 24'><path d='M4 2 L4 21 L9.2 16.3 L12.4 22.6 L15.4 21.2 L12.2 15 L19 15 Z' fill='%2300000055' transform='translate(0.8 1)'/><path d='M4 2 L4 21 L9.2 16.3 L12.4 22.6 L15.4 21.2 L12.2 15 L19 15 Z' fill='%23a6c4fb' stroke='%23ffffff' stroke-width='1.7' stroke-linejoin='round'/></svg>") 4 2, pointer;
   }
   .zone b{color:var(--text)}
-  .foot{color:var(--muted);font-size:12px}
-  .foot code{background:var(--head);border:1px solid var(--border);border-radius:5px;padding:1px 6px;color:var(--pink)}
+  .foot{color:var(--muted);font-size:12px;max-width:80ch}
+  .foot code{background:var(--head);border:1px solid var(--border);border-radius:5px;padding:1px 6px;color:var(--accent)}
 </style>
 </head>
 <body>
-  <h1><svg width="22" height="22" viewBox="0 0 30 30" style="vertical-align:-3px"><g fill="#ff9ec4" stroke="#ffffff" stroke-width="1.3"><ellipse cx="15" cy="20" rx="6.5" ry="5.4"/><ellipse cx="6.6" cy="13" rx="2.7" ry="3"/><ellipse cx="11.6" cy="8.6" rx="2.7" ry="3.1"/><ellipse cx="18.4" cy="8.6" rx="2.7" ry="3.1"/><ellipse cx="23.4" cy="13" rx="2.7" ry="3"/></g></svg> <b>귀여운 커서</b> 미리보기</h1>
-  <p class="sub">v1.8.0 에서 적용된 커서 2종입니다. 아래 SVG 는 실제 커서와 동일한 도형이고, 점선 영역에 마우스를 올리면 <b>진짜 커서</b>가 바뀝니다.</p>
+  <h1>
+    <svg width="24" height="24" viewBox="0 0 24 24"><path d="M4 2 L4 21 L9.2 16.3 L12.4 22.6 L15.4 21.2 L12.2 15 L19 15 Z" fill="#00000055" transform="translate(0.8 1)"/><path d="M4 2 L4 21 L9.2 16.3 L12.4 22.6 L15.4 21.2 L12.2 15 L19 15 Z" fill="#4c8bf5" stroke="#ffffff" stroke-width="1.3" stroke-linejoin="round"/></svg>
+    <span><b>게임풍 커서</b> 미리보기</span>
+  </h1>
+  <p class="sub">각진 화살표를 <b>테마 강조색</b>으로 칠한 커서입니다. 실제 앱에서는 강조색(파랑/보라/초록/주황/핑크/시안…)을 바꾸면 커서 색도 같이 바뀝니다. 아래 점선 영역에 마우스를 올리면 진짜 커서가 바뀝니다.</p>
+  <div class="accent-note">이 미리보기는 예시로 <b>파랑(#4c8bf5)</b> 강조색을 씁니다. 앱에서는 헤더의 강조색 선택에 따라 자동으로 그 색을 따라갑니다.</div>
 
   <div class="grid">
     <div class="card">
       <h2>기본 화살표 <span style="color:var(--muted);font-weight:400">(어디서나)</span></h2>
-      <div class="desc">통통한 파스텔 핑크 화살표 + 노란 반짝이. 화면 어디든 기본 커서.</div>
+      <div class="desc">각진 게임풍 화살표 + 흰 테두리 + 옅은 그림자. 강조색으로 채워짐.</div>
       <div class="stage">
         <div class="chip">
-          <svg width="96" height="96" viewBox="0 0 30 30"><path d="M5 3.5 Q4 3 4.4 4.2 L10.4 21 Q10.9 22.3 11.8 21.2 L14.2 17.6 L19.2 22.6 Q20 23.4 20.8 22.6 L22.2 21.2 Q23 20.4 22.2 19.6 L17.3 14.6 L21.4 12.6 Q22.7 12 21.4 11.4 Z" fill="#ff9ec4" stroke="#ffffff" stroke-width="1.6" stroke-linejoin="round"/><g fill="#fff3b0" stroke="#ffcf5c" stroke-width=".7"><path d="M25 4 l1 2 2 1 -2 1 -1 2 -1 -2 -2 -1 2 -1 z"/></g></svg>
-          <small>실제 크기 ×3.2</small>
+          <svg width="96" height="96" viewBox="0 0 24 24"><path d="M4 2 L4 21 L9.2 16.3 L12.4 22.6 L15.4 21.2 L12.2 15 L19 15 Z" fill="#00000055" transform="translate(0.8 1)"/><path d="M4 2 L4 21 L9.2 16.3 L12.4 22.6 L15.4 21.2 L12.2 15 L19 15 Z" fill="#4c8bf5" stroke="#ffffff" stroke-width="1.3" stroke-linejoin="round"/></svg>
+          <small>실제 크기 ×4</small>
         </div>
-        <div class="zone">이 영역(및 페이지 전체)에<br>마우스를 올려보세요 →<br><b>화살표 커서</b></div>
+        <div class="zone">이 영역(및 페이지 전체)에<br>마우스를 올려보세요<br><b>강조색 화살표</b></div>
       </div>
     </div>
 
     <div class="card">
-      <h2>고양이 발바닥 <span style="color:var(--muted);font-weight:400">(클릭 가능한 곳)</span></h2>
-      <div class="desc">버튼·탭·목록·아이콘 등 누를 수 있는 요소 위에서 발바닥으로 변신.</div>
+      <h2>포인터 <span style="color:var(--muted);font-weight:400">(클릭 가능한 곳)</span></h2>
+      <div class="desc">버튼·탭·목록·아이콘 위에서는 밝게 빛나는(하이라이트) 화살표로 변신.</div>
       <div class="stage">
         <div class="chip">
-          <svg width="96" height="96" viewBox="0 0 30 30"><g fill="#ff9ec4" stroke="#ffffff" stroke-width="1.3"><ellipse cx="15" cy="20" rx="6.5" ry="5.4"/><ellipse cx="6.6" cy="13" rx="2.7" ry="3"/><ellipse cx="11.6" cy="8.6" rx="2.7" ry="3.1"/><ellipse cx="18.4" cy="8.6" rx="2.7" ry="3.1"/><ellipse cx="23.4" cy="13" rx="2.7" ry="3"/></g></svg>
-          <small>실제 크기 ×3.2</small>
+          <svg width="96" height="96" viewBox="0 0 24 24"><path d="M4 2 L4 21 L9.2 16.3 L12.4 22.6 L15.4 21.2 L12.2 15 L19 15 Z" fill="#00000055" transform="translate(0.8 1)"/><path d="M4 2 L4 21 L9.2 16.3 L12.4 22.6 L15.4 21.2 L12.2 15 L19 15 Z" fill="#a6c4fb" stroke="#ffffff" stroke-width="1.7" stroke-linejoin="round"/></svg>
+          <small>실제 크기 ×4</small>
         </div>
-        <div class="zone paw">여기에 마우스를 올려보세요 →<br><b>발바닥 커서</b></div>
+        <div class="zone point">여기에 마우스를 올려보세요<br><b>하이라이트 화살표</b></div>
       </div>
     </div>
   </div>
 
   <p class="foot">
-    실제 앱에서는 <code>public/index.html</code> 의 CSS 로 적용됩니다. 터미널 텍스트 영역·리사이즈 핸들·드래그 바는 선택/조작 UX 를 위해 원래 커서(text/resize/grab)를 유지합니다.<br>
-    색이나 모양을 바꾸고 싶으면 말씀해 주세요 — 앱 강조색을 따라가게 하거나 다른 캐릭터로 교체할 수 있어요.
+    실제 앱에서는 <code>app.js</code> 의 <code>applyCursors()</code> 가 현재 테마 강조색을 읽어 커서 SVG 를 동적으로 만들어 적용합니다. 터미널 텍스트 영역·리사이즈 핸들·드래그 바는 선택/조작 UX 를 위해 원래 커서(text/resize/grab)를 유지합니다.
   </p>
 </body>
 </html>
