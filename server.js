@@ -489,6 +489,62 @@ function extractArtifacts(text) {
   return out;
 }
 
+// ---- 세션 뷰어: jsonl 트랜스크립트 파싱 ----
+function toolPreview(name, input) {
+  if (!input || typeof input !== 'object') return '';
+  if (name === 'Task') return (input.subagent_type ? `[${input.subagent_type}] ` : '') + (input.description || input.prompt || '').toString().slice(0, 160);
+  if (input.file_path) return String(input.file_path);
+  if (input.path) return String(input.path);
+  if (input.command) return String(input.command).slice(0, 160);
+  if (input.pattern) return String(input.pattern).slice(0, 160);
+  if (input.url) return String(input.url);
+  const k = Object.keys(input)[0];
+  return k ? `${k}: ${String(input[k]).slice(0, 120)}` : '';
+}
+function parseTranscript(file) {
+  const raw = fs.readFileSync(file, 'utf8');
+  const lines = raw.split(/\r?\n/);
+  const items = [];
+  for (const ln of lines) {
+    if (!ln) continue;
+    let o; try { o = JSON.parse(ln); } catch { continue; }
+    const t = o.type;
+    if (t !== 'user' && t !== 'assistant') continue;
+    const msg = o.message || {};
+    const role = msg.role || t;
+    let content = msg.content;
+    if (typeof content === 'string') content = [{ type: 'text', text: content }];
+    if (!Array.isArray(content)) continue;
+    const texts = [], tools = [], results = [];
+    for (const b of content) {
+      if (typeof b === 'string') { texts.push(b); continue; }
+      if (!b || typeof b !== 'object') continue;
+      if (b.type === 'text' && b.text) texts.push(b.text);
+      else if (b.type === 'tool_use') tools.push({ name: b.name || 'tool', preview: toolPreview(b.name, b.input), isTask: b.name === 'Task' });
+      else if (b.type === 'tool_result') {
+        let rc = b.content;
+        if (Array.isArray(rc)) rc = rc.map((x) => (x && x.type === 'text' ? x.text : (typeof x === 'string' ? x : ''))).join('\n');
+        results.push(String(rc == null ? '' : rc).slice(0, 3000));
+      }
+    }
+    const text = texts.join('\n').trim();
+    if (role === 'user' && !text && results.length) {
+      for (const r of results) items.push({ role: 'tool_result', text: r });
+      continue;
+    }
+    if (!text && !tools.length) continue;
+    items.push({ role, text, tools });
+  }
+  return items.slice(-500); // 상한 (오래된 것부터 잘라 최근 500개)
+}
+app.get('/api/transcript', (req, res) => {
+  const key = String(req.query.key || '');
+  const s = ptyStore.get(key);
+  if (!s || !s.watch || !s.watch.file || !fs.existsSync(s.watch.file)) return res.json({ ready: false, items: [] });
+  try { res.json({ ready: true, items: parseTranscript(s.watch.file) }); }
+  catch (e) { res.json({ ready: false, items: [], error: String((e && e.message) || e) }); }
+});
+
 // ---- 사용량 (/status 스크레이프, 요청 시 1회) ----
 function stripAnsi(s) {
   let c = s.replace(/\x1b\[[0-9;?]*[ -/]*[@-~]/g, '').replace(/\x1b[\]P][\s\S]*?(\x07|\x1b\\)/g, '');

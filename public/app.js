@@ -28,6 +28,8 @@ const ICON = {
   restore: ic('<path d="M8 3H5a2 2 0 0 0-2 2v3M16 3h3a2 2 0 0 1 2 2v3M8 21H5a2 2 0 0 1-2-2v-3M16 21h3a2 2 0 0 1 2-2v-3"/>'),
   help: ic('<circle cx="12" cy="12" r="9"/><path d="M9.1 9a3 3 0 0 1 5.8 1c0 2-3 2.5-3 4"/><path d="M12 17h.01"/>'),
   keyboard: ic('<rect x="2" y="6" width="20" height="12" rx="2"/><path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M6 14h12"/>'),
+  task: ic('<path d="M12 2 2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5M2 12l10 5 10-5"/>'),
+  tool: ic('<path d="M4 17l6-6-6-6"/><path d="M12 19h8"/>'),
 };
 function hydrateIcons(root) {
   (root || document).querySelectorAll('[data-icon]').forEach((el) => {
@@ -55,6 +57,7 @@ const statusEl = document.getElementById('status');
 let columns = [];
 let columnSplit = null;
 const minimized = [];              // 최소화된 패널 목록 (claude 는 계속 실행, DOM 만 숨김 보관)
+const viewerByKey = new Map();     // 세션 key -> 열려있는 뷰어 패널 (중복 방지)
 const minStash = document.createElement('div'); // 최소화 패널 DOM 을 살려두는 숨김 보관소 (term/ws 유지)
 minStash.id = 'minStash'; minStash.style.display = 'none';
 document.addEventListener('DOMContentLoaded', () => document.body.appendChild(minStash));
@@ -418,6 +421,83 @@ function renderTray() {
   });
 }
 
+/* ---------- 세션 뷰어 (대화·서브에이전트 카드 뷰) ---------- */
+function renderViewer(body, items) {
+  const atBottom = body.scrollHeight - body.scrollTop - body.clientHeight < 40;
+  const html = (items || []).map((it) => {
+    if (it.role === 'tool_result') {
+      return `<div class="vcard result"><div class="vcc">${escapeHtml(it.text)}</div></div>`;
+    }
+    if (it.role === 'user') {
+      return `<div class="vmsg"><div class="vwho user">나</div><div class="vbub user">${escapeHtml(it.text)}</div></div>`;
+    }
+    const tools = (it.tools || []).map((t) => {
+      const ic = t.isTask ? ICON.task : ICON.tool;
+      const pv = t.preview ? ` · <span class="vp">${escapeHtml(t.preview)}</span>` : '';
+      return `<div class="vcard${t.isTask ? ' task' : ''}"><div class="vch">${ic}<span>${escapeHtml(t.name)}</span>${pv}</div></div>`;
+    }).join('');
+    const txt = it.text ? `<div class="vmsg"><div class="vwho ai">AI</div><div class="vbub">${escapeHtml(it.text)}</div></div>` : '';
+    return txt + tools;
+  }).join('');
+  body.innerHTML = html || '<div class="vempty">아직 메시지가 없습니다.</div>';
+  if (atBottom) body.scrollTop = body.scrollHeight;
+}
+function addViewerPane(src) {
+  if (!src || !src.cfg || !src.cfg.key) return;
+  const key = src.cfg.key;
+  if (viewerByKey.has(key)) { setActive(viewerByKey.get(key)); return; }
+  emptyMsg.style.display = 'none';
+  const col = newColumn();
+  const pane = document.createElement('div');
+  pane.className = 'pane viewer';
+  pane.innerHTML = `
+    <div class="bar">
+      <span class="dot"></span>
+      <span class="label"><span class="ttl">${ICON.eye}<span>세션 뷰어</span></span><span class="cwd">${escapeHtml(src.cfg.title || '')}</span></span>
+      <button class="vrefresh" title="새로고침">${ICON.refresh}</button>
+      <button class="x" title="뷰어 닫기">${ICON.x}</button>
+    </div>
+    <div class="vbody"><div class="vempty">불러오는 중…</div></div>`;
+  col.el.appendChild(pane);
+  const body = pane.querySelector('.vbody');
+  let disposed = false, timer = null;
+  const refresh = async () => {
+    try {
+      const r = await fetch(`/api/transcript?key=${encodeURIComponent(key)}`).then((x) => x.json());
+      if (disposed) return;
+      if (!r.ready) { if (!body.querySelector('.vmsg')) body.innerHTML = '<div class="vempty">첫 메시지 이후 표시됩니다…</div>'; return; }
+      renderViewer(body, r.items);
+    } catch {}
+  };
+  const paneObj = {
+    el: pane, cfg: { title: '세션 뷰어', viewer: true }, term: null,
+    fit() {},
+    dispose() {
+      disposed = true;
+      if (timer) clearInterval(timer);
+      viewerByKey.delete(key);
+      const c = findColumnOf(paneObj);
+      if (c) {
+        const ci = c.panes.indexOf(paneObj);
+        if (ci >= 0) c.panes.splice(ci, 1);
+        if (c.panes.length === 0) { const idx = columns.indexOf(c); if (idx >= 0) columns.splice(idx, 1); c.el.remove(); }
+      }
+      pane.remove(); rebuildAll();
+      if (activePane === paneObj) setActive(columns[0] ? columns[0].panes[0] : null);
+      updateStatus();
+    },
+  };
+  col.panes.push(paneObj);
+  viewerByKey.set(key, paneObj);
+  pane.querySelector('.x').addEventListener('click', (e) => { e.stopPropagation(); paneObj.dispose(); });
+  pane.querySelector('.vrefresh').addEventListener('click', (e) => { e.stopPropagation(); refresh(); });
+  pane.addEventListener('mousedown', () => setActive(paneObj));
+  try { enablePaneDrag(paneObj, pane.querySelector('.bar')); } catch {}
+  rebuildAll(); setActive(paneObj); updateStatus();
+  refresh();
+  timer = setInterval(refresh, 2000);
+}
+
 // 모델 순서 기준으로 DOM 순서를 맞추고 split.js 를 재생성한다.
 function rebuildAll() {
   columns.forEach((c) => { if (c.split) { try { c.split.destroy(); } catch {} c.split = null; } });
@@ -482,6 +562,7 @@ function addPane(cfg, placement) {
         <span class="ttl">${escapeHtml(title)}</span><span class="cwd">${ICON.folder}<span>${escapeHtml(shortCwd)}</span></span>
       </span>
       <button class="artifact" title="Claude 아티팩트 미리보기" style="display:none"></button>
+      <button class="viewer-btn" title="세션 뷰어 — 대화·서브에이전트 작업을 카드로 보기">${ICON.eye} 뷰어</button>
       <button class="auto" title="새 메시지 자동 새로고침 (유휴 시 자동 반영)">자동</button>
       <button class="reload" title="새로고침 (세션 다시 불러오기)">${ICON.refresh}</button>
       <button class="split" title="아래로 분할">${ICON.split}</button>
@@ -802,6 +883,10 @@ function addPane(cfg, placement) {
   pane.querySelector('.min').addEventListener('click', (e) => {
     e.stopPropagation();
     minimizePane(paneObj);
+  });
+  pane.querySelector('.viewer-btn').addEventListener('click', (e) => {
+    e.stopPropagation();
+    addViewerPane(paneObj);
   });
   pane.querySelector('.split').addEventListener('click', (e) => {
     e.stopPropagation();
