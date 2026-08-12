@@ -32,10 +32,7 @@
   "build": {
     "appId": "com.claude-terminal-hub.app",
     "productName": "Claude Terminal Hub",
-    "asar": true,
-    "asarUnpack": [
-      "node_modules/node-pty/**/*"
-    ],
+    "asar": false,
     "files": [
       "server.js",
       "electron/**/*",

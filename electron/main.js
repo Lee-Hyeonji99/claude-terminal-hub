@@ -59,7 +59,16 @@ async function ensureServer() {
     stdio: ['ignore', logFd, logFd],
     windowsHide: true,
   });
-  serverProc.on('exit', () => { exited = true; try { fs.closeSync(logFd); } catch { /* already closed */ } });
+  serverProc.on('exit', (code, signal) => {
+    exited = true;
+    try { fs.writeSync(logFd, `\n[electron] server.js 프로세스 종료 (code=${code} signal=${signal})\n`); } catch { /* ignore */ }
+    try { fs.closeSync(logFd); } catch { /* already closed */ }
+  });
+  serverProc.on('error', (err) => {
+    exited = true;
+    try { fs.writeSync(logFd, `\n[electron] server.js 프로세스 spawn 실패: ${err && err.stack ? err.stack : err}\n`); } catch { /* ignore */ }
+    try { fs.closeSync(logFd); } catch { /* already closed */ }
+  });
   for (let i = 0; i < 40; i++) {
     await new Promise((r) => setTimeout(r, 300));
     if (await ping()) return true;
