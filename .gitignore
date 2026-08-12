@@ -5,3 +5,9 @@ npm-debug.log*
 Thumbs.db
 # 앱 창 전용 브라우저 프로필 (런타임 생성물, LOCALAPPDATA에 위치하지만 혹시 몰라)
 claude-hub-appwin/
+
+# Windows exe 빌드 시 CI 에서 내려받는 VC++ 재배포 패키지 (커밋 금지, 14MB 바이너리)
+build/vc_redist.x64.exe
+
+# electron-builder 산출물
+dist/
