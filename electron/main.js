@@ -44,16 +44,21 @@ function ping() {
   });
 }
 
+const SERVER_LOG_PATH = path.join(app.getPath('userData'), 'server.log');
+
 let serverProc = null;
 async function ensureServer() {
   if (await ping()) return true; // 이미 떠 있으면 재사용
+  const fs = require('fs');
+  const logFd = fs.openSync(SERVER_LOG_PATH, 'w');
   // Electron 바이너리를 순수 node 로 실행(ELECTRON_RUN_AS_NODE)해 서버 기동 → 별도 node 설치 불필요
   serverProc = spawn(process.execPath, [path.join(ROOT, 'server.js')], {
     cwd: ROOT,
     env: { ...process.env, ELECTRON_RUN_AS_NODE: '1', CLAUDE_HUB_PORT: String(PORT) },
-    stdio: 'ignore',
+    stdio: ['ignore', logFd, logFd],
     windowsHide: true,
   });
+  serverProc.on('exit', () => { try { fs.closeSync(logFd); } catch { /* already closed */ } });
   for (let i = 0; i < 40; i++) {
     await new Promise((r) => setTimeout(r, 300));
     if (await ping()) return true;
@@ -72,8 +77,15 @@ function createWindow(ready) {
     webPreferences: { contextIsolation: true, spellcheck: false, preload: path.join(__dirname, 'preload.js') },
   });
 
-  if (ready) win.loadURL(URL);
-  else win.loadURL('data:text/html,<body style="background:%230c0e14;color:%238a91a5;font-family:Segoe UI;display:flex;align-items:center;justify-content:center;height:100vh;margin:0">서버를 시작하지 못했습니다. 포트 ' + PORT + ' 확인 후 다시 실행하세요.</body>');
+  if (ready) {
+    win.loadURL(URL);
+  } else {
+    const html = `<body style="background:#0c0e14;color:#8a91a5;font-family:Segoe UI;display:flex;flex-direction:column;gap:8px;align-items:center;justify-content:center;height:100vh;margin:0;text-align:center">
+      <div>서버를 시작하지 못했습니다. 포트 ${PORT} 확인 후 다시 실행하세요.</div>
+      <div style="font-size:12px;opacity:.7">로그: ${SERVER_LOG_PATH}</div>
+    </body>`;
+    win.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(html));
+  }
 
   // 외부 링크는 시스템 기본 브라우저로
   win.webContents.setWindowOpenHandler(({ url }) => { shell.openExternal(url); return { action: 'deny' }; });
