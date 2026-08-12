@@ -17,7 +17,14 @@ const readline = require('readline');
 const { execFile } = require('child_process');
 const express = require('express');
 const { WebSocketServer } = require('ws');
-const pty = require('node-pty');
+let pty;
+try {
+  pty = require('node-pty');
+} catch (e) {
+  console.error('[fatal] node-pty 로드 실패:', e && e.message ? e.message : e);
+  console.error('[fatal] Windows 라면 "Microsoft Visual C++ Redistributable"(x64) 설치 여부를 확인하세요: https://aka.ms/vs/17/release/vc_redist.x64.exe');
+  process.exit(1);
+}
 
 const PORT = Number(process.env.CLAUDE_HUB_PORT || 4778);
 const IS_WIN = process.platform === 'win32';

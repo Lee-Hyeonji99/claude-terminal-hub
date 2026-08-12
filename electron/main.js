@@ -51,6 +51,7 @@ async function ensureServer() {
   if (await ping()) return true; // 이미 떠 있으면 재사용
   const fs = require('fs');
   const logFd = fs.openSync(SERVER_LOG_PATH, 'w');
+  let exited = false;
   // Electron 바이너리를 순수 node 로 실행(ELECTRON_RUN_AS_NODE)해 서버 기동 → 별도 node 설치 불필요
   serverProc = spawn(process.execPath, [path.join(ROOT, 'server.js')], {
     cwd: ROOT,
@@ -58,12 +59,24 @@ async function ensureServer() {
     stdio: ['ignore', logFd, logFd],
     windowsHide: true,
   });
-  serverProc.on('exit', () => { try { fs.closeSync(logFd); } catch { /* already closed */ } });
+  serverProc.on('exit', () => { exited = true; try { fs.closeSync(logFd); } catch { /* already closed */ } });
   for (let i = 0; i < 40; i++) {
     await new Promise((r) => setTimeout(r, 300));
     if (await ping()) return true;
+    // server.js 프로세스가 이미 죽었으면(네이티브 모듈 로드 실패 등) 남은 재시도를 기다리지 않고 바로 실패 처리
+    if (exited) break;
   }
   return false;
+}
+
+function readServerLogTail() {
+  try {
+    const fs = require('fs');
+    const text = fs.readFileSync(SERVER_LOG_PATH, 'utf8');
+    return text.slice(-4000) || '(로그 비어있음 — 서버가 아예 시작되지 않았거나 아직 로그를 못 씀)';
+  } catch (e) {
+    return '(로그 파일을 읽을 수 없음: ' + e.message + ')';
+  }
 }
 
 function createWindow(ready) {
@@ -80,9 +93,11 @@ function createWindow(ready) {
   if (ready) {
     win.loadURL(URL);
   } else {
-    const html = `<body style="background:#0c0e14;color:#8a91a5;font-family:Segoe UI;display:flex;flex-direction:column;gap:8px;align-items:center;justify-content:center;height:100vh;margin:0;text-align:center">
-      <div>서버를 시작하지 못했습니다. 포트 ${PORT} 확인 후 다시 실행하세요.</div>
-      <div style="font-size:12px;opacity:.7">로그: ${SERVER_LOG_PATH}</div>
+    const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    const html = `<body style="background:#0c0e14;color:#8a91a5;font-family:Segoe UI;display:flex;flex-direction:column;gap:10px;align-items:center;padding:40px 24px;margin:0;box-sizing:border-box;min-height:100vh">
+      <div style="text-align:center">서버를 시작하지 못했습니다. 포트 ${PORT} 확인 후 다시 실행하세요.</div>
+      <div style="font-size:12px;opacity:.7">로그 파일: ${esc(SERVER_LOG_PATH)}</div>
+      <pre style="width:100%;max-width:900px;flex:1;overflow:auto;background:#000;color:#c9d1d9;padding:12px;border-radius:6px;font-size:12px;white-space:pre-wrap;word-break:break-all">${esc(readServerLogTail())}</pre>
     </body>`;
     win.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(html));
   }
