@@ -4,14 +4,15 @@
   "private": true,
   "description": "여러 Claude Code / 셸 세션을 한 브라우저 화면에서 보는 통합 터미널",
   "type": "commonjs",
-  "main": "server.js",
+  "main": "electron/main.js",
   "bin": {
     "claude-hub": "bin/claude-hub"
   },
   "scripts": {
     "start": "node server.js",
     "app": "electron electron/main.js",
-    "postinstall": "electron-rebuild -f -w node-pty"
+    "postinstall": "electron-rebuild -f -w node-pty",
+    "dist:win": "electron-builder --win --x64"
   },
   "dependencies": {
     "@xterm/addon-canvas": "^0.7.0",
@@ -25,6 +26,46 @@
   "devDependencies": {
     "@electron/rebuild": "^4.2.0",
     "electron": "^43.2.0",
+    "electron-builder": "^26.15.3",
     "rcedit": "^5.0.2"
+  },
+  "build": {
+    "appId": "com.claude-terminal-hub.app",
+    "productName": "Claude Terminal Hub",
+    "asar": true,
+    "asarUnpack": [
+      "node_modules/node-pty/**/*"
+    ],
+    "files": [
+      "server.js",
+      "electron/**/*",
+      "public/**/*",
+      "bin/**/*",
+      "package.json",
+      "node_modules/**/*",
+      "!node_modules/electron-builder/**",
+      "!node_modules/electron/**",
+      "!node_modules/@electron/rebuild/**"
+    ],
+    "directories": {
+      "output": "dist"
+    },
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": ["x64"]
+        }
+      ],
+      "icon": "electron/icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Claude Terminal Hub"
+    }
   }
 }
