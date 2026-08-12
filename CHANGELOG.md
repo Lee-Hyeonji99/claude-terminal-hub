@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.12.0] - 2026-08-12
+
+### Added
+- **Windows exe 배포**: `electron-builder` 도입 — `npm run dist:win` 으로 NSIS 설치 파일(`.exe`)을 빌드해 일반 사용자에게 git/Node 설치 없이 배포 가능. `node-pty` 네이티브 모듈은 빌드 시 Electron ABI 로 자동 리빌드(`asarUnpack` 처리로 patch 후에도 정상 로드).
+  - GitHub Actions `build-windows.yml`: `v*.*.*` 태그 push 또는 수동 실행 시 `windows-latest` 러너에서 exe 빌드 → 워크플로 아티팩트 업로드 + 태그 push 인 경우 GitHub Release 에 첨부. (네이티브 모듈 크로스컴파일은 Linux 에서 불가능해 Windows 러너 필요.)
+
 ## [1.11.0] - 2026-08-04
 
 ### Added
