@@ -10,6 +10,7 @@ const { app, BrowserWindow, Menu, shell, ipcMain, dialog, nativeImage, Notificat
 const http = require('http');
 const path = require('path');
 const { spawn } = require('child_process');
+const { autoUpdater } = require('electron-updater');
 
 // 작업표시줄(Windows)/Dock(macOS)/Alt-Tab이 패키징 안 된 electron 자체 정체성("Electron")으로
 // 뜨는 걸 막기 위해 앱 고유 이름/AppUserModelID를 지정
@@ -168,10 +169,34 @@ ipcMain.on('cth-notify', (e, payload) => {
   win.once('focus', () => win.flashFrame(false));
 });
 
+// 자동 업데이트: GitHub Release 에 올라간 최신 버전을 백그라운드로 받아뒀다가,
+// 사용자 확인 후(또는 다음 종료 시 자동으로) 설치한다. 개발 실행(패키징 안 됨)일 땐 업데이트 서버가 없어 스킵.
+autoUpdater.autoDownload = true;
+autoUpdater.autoInstallOnAppQuit = true;
+function initAutoUpdate(win) {
+  if (!app.isPackaged) return;
+  autoUpdater.on('update-downloaded', async () => {
+    const r = await dialog.showMessageBox(win, {
+      type: 'info',
+      title: 'Claude Terminal Hub 업데이트',
+      message: '새 버전을 다운로드했습니다. 지금 재시작해서 설치할까요?',
+      buttons: ['지금 재시작', '나중에 (다음 종료 시 자동 설치)'],
+      defaultId: 0,
+      cancelId: 1,
+    });
+    if (r.response === 0) autoUpdater.quitAndInstall();
+  });
+  autoUpdater.on('error', (err) => {
+    console.error('[auto-update] 확인/다운로드 실패:', err && err.message ? err.message : err);
+  });
+  autoUpdater.checkForUpdates().catch(() => {});
+}
+
 app.whenReady().then(async () => {
   Menu.setApplicationMenu(null); // Ctrl+W/T/N 등 기본 accelerator 제거 → 키가 터미널로 전달
   const ok = await ensureServer();
-  createWindow(ok);
+  const win = createWindow(ok);
+  initAutoUpdate(win);
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow(true);
