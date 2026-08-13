@@ -566,6 +566,8 @@ function saveLayout() {
       const snap = collectWorkspaceSnapshot(all[pid].columns);
       if (snap.length) out[pid] = { columns: snap, columnSizes: (pid === activeProfileId && columnSplit) ? columnSplit.getSizes() : null };
     }
+    // 최소화된 패널(트레이)은 프로필 소속과 무관하게 하나의 전역 목록 — 별도 키로 저장
+    out.__minimized = minimized.map(paneSnapshot).filter((s) => s && s.type === 'term');
     localStorage.setItem('cth_layout', JSON.stringify(out));
   } catch { /* ignore */ }
 }
@@ -589,14 +591,14 @@ function restoreLayoutForProfile(pid) {
         addPane({
           key: ps.key, cwd: ps.cwd, profile: ps.profile, resumeId: ps.resumeId || undefined,
           command: ps.command || undefined, runClaude: !!ps.runClaude, title: ps.title || undefined,
-        }, first ? undefined : 'row');
+        }, first ? 'newcol' : 'row');
         const col = columns[columns.length - 1];
         keyToPane.set(ps.key, col.panes[col.panes.length - 1]);
         first = false;
       } else if (ps.type === 'preview') {
         const fm = ps.url.match(/^\/api\/file\?path=(.+)$/);
         const label = fm ? (decodeURIComponent(fm[1]).split(/[\\/]/).filter(Boolean).pop() || null) : null;
-        addPreviewPane(ps.url, first ? undefined : 'row', label);
+        addPreviewPane(ps.url, first ? 'newcol' : 'row', label);
         first = false;
       } else if (ps.type === 'viewer') {
         pendingViewers.push(ps); // 뷰어는 항상 새 컬럼으로 열리므로 마지막에 처리
@@ -617,6 +619,26 @@ function restoreLayoutForProfile(pid) {
   });
 }
 
+let minimizedRestored = false;
+// 최소화(트레이) 상태였던 패널 복원 — 프로필 무관 전역 목록이라 앱 시작 시 한 번만 실행.
+function restoreMinimized() {
+  if (minimizedRestored) return;
+  minimizedRestored = true;
+  let list;
+  try { list = JSON.parse(localStorage.getItem('cth_layout') || '{}').__minimized; } catch { list = null; }
+  if (!Array.isArray(list) || !list.length) return;
+  for (const ps of list) {
+    if (ps.type !== 'term') continue;
+    addPane({
+      key: ps.key, cwd: ps.cwd, profile: ps.profile, resumeId: ps.resumeId || undefined,
+      command: ps.command || undefined, runClaude: !!ps.runClaude, title: ps.title || undefined,
+    }, 'newcol');
+    const col = columns[columns.length - 1];
+    const paneObj = col.panes[col.panes.length - 1];
+    minimizePane(paneObj);
+  }
+}
+
 function newColumn(atIndex) {
   const el = document.createElement('div');
   el.className = 'column';
@@ -633,15 +655,24 @@ function setActive(pane) {
   if (pane && pane.el) { pane.el.classList.add('active'); pane.el.classList.remove('done'); if (pane.term) { try { pane.term.focus(); } catch {} } }
 }
 
+// 새 패널이 들어갈 컬럼 결정: 'row'면 현재 활성 패널의 컬럼에, 아니면 컬럼이 잘게 늘어나지 않도록
+// 마지막 컬럼에 아직 자리(2행 미만)가 있으면 거기 채우고, 꽉 찼을 때만 새 컬럼을 연다.
+const PANES_PER_COLUMN = 2;
+function pickColumnForPlacement(placement) {
+  if (placement === 'row' && activePane && findColumnOf(activePane)) return findColumnOf(activePane);
+  if (placement === 'newcol') return newColumn(); // 저장된 레이아웃 복원 시 컬럼 경계를 그대로 재현하기 위한 강제 새 컬럼
+  const last = columns[columns.length - 1];
+  if (last && last.panes.length < PANES_PER_COLUMN) return last;
+  return newColumn();
+}
+
 /* ---------- 패널(세션) 생성 ---------- */
 function addPane(cfg, placement) {
   emptyMsg.style.display = 'none';
   if (!cfg.profile) cfg.profile = activeProfileId; // 현재 계정 프로필에 소속
   if (!cfg.key) cfg.key = 'k_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8); // 재부착용 안정 키
 
-  let col;
-  if (placement === 'row' && activePane && findColumnOf(activePane)) col = findColumnOf(activePane);
-  else col = newColumn();
+  const col = pickColumnForPlacement(placement);
 
   const pane = document.createElement('div');
   pane.className = 'pane';
@@ -1041,9 +1072,7 @@ function addPreviewPane(url, placement, label) {
   if (!isFile) url = normalizeUrl(url); // 빈 값이면 '' (빈 패널로 열림)
   emptyMsg.style.display = 'none';
 
-  let col;
-  if (placement === 'row' && activePane && findColumnOf(activePane)) col = findColumnOf(activePane);
-  else col = newColumn();
+  const col = pickColumnForPlacement(placement);
 
   const pane = document.createElement('div');
   pane.className = 'pane running';
@@ -1559,6 +1588,7 @@ async function initState() {
   if (!profiles.find((p) => p.id === 'default')) profiles.unshift({ id: 'default', name: '기본' });
   if (!profiles.find((p) => p.id === activeProfileId)) activeProfileId = 'default';
   restoreLayoutForProfile(activeProfileId); // 마지막으로 열려있던 패널 레이아웃 복원
+  restoreMinimized(); // 최소화(트레이)돼 있던 패널도 복원
   renderTabs();
   loadRecent();
 }
