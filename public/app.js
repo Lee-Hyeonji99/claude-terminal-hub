@@ -764,7 +764,6 @@ function addPane(cfg, placement) {
   let reloading = false;
   let autoReload = false;
   let lastActivityAt = Date.now();
-  let lastArtifact = null;
   let ws = null;
   let reconnectTries = 0;
   let reconnectTimer = null;
@@ -927,6 +926,7 @@ function addPane(cfg, placement) {
       try { window.removeEventListener('focus', onWake); } catch {}
       try { document.removeEventListener('visibilitychange', onVisible); } catch {}
       try { ro.disconnect(); } catch {}
+      closeArtifactDropdown();
       // 서버 pty 를 실제로 종료(패널 닫기 = 세션 종료). ws close 만으로는 이제 pty 가 안 죽음.
       try { if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: 'kill' })); } catch {}
       try { if (ws) ws.close(); } catch {}
@@ -1017,14 +1017,45 @@ function addPane(cfg, placement) {
   });
   const reloadBtn = pane.querySelector('.reload');
 
-  // Claude 아티팩트(만든/본 파일) 감지 → 칩 표시, 클릭 시 옆에 미리보기
+  // Claude 아티팩트(세션 중 만들거나 고친 파일) 감지 → 칩에 개수 표시, 클릭하면 전체 목록을 드롭다운으로
   const artifactBtn = pane.querySelector('.artifact');
-  artifactBtn.addEventListener('click', (e) => { e.stopPropagation(); if (lastArtifact) addFilePreview(lastArtifact, 'column'); });
+  const artifactSeen = new Set(); // 배지 카운트용(서버가 최종 목록의 authoritative source)
+  let artifactDropdown = null;
+  function closeArtifactDropdown() {
+    if (artifactDropdown) { artifactDropdown.remove(); artifactDropdown = null; }
+    document.removeEventListener('mousedown', onDocMouseDownForArtifact, true);
+  }
+  function onDocMouseDownForArtifact(e) {
+    if (artifactDropdown && !artifactDropdown.contains(e.target) && e.target !== artifactBtn) closeArtifactDropdown();
+  }
+  async function openArtifactDropdown() {
+    if (artifactDropdown) { closeArtifactDropdown(); return; }
+    const dd = document.createElement('div');
+    dd.className = 'popover open artifact-dropdown';
+    dd.innerHTML = '<div class="popover-item" style="cursor:default;color:var(--muted)">불러오는 중…</div>';
+    artifactBtn.appendChild(dd);
+    artifactDropdown = dd;
+    setTimeout(() => document.addEventListener('mousedown', onDocMouseDownForArtifact, true), 0);
+    const r = await fetch(`/api/artifacts?key=${encodeURIComponent(cfg.key)}`).then((x) => x.json()).catch(() => ({ files: [] }));
+    if (artifactDropdown !== dd) return; // 그 사이 닫혔으면 무시
+    const files = r.files || [];
+    if (!files.length) { dd.innerHTML = '<div class="popover-item" style="cursor:default;color:var(--muted)">아직 만들거나 고친 파일이 없습니다.</div>'; return; }
+    dd.innerHTML = '';
+    files.forEach((f) => {
+      const base = f.path.split(/[\\/]/).filter(Boolean).pop() || f.path;
+      const item = document.createElement('div');
+      item.className = 'popover-item';
+      item.title = f.path;
+      item.innerHTML = `${ICON.file}<span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(base)}</span><span style="margin-left:auto;color:var(--muted);font-size:10px">${escapeHtml(f.tool || '')}</span>`;
+      item.addEventListener('click', () => { closeArtifactDropdown(); addFilePreview(f.path, 'column'); });
+      dd.appendChild(item);
+    });
+  }
+  artifactBtn.addEventListener('click', (e) => { e.stopPropagation(); openArtifactDropdown(); });
   function onArtifact(p) {
-    lastArtifact = p;
-    const base = p.split(/[\\/]/).filter(Boolean).pop() || p;
-    artifactBtn.innerHTML = `${ICON.eye}<span class="alabel">${escapeHtml(base)}</span>`;
-    artifactBtn.title = `미리보기: ${p}`;
+    artifactSeen.add(p);
+    artifactBtn.innerHTML = `${ICON.eye}<span class="alabel">파일 ${artifactSeen.size}개</span>`;
+    artifactBtn.title = '이 세션에서 만들거나 고친 파일 보기';
     artifactBtn.style.display = '';
   }
 
