@@ -223,9 +223,10 @@ function encodeProjectPath(p) {
   return p.replace(/[^a-zA-Z0-9]/g, '-');
 }
 
-// 파일 끝부분(N바이트)에서 마지막 custom-title / ai-title 를 찾는다 (제목은 세션 진행 중 갱신되어 끝에 최신값).
+// 파일 끝부분(N바이트)에서 마지막 custom-title / ai-title / 마지막 user 입력 시각을 찾는다
+// (제목·마지막 입력은 세션 진행 중 갱신되어 끝에 최신값 위치).
 function readTitlesFromTail(file, size) {
-  const meta = { customTitle: null, aiTitle: null };
+  const meta = { customTitle: null, aiTitle: null, lastInputAt: null };
   try {
     const bytes = Math.min(size, 96 * 1024);
     const fd = fs.openSync(file, 'r');
@@ -238,15 +239,16 @@ function readTitlesFromTail(file, size) {
       let obj; try { obj = JSON.parse(line); } catch { continue; }
       if (obj.type === 'custom-title' && obj.customTitle) meta.customTitle = String(obj.customTitle).slice(0, 120);
       else if (obj.type === 'ai-title' && obj.aiTitle) meta.aiTitle = String(obj.aiTitle).slice(0, 120);
+      if (obj.type === 'user' && obj.timestamp) meta.lastInputAt = obj.timestamp; // 끝까지 덮어써 마지막 값 유지
     }
   } catch { /* skip */ }
   return meta;
 }
 
 function readSessionMeta(file) {
-  // 앞부분: cwd + 첫 user 메시지, 뒷부분: 최신 custom-title(/rename) / ai-title
+  // 앞부분: cwd + 첫 user 메시지/시각, 뒷부분: 최신 custom-title(/rename) / ai-title / 마지막 입력 시각
   return new Promise((resolve) => {
-    const meta = { title: null, summary: null, cwd: null, customTitle: null, aiTitle: null };
+    const meta = { title: null, summary: null, cwd: null, customTitle: null, aiTitle: null, firstInputAt: null, lastInputAt: null };
     let stat; try { stat = fs.statSync(file); } catch { return resolve(meta); }
     Object.assign(meta, readTitlesFromTail(file, stat.size));
 
@@ -259,15 +261,18 @@ function readSessionMeta(file) {
       let obj; try { obj = JSON.parse(line); } catch { return; }
       if (obj.cwd && !meta.cwd) meta.cwd = String(obj.cwd);
       if (obj.type === 'summary' && obj.summary && !meta.summary) meta.summary = String(obj.summary).slice(0, 120);
-      if (obj.type === 'user' && !meta.title) {
-        const c = obj.message && obj.message.content;
-        let text = '';
-        if (typeof c === 'string') text = c;
-        else if (Array.isArray(c)) text = c.map((x) => (x && x.text) || '').join(' ');
-        text = text.replace(/\s+/g, ' ').trim();
-        if (text && !text.startsWith('<')) meta.title = text.slice(0, 120);
+      if (obj.type === 'user') {
+        if (!meta.firstInputAt && obj.timestamp) meta.firstInputAt = obj.timestamp;
+        if (!meta.title) {
+          const c = obj.message && obj.message.content;
+          let text = '';
+          if (typeof c === 'string') text = c;
+          else if (Array.isArray(c)) text = c.map((x) => (x && x.text) || '').join(' ');
+          text = text.replace(/\s+/g, ' ').trim();
+          if (text && !text.startsWith('<')) meta.title = text.slice(0, 120);
+        }
       }
-      if (meta.cwd && (meta.title || meta.summary) && lines > 3) rl.close();
+      if (meta.cwd && meta.firstInputAt && (meta.title || meta.summary) && lines > 3) rl.close();
       if (lines > 200) rl.close();
     });
     rl.on('close', () => resolve(meta));
@@ -315,12 +320,16 @@ function listAllSessions(projectsDir) {
 
 // ---- 최근 세션 (모든 프로젝트 통합, LNB 추천용) ----
 app.get('/api/recent', async (req, res) => {
-  const limit = Math.min(30, Math.max(1, parseInt(req.query.limit, 10) || 12));
+  const isAll = req.query.all === '1';
+  const limit = Math.min(isAll ? 500 : 30, Math.max(1, parseInt(req.query.limit, 10) || 12));
   const all = listSessionsScoped(req.query.profile);
   const top = all.slice(0, limit);
   const sessions = await Promise.all(top.map(async (s) => {
     const meta = await getMeta(s.full, s.mtime);
-    return { id: s.id, title: bestTitle(meta), cwd: meta.cwd || '', mtime: s.mtime, sizeKB: s.sizeKB, profile: s.profile };
+    return {
+      id: s.id, title: bestTitle(meta), cwd: meta.cwd || '', mtime: s.mtime, sizeKB: s.sizeKB, profile: s.profile,
+      firstInputAt: meta.firstInputAt || null, lastInputAt: meta.lastInputAt || null,
+    };
   }));
   res.json({ total: all.length, sessions: sessions.filter((s) => s.cwd) });
 });

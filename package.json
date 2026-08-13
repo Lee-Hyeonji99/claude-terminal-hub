@@ -18,6 +18,7 @@
     "@xterm/addon-canvas": "^0.7.0",
     "@xterm/addon-fit": "^0.10.0",
     "@xterm/xterm": "^5.5.0",
+    "electron-updater": "^6.8.9",
     "express": "^4.19.2",
     "node-pty": "^1.0.0",
     "split.js": "^1.6.5",
@@ -46,6 +47,11 @@
     ],
     "directories": {
       "output": "dist"
+    },
+    "publish": {
+      "provider": "github",
+      "owner": "Lee-Hyeonji99",
+      "repo": "claude-terminal-hub"
     },
     "extraResources": [
       {
