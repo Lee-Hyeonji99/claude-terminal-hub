@@ -561,6 +561,19 @@ app.get('/api/transcript', (req, res) => {
   catch (e) { res.json({ ready: false, items: [], error: String((e && e.message) || e) }); }
 });
 
+// 세션 전체에서 Claude 가 만들고/고친 파일(아티팩트) 목록 — 마지막 것만이 아니라 전부
+app.get('/api/artifacts', (req, res) => {
+  const key = String(req.query.key || '');
+  const s = ptyStore.get(key);
+  if (!s || !s.watch || !s.watch.file || !fs.existsSync(s.watch.file)) return res.json({ ready: false, files: [] });
+  try {
+    const text = fs.readFileSync(s.watch.file, 'utf8');
+    res.json({ ready: true, files: extractArtifacts(text).reverse() }); // 최근에 손댄 파일이 위로
+  } catch (e) {
+    res.json({ ready: false, files: [], error: String((e && e.message) || e) });
+  }
+});
+
 // ---- 사용량 (/status 스크레이프, 요청 시 1회) ----
 function stripAnsi(s) {
   let c = s.replace(/\x1b\[[0-9;?]*[ -/]*[@-~]/g, '').replace(/\x1b[\]P][\s\S]*?(\x07|\x1b\\)/g, '');
