@@ -52,8 +52,7 @@
     "publish": {
       "provider": "github",
       "owner": "Lee-Hyeonji99",
-      "repo": "claude-terminal-hub",
-      "releaseType": "release"
+      "repo": "claude-terminal-hub"
     },
     "extraResources": [
       {
