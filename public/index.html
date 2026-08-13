@@ -135,7 +135,7 @@
     .lnb-alltoggle.on{color:var(--accent);border-color:var(--accent)}
     #stage{flex:1;position:relative;display:flex;min-height:0;overflow:hidden}
     .column{display:flex;flex-direction:column;min-width:0;min-height:0;height:100%}
-    .pane{display:flex;flex-direction:column;min-height:0;min-width:0;background:var(--panel);border:1px solid var(--border);border-radius:8px;overflow:hidden;margin:4px}
+    .pane{display:flex;flex-direction:column;min-height:0;min-width:0;background:var(--panel);border:1px solid var(--border);border-radius:8px;overflow:hidden;margin:1px}
     .pane.active{border-color:var(--active);box-shadow:0 0 0 1px var(--active)}
     .pane .bar{display:flex;align-items:center;gap:8px;padding:4px 8px;background:var(--head);border-bottom:1px solid var(--border);flex:none;font-size:12px}
     .pane .bar .dot{width:8px;height:8px;border-radius:50%;background:var(--muted);flex:none}
@@ -352,6 +352,7 @@
       <div class="lnb-head">
         <span id="lnbTitle">최근 세션</span>
         <div class="lnb-head-btns">
+          <button id="lnbAllSessionsToggle" class="lnb-alltoggle" title="닫혔지만 기록은 남아있는 세션까지 전부 보기">모든 세션</button>
           <button id="lnbAllToggle" class="lnb-alltoggle" title="모든 계정의 세션을 함께 보기 (다른 계정 대화 이어가기)">모든 계정</button>
           <button id="lnbRefresh" class="ghost icon-btn" title="새로고침"><span data-icon="refresh"></span></button>
         </div>

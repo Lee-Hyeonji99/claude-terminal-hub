@@ -147,6 +147,8 @@ document.body.appendChild(wsStash);
 const profileQ = () => `profile=${encodeURIComponent(activeProfileId)}`;
 // LNB(최근/검색)에서 "모든 계정" 보기 토글 — 켜면 모든 프로필 세션을 함께 나열
 let lnbAllProfiles = localStorage.getItem('cth_lnb_all_profiles') === '1';
+// LNB "모든 세션" 보기 토글 — 켜면 개수 제한 없이(서버 상한 500) 닫힌 세션까지 전부 나열 + 입력 시각 표시
+let lnbAllSessions = localStorage.getItem('cth_lnb_all_sessions') === '1';
 const lnbProfileQ = () => (lnbAllProfiles ? 'profile=__all__' : profileQ());
 function profileName(id) { const p = profiles.find((x) => x.id === id); return p ? p.name : (id || '기본'); }
 
@@ -186,6 +188,7 @@ function switchProfile(id) {
   columns = w.columns;
   activePane = w.activePane || null;
   columns.forEach((c) => stage.appendChild(c.el));
+  if (columns.length === 0 && !layoutRestoreAttempted.has(id)) restoreLayoutForProfile(id);
   rebuildAll();
   renderTabs();
   updateStatus();
@@ -470,7 +473,7 @@ function addViewerPane(src) {
     } catch {}
   };
   const paneObj = {
-    el: pane, cfg: { title: '세션 뷰어', viewer: true }, term: null,
+    el: pane, cfg: { title: '세션 뷰어', viewer: true, watchKey: key }, term: null,
     fit() {},
     dispose() {
       disposed = true;
@@ -508,7 +511,8 @@ function rebuildAll() {
   });
   if (columns.length >= 2) {
     columnSplit = Split(columns.map((c) => c.el), {
-      direction: 'horizontal', gutterSize: 6, minSize: 220, snapOffset: 0, onDrag: fitAll, onDragEnd: fitAll,
+      direction: 'horizontal', gutterSize: 3, minSize: 220, snapOffset: 0, onDrag: fitAll,
+      onDragEnd: () => { fitAll(); saveLayoutDebounced(); },
     });
   } else if (columns.length === 1) {
     columns[0].el.style.width = '100%';
@@ -516,13 +520,101 @@ function rebuildAll() {
   columns.forEach((col) => {
     if (col.panes.length >= 2) {
       col.split = Split(col.panes.map((p) => p.el), {
-        direction: 'vertical', gutterSize: 6, minSize: 120, snapOffset: 0, onDrag: fitAll, onDragEnd: fitAll,
+        direction: 'vertical', gutterSize: 3, minSize: 120, snapOffset: 0, onDrag: fitAll,
+        onDragEnd: () => { fitAll(); saveLayoutDebounced(); },
       });
     } else if (col.panes.length === 1) {
       col.panes[0].el.style.height = '100%';
     }
   });
   requestAnimationFrame(() => { fitAll(); requestAnimationFrame(fitAll); });
+  saveLayoutDebounced();
+}
+
+/* ---------- 창 레이아웃(열린 패널) 저장·복원 — 앱 재시작 시 마지막 화면 그대로 ---------- */
+function debounce(fn, ms) {
+  let t;
+  return (...args) => { clearTimeout(t); t = setTimeout(() => fn(...args), ms); };
+}
+function paneSnapshot(p) {
+  const cfg = (p && p.cfg) || {};
+  if (cfg.viewer) return cfg.watchKey ? { type: 'viewer', watchKey: cfg.watchKey } : null;
+  if (cfg.preview) return cfg.url ? { type: 'preview', url: cfg.url } : null;
+  if (cfg.key && cfg.cwd) {
+    return {
+      type: 'term', key: cfg.key, cwd: cfg.cwd, profile: cfg.profile,
+      resumeId: cfg.resumeId || null, command: cfg.command || null, runClaude: !!cfg.runClaude,
+      title: cfg.title || null,
+    };
+  }
+  return null;
+}
+function collectWorkspaceSnapshot(cols) {
+  return (cols || [])
+    .map((col) => {
+      let sizes = null;
+      try { if (col.split) sizes = col.split.getSizes(); } catch { /* ignore */ }
+      return { sizes, panes: col.panes.map(paneSnapshot).filter(Boolean) };
+    })
+    .filter((c) => c.panes.length);
+}
+function saveLayout() {
+  try {
+    const all = { ...profileWorkspaces, [activeProfileId]: { columns } };
+    const out = {};
+    for (const pid of Object.keys(all)) {
+      const snap = collectWorkspaceSnapshot(all[pid].columns);
+      if (snap.length) out[pid] = { columns: snap, columnSizes: (pid === activeProfileId && columnSplit) ? columnSplit.getSizes() : null };
+    }
+    localStorage.setItem('cth_layout', JSON.stringify(out));
+  } catch { /* ignore */ }
+}
+const saveLayoutDebounced = debounce(saveLayout, 400);
+
+const layoutRestoreAttempted = new Set();
+// 저장된 레이아웃을 현재(활성) columns 로 복원. 뷰어 패널은 대상 터미널 패널을 먼저 만든 뒤 마지막에 연결.
+function restoreLayoutForProfile(pid) {
+  layoutRestoreAttempted.add(pid);
+  let saved;
+  try { saved = JSON.parse(localStorage.getItem('cth_layout') || '{}')[pid]; } catch { saved = null; }
+  if (!saved || !Array.isArray(saved.columns) || !saved.columns.length) return;
+
+  const keyToPane = new Map();
+  const pendingViewers = [];
+  const colSizesList = [];
+  for (const colSnap of saved.columns) {
+    let first = true;
+    for (const ps of colSnap.panes) {
+      if (ps.type === 'term') {
+        addPane({
+          key: ps.key, cwd: ps.cwd, profile: ps.profile, resumeId: ps.resumeId || undefined,
+          command: ps.command || undefined, runClaude: !!ps.runClaude, title: ps.title || undefined,
+        }, first ? undefined : 'row');
+        const col = columns[columns.length - 1];
+        keyToPane.set(ps.key, col.panes[col.panes.length - 1]);
+        first = false;
+      } else if (ps.type === 'preview') {
+        const fm = ps.url.match(/^\/api\/file\?path=(.+)$/);
+        const label = fm ? (decodeURIComponent(fm[1]).split(/[\\/]/).filter(Boolean).pop() || null) : null;
+        addPreviewPane(ps.url, first ? undefined : 'row', label);
+        first = false;
+      } else if (ps.type === 'viewer') {
+        pendingViewers.push(ps); // 뷰어는 항상 새 컬럼으로 열리므로 마지막에 처리
+      }
+    }
+    if (!first) colSizesList.push(colSnap.sizes); // 실제로 패널이 만들어진 컬럼만 사이즈 기록
+  }
+  for (const ps of pendingViewers) {
+    const src = keyToPane.get(ps.watchKey);
+    if (src) addViewerPane(src);
+  }
+  requestAnimationFrame(() => {
+    try { if (saved.columnSizes && columnSplit) columnSplit.setSizes(saved.columnSizes); } catch { /* ignore */ }
+    columns.forEach((col, i) => {
+      const sizes = colSizesList[i];
+      try { if (sizes && col.split) col.split.setSizes(sizes); } catch { /* ignore */ }
+    });
+  });
 }
 
 function newColumn(atIndex) {
@@ -562,8 +654,6 @@ function addPane(cfg, placement) {
         <span class="ttl">${escapeHtml(title)}</span><span class="cwd">${ICON.folder}<span>${escapeHtml(shortCwd)}</span></span>
       </span>
       <button class="artifact" title="Claude 아티팩트 미리보기" style="display:none"></button>
-      <button class="viewer-btn" title="세션 뷰어 — 대화·서브에이전트 작업을 카드로 보기">${ICON.eye} 뷰어</button>
-      <button class="auto" title="새 메시지 자동 새로고침 (유휴 시 자동 반영)">자동</button>
       <button class="reload" title="새로고침 (세션 다시 불러오기)">${ICON.refresh}</button>
       <button class="split" title="아래로 분할">${ICON.split}</button>
       <button class="min" title="최소화 (숨김 — claude 는 계속 실행)">${ICON.minimize}</button>
@@ -884,10 +974,6 @@ function addPane(cfg, placement) {
     e.stopPropagation();
     minimizePane(paneObj);
   });
-  pane.querySelector('.viewer-btn').addEventListener('click', (e) => {
-    e.stopPropagation();
-    addViewerPane(paneObj);
-  });
   pane.querySelector('.split').addEventListener('click', (e) => {
     e.stopPropagation();
     setActive(paneObj);
@@ -898,18 +984,7 @@ function addPane(cfg, placement) {
     setActive(paneObj);
     reload();
   });
-  const autoBtn = pane.querySelector('.auto');
   const reloadBtn = pane.querySelector('.reload');
-  // 재개 세션만 새 메시지 감지 대상 → 자동 토글 노출
-  if (!cfg.resumeId) autoBtn.style.display = 'none';
-  autoBtn.addEventListener('click', (e) => {
-    e.stopPropagation();
-    autoReload = !autoReload;
-    autoBtn.classList.toggle('on', autoReload);
-    autoBtn.textContent = autoReload ? '자동 ●' : '자동';
-    autoBtn.title = autoReload ? '자동 새로고침: 켜짐 (유휴 시 새 메시지 자동 반영)' : '자동 새로고침: 꺼짐 (새 메시지 오면 새로고침 버튼이 깜빡임)';
-    if (autoReload) pane.classList.remove('has-changes');
-  });
 
   // Claude 아티팩트(만든/본 파일) 감지 → 칩 표시, 클릭 시 옆에 미리보기
   const artifactBtn = pane.querySelector('.artifact');
@@ -1306,7 +1381,8 @@ function relTime(ms) {
 }
 
 /* ---------- LNB (최근 세션 + 전체 검색) ---------- */
-function renderSessionList(sessions, emptyMsg) {
+function isoTime(iso) { return iso ? relTime(new Date(iso).getTime()) : '?'; }
+function renderSessionList(sessions, emptyMsg, showTimes) {
   const box = document.getElementById('recentList');
   box.innerHTML = '';
   if (!sessions || sessions.length === 0) {
@@ -1322,7 +1398,9 @@ function renderSessionList(sessions, emptyMsg) {
     it.innerHTML = `
       <div class="rt">${ICON.chat}<span>${escapeHtml(s.title)}</span></div>
       <div class="rf">${ICON.folder}<span>${escapeHtml(folder)}</span></div>
-      <div class="rs">${relTime(s.mtime)}${other ? ` · <span class="rprof">${escapeHtml(profileName(s.profile))}</span>` : ''}</div>
+      ${showTimes
+        ? `<div class="rs">최초 ${isoTime(s.firstInputAt)} · 마지막 ${isoTime(s.lastInputAt)}${other ? ` · <span class="rprof">${escapeHtml(profileName(s.profile))}</span>` : ''}</div>`
+        : `<div class="rs">${relTime(s.mtime)}${other ? ` · <span class="rprof">${escapeHtml(profileName(s.profile))}</span>` : ''}</div>`}
       ${other ? `<button class="rcont" title="이 대화를 현재 계정(${escapeHtml(profileName(activeProfileId))})으로 복사해 이어가기">${escapeHtml(profileName(activeProfileId))} 계정으로 이어가기</button>` : ''}`;
     it.onclick = () => openSession(s);
     const cont = it.querySelector('.rcont');
@@ -1332,10 +1410,12 @@ function renderSessionList(sessions, emptyMsg) {
 }
 
 async function loadRecent() {
-  document.getElementById('lnbTitle').textContent = lnbAllProfiles ? '최근 세션 · 모든 계정' : '최근 세션';
+  const titleBits = [lnbAllSessions ? '모든 세션' : '최근 세션', lnbAllProfiles ? '모든 계정' : null].filter(Boolean);
+  document.getElementById('lnbTitle').textContent = titleBits.join(' · ');
   document.getElementById('recentList').innerHTML = '<div class="recent-empty">불러오는 중…</div>';
-  const res = await fetch(`/api/recent?limit=${lnbAllProfiles ? 40 : 15}&${lnbProfileQ()}`).then((r) => r.json()).catch(() => ({ sessions: [] }));
-  renderSessionList(res.sessions, lnbAllProfiles ? '세션이 없습니다.' : '최근 세션이 없습니다.');
+  const q = lnbAllSessions ? `all=1&${lnbProfileQ()}` : `limit=${lnbAllProfiles ? 40 : 15}&${lnbProfileQ()}`;
+  const res = await fetch(`/api/recent?${q}`).then((r) => r.json()).catch(() => ({ sessions: [] }));
+  renderSessionList(res.sessions, '세션이 없습니다.', lnbAllSessions);
 }
 
 async function searchSessions(q) {
@@ -1383,6 +1463,15 @@ function setLnbAll(on) {
 }
 document.getElementById('lnbAllToggle').addEventListener('click', () => setLnbAll(!lnbAllProfiles));
 document.getElementById('lnbAllToggle').classList.toggle('on', lnbAllProfiles);
+function setLnbAllSessions(on) {
+  lnbAllSessions = on;
+  localStorage.setItem('cth_lnb_all_sessions', on ? '1' : '0');
+  const b = document.getElementById('lnbAllSessionsToggle');
+  if (b) b.classList.toggle('on', on);
+  refreshLnb();
+}
+document.getElementById('lnbAllSessionsToggle').addEventListener('click', () => setLnbAllSessions(!lnbAllSessions));
+document.getElementById('lnbAllSessionsToggle').classList.toggle('on', lnbAllSessions);
 document.getElementById('addProfile').addEventListener('click', addProfile);
 document.querySelectorAll('#themePopover .popover-item').forEach((el) => {
   el.addEventListener('click', () => { applyTheme(el.dataset.theme); closePopovers(); });
@@ -1469,6 +1558,7 @@ async function initState() {
   } catch {}
   if (!profiles.find((p) => p.id === 'default')) profiles.unshift({ id: 'default', name: '기본' });
   if (!profiles.find((p) => p.id === activeProfileId)) activeProfileId = 'default';
+  restoreLayoutForProfile(activeProfileId); // 마지막으로 열려있던 패널 레이아웃 복원
   renderTabs();
   loadRecent();
 }
