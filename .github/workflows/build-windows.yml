@@ -30,8 +30,23 @@ jobs:
         run: Invoke-WebRequest -Uri https://aka.ms/vs/17/release/vc_redist.x64.exe -OutFile build/vc_redist.x64.exe
         shell: pwsh
 
-      # 태그 push 또는 수동 릴리즈 발행: electron-builder 가 GitHub Release 를 직접 만들고
-      # latest.yml 까지 올림(auto-update 에 필요). 태그가 없으면 package.json 버전 기준으로 만듦.
+      # electron-builder 가 exe/blockmap/latest.yml 을 동시에 업로드하면서 릴리즈가 없으면
+      # 각자 "만들기"를 레이스로 시도해 draft 가 중복 생성되는 문제가 있음 → 미리 draft 를
+      # 하나 만들어두면(이미 있으면 건너뜀) electron-builder 는 거기에 파일만 채워 넣는다.
+      - if: startsWith(github.ref, 'refs/tags/') || inputs.publish == true
+        name: Ensure draft release exists (avoid electron-builder concurrent-create race)
+        shell: pwsh
+        run: |
+          $tag = "v" + (node -p "require('./package.json').version")
+          gh release view $tag 2>$null
+          if ($LASTEXITCODE -ne 0) {
+            gh release create $tag --draft --title $tag --notes "Automated build"
+          }
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # 태그 push 또는 수동 릴리즈 발행: electron-builder 가 (위에서 미리 만들어둔) draft 릴리즈에
+      # 설치파일+latest.yml 을 올림(auto-update 에 필요). 태그가 없으면 package.json 버전 기준으로 만듦.
       - if: startsWith(github.ref, 'refs/tags/') || inputs.publish == true
         run: npx electron-builder --win --x64 --publish always
         env:
