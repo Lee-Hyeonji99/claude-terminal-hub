@@ -13,7 +13,8 @@
     "start": "node server.js",
     "app": "electron electron/main.js",
     "postinstall": "electron-rebuild -f -w node-pty",
-    "dist:win": "electron-builder --win --x64 --publish never"
+    "dist:win": "electron-builder --win --x64 --publish never",
+    "dist:mac": "electron-builder --mac --publish never"
   },
   "dependencies": {
     "@xterm/addon-canvas": "^0.7.0",
@@ -54,12 +55,6 @@
       "owner": "Lee-Hyeonji99",
       "repo": "claude-terminal-hub"
     },
-    "extraResources": [
-      {
-        "from": "build/vc_redist.x64.exe",
-        "to": "vc_redist.x64.exe"
-      }
-    ],
     "win": {
       "target": [
         {
@@ -69,7 +64,34 @@
           ]
         }
       ],
-      "icon": "electron/icon.ico"
+      "icon": "electron/icon.ico",
+      "extraResources": [
+        {
+          "from": "build/vc_redist.x64.exe",
+          "to": "vc_redist.x64.exe"
+        }
+      ]
+    },
+    "mac": {
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        },
+        {
+          "target": "zip",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        }
+      ],
+      "icon": "build/icon-mac-1024.png",
+      "category": "public.app-category.developer-tools",
+      "identity": null
     },
     "nsis": {
       "oneClick": false,
