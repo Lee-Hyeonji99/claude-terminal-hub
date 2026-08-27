@@ -125,6 +125,13 @@ th{color:var(--doc-muted);font-weight:600;font-size:11.5px;background:var(--doc-
 [data-mode="pastel"][data-ch="rasher"]{--bg:#f6edf7;--panel:#fffbff;--head:#ecdcf0;--border:#d6bede;--text:#2c1f31;--muted:#715f77;--accent:#b03650;--accent2:#7f49b0;--ok:#379a5c;--termbg:#1f1424;--termfg:#efe2f2;--onacc:#fff}
 [data-mode="pastel"][data-ch="marshal"]{--bg:#f2f5fd;--panel:#fff;--head:#e4eaf9;--border:#c8d3ee;--text:#1e2740;--muted:#6a7797;--accent:#e0708f;--accent2:#41539b;--ok:#2f9c6b;--termbg:#171d2c;--termfg:#e9eefb;--onacc:#fff}
 
+.rawcols{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:14px}
+.rawchip{display:inline-flex;align-items:center;gap:6px;font-family:var(--mono);font-size:10.5px;color:var(--doc-muted);
+  background:var(--doc-head);border:1px solid var(--doc-border);border-radius:999px;padding:3px 9px 3px 3px}
+.rawchip i{width:16px;height:16px;border-radius:50%;display:block;border:1px solid rgba(255,255,255,.2)}
+.rawchip{cursor:pointer;transition:.12s}
+.rawchip:hover{border-color:var(--doc-accent);color:var(--doc-text)}
+.rawchip.on{border-color:#fff;color:#fff;font-weight:700}
 .pal{display:flex;border-radius:10px;overflow:hidden;border:1px solid var(--doc-border);height:34px;margin-top:12px}
 .pal i{flex:1}
 .palrow{display:flex;gap:14px;font-size:11px;color:var(--doc-muted);margin-top:6px;flex-wrap:wrap}
@@ -211,14 +218,15 @@ th{color:var(--doc-muted);font-weight:600;font-size:11.5px;background:var(--doc-
   <div class="fcard"><div class="fcode">~/.claude-terminal-hub/
 ├─ state.json            ← 지금도 쓰는 세션/프로필 저장 파일
 └─ theme-assets/         ← [신규] 캐릭터 이미지 폴더
-   ├─ hachiware.webp     ← 테마 키와 같은 이름이면 자동 인식
+   ├─ hachiware.webp       ← 전신/큰 이미지 (워터마크·배경용)
    ├─ usagi.webp
    ├─ momonga.webp
    ├─ rakko.webp
    ├─ flurry.png
-   ├─ rasher.png
-   ├─ marshal.png
-   └─ cursor-custom.png  ← [선택] 커서 전용 이미지</div></div>
+   ├─ flurry-icon.png      ← 얼굴 아이콘 (아바타·커서용, 없으면 위 이미지 사용)
+   ├─ rasher.png / rasher-icon.png
+   ├─ marshal.png / marshal-icon.png
+   └─ cursor-custom.png    ← [선택] 커서 전용 이미지</div></div>
 
   <table>
     <tr><th style="width:200px">항목</th><th>동작</th></tr>
@@ -240,6 +248,9 @@ th{color:var(--doc-muted);font-weight:600;font-size:11.5px;background:var(--doc-
     <div class="cgroup"><span>모드</span><div class="cbtns" id="modeBtns">
       <button class="chip plain on" data-mode="dark">🌙 다크</button>
       <button class="chip plain" data-mode="pastel">🍡 파스텔</button></div></div>
+    <div class="cgroup"><span>팔레트</span><div class="cbtns" id="palBtns">
+      <button class="chip plain on" data-pal="auto">🎨 이미지에서 자동 추출</button>
+      <button class="chip plain" data-pal="manual">수동 지정</button></div></div>
     <div class="cgroup"><span>강도</span><div class="cbtns" id="lvBtns">
       <button class="chip plain" data-lv="1">Lv1 색만</button>
       <button class="chip plain on" data-lv="2">Lv2 색+이미지</button>
@@ -295,6 +306,7 @@ th{color:var(--doc-muted);font-weight:600;font-size:11.5px;background:var(--doc-
     </div>
   </div>
 
+  <div class="rawcols" id="rawCols"></div>
   <div class="pal" id="pal"></div>
   <div class="palrow" id="palrow"></div>
 
@@ -334,10 +346,10 @@ th{color:var(--doc-muted);font-weight:600;font-size:11.5px;background:var(--doc-
       <div class="knob">
         <label>이미지 맞춤</label>
         <div class="seg" id="fitSeg">
-          <button class="on" data-fit="head">얼굴 크롭</button>
-          <button data-fit="contain">전체 넣기</button>
+          <button class="on" data-fit="contain">원본 그대로</button>
+          <button data-fit="head">얼굴 크롭</button>
         </div>
-        <span class="muted" style="font-size:10.5px">전신 이미지는 32px에서 얼굴이 너무 작아집니다 — 얼굴 크롭 권장</span>
+        <span class="muted" style="font-size:10.5px">기본은 <b>얼굴 아이콘</b>을 쓰므로 크롭이 필요 없습니다. 전신 사진을 직접 넣었을 때만 크롭을 쓰세요.</span>
       </div>
       <div class="knob">
         <label>크기 <span id="szVal">32px</span></label>
@@ -497,33 +509,156 @@ th{color:var(--doc-muted);font-weight:600;font-size:11.5px;background:var(--doc-
 
 <script>
 const THEMES = [
-  { key:'hachiware', file:'hachiware.webp', name:'하치와레', ip:'치이카와', quirk:'야하-!',
+  { key:'hachiware', icon:'hachiware.webp', full:'hachiware.webp', name:'하치와레', ip:'치이카와', quirk:'야하-!',
     bub:'다 됐어! 테마 7개 넣었어', ph:'같이 해보자…  Enter 전송', ui:'Gowun Dodum' },
-  { key:'usagi', file:'usagi.webp', name:'우사기', ip:'치이카와', quirk:'우라-!',
+  { key:'usagi', icon:'usagi.webp', full:'usagi.webp', name:'우사기', ip:'치이카와', quirk:'우라-!',
     bub:'하하! 다 했다구!', ph:'우랏!  Enter 전송', ui:'Jua' },
-  { key:'momonga', file:'momonga.webp', name:'모몽가', ip:'치이카와', quirk:'모몽가~',
+  { key:'momonga', icon:'momonga.webp', full:'momonga.webp', name:'모몽가', ip:'치이카와', quirk:'모몽가~',
     bub:'귀엽지? 다 해놨어', ph:'모몽가가 해줄게…  Enter 전송', ui:'Gaegu' },
-  { key:'rakko', file:'rakko.webp', name:'랏코', ip:'치이카와', quirk:'훗…',
+  { key:'rakko', icon:'rakko.webp', full:'rakko.webp', name:'랏코', ip:'치이카와', quirk:'훗…',
     bub:'끝났다. 확인해라', ph:'다음 작업은?  Enter 전송', ui:'Noto Sans KR' },
-  { key:'flurry', file:'flurry.png', name:'뽀야미', ip:'동물의숲', quirk:'뽀드득',
+  { key:'flurry', icon:'flurry-icon.png', full:'flurry.png', name:'뽀야미', ip:'동물의숲', quirk:'뽀드득',
     bub:'다 됐어 뽀드득!', ph:'무엇을 도와줄까 뽀드득…', ui:'Gowun Dodum' },
-  { key:'rasher', file:'rasher.png', name:'글레이', ip:'동물의숲', quirk:'꾸엑',
+  { key:'rasher', icon:'rasher-icon.png', full:'rasher.png', name:'글레이', ip:'동물의숲', quirk:'꾸엑',
     bub:'끝냈다 꾸엑', ph:'용건만 말해라 꾸엑…', ui:'Noto Sans KR' },
-  { key:'marshal', file:'marshal.png', name:'쭈니', ip:'동물의숲', quirk:'어차피',
+  { key:'marshal', icon:'marshal-icon.png', full:'marshal.png', name:'쭈니', ip:'동물의숲', quirk:'어차피',
     bub:'어차피 다 해놨어', ph:'어차피 할 거지만…  Enter 전송', ui:'Gowun Dodum' },
 ];
 const TH = Object.fromEntries(THEMES.map(t=>[t.key,t]));
-const override = {};
-const srcOf = t => override[t.key] || ('/theme-assets/' + t.file);
+const override = {};                                   // key -> objectURL (사용자 교체)
+const A = f => '/theme-assets/' + f;
+const iconOf = t => override[t.key] || A(t.icon);      // 아바타·커서용 (얼굴 아이콘)
+const fullOf = t => override[t.key] || A(t.full);      // 워터마크·배경용 (전신)
 const app = document.getElementById('app');
 const cur = () => TH[app.dataset.ch];
+const loadImg = src => new Promise((res,rej)=>{ const i=new Image(); i.onload=()=>res(i); i.onerror=rej; i.src=src; });
 
-/* 컨트롤 */
+/* ============ 이미지 → 팔레트 자동 추출 ============ */
+let paletteMode = 'auto';
+const PAL_CACHE = {};
+const ACC_PICK = {};   // 테마 key -> 사용자가 고른 기준색(hex)
+
+function rgb2hsl(r,g,b){
+  r/=255;g/=255;b/=255;
+  const mx=Math.max(r,g,b), mn=Math.min(r,g,b), l=(mx+mn)/2;
+  let h=0,s=0;
+  if(mx!==mn){ const d=mx-mn;
+    s = l>0.5 ? d/(2-mx-mn) : d/(mx+mn);
+    h = mx===r ? (g-b)/d + (g<b?6:0) : mx===g ? (b-r)/d+2 : (r-g)/d+4;
+    h*=60; }
+  return [h,s,l];
+}
+const hslCss = (h,s,l) => `hsl(${h.toFixed(0)} ${s.toFixed(0)}% ${l.toFixed(0)}%)`;
+const toHex = (r,g,b) => '#'+[r,g,b].map(v=>Math.round(v).toString(16).padStart(2,'0')).join('');
+
+async function extractColors(src){
+  if(PAL_CACHE[src]) return PAL_CACHE[src];
+  const im = await loadImg(src);
+  const n=56, c=document.createElement('canvas'); c.width=n; c.height=n;
+  const g=c.getContext('2d',{willReadFrequently:true});
+  g.drawImage(im,0,0,n,n);
+  const d=g.getImageData(0,0,n,n).data;
+  const buckets=new Map();
+  for(let i=0;i<d.length;i+=4){
+    if(d[i+3]<200) continue;
+    const r=d[i], gg=d[i+1], b=d[i+2];
+    const [h,sat,l]=rgb2hsl(r,gg,b);
+    if(l>0.93 || l<0.07) continue;                       // 순백/순흑 제외
+    const key = Math.round(h/14)+'|'+Math.round(sat*5)+'|'+Math.round(l*6);
+    const o=buckets.get(key)||{n:0,r:0,g:0,b:0};
+    o.n++; o.r+=r; o.g+=gg; o.b+=b; buckets.set(key,o);
+  }
+  const list=[...buckets.values()].map(o=>{
+    const r=o.r/o.n, g2=o.g/o.n, b=o.b/o.n, [h,sat,l]=rgb2hsl(r,g2,b);
+    return { n:o.n, r, g:g2, b, h, s:sat, l, hex:toHex(r,g2,b) };
+  }).sort((a,b)=>b.n-a.n);
+  const out=[];
+  for(const c2 of list){
+    if(out.some(o=>Math.abs(o.h-c2.h)<22 && Math.abs(o.l-c2.l)<0.18)) continue;
+    out.push(c2); if(out.length>=6) break;
+  }
+  PAL_CACHE[src]=out; return out;
+}
+function rankColors(cols){
+  // 채도 × 등장량 가중 — 캐릭터의 "특징색"을 위로
+  return cols.map(c=>({c, w:(c.s*1.6+0.25)*Math.sqrt(c.n)*((c.l>0.2&&c.l<0.85)?1:0.5)}))
+             .sort((a,b)=>b.w-a.w).map(x=>x.c);
+}
+function buildPalette(cols, mode, forceHex){
+  let ranked = rankColors(cols);
+  if(forceHex){                                   // 사용자가 고른 기준색을 맨 앞으로
+    const i = ranked.findIndex(c=>c.hex===forceHex);
+    if(i>0) ranked = [ranked[i], ...ranked.slice(0,i), ...ranked.slice(i+1)];
+  }
+  const a1 = ranked[0] || {h:220,s:.6,l:.6,hex:'#4c8bf5'};
+  const a2 = ranked.find(c=>Math.abs(c.h-a1.h)>28) || ranked[1] || a1;
+  const h=a1.h, h2=a2.h;
+  const sat = Math.max(28, Math.min(70, a1.s*100));     // 무채색 캐릭터도 색감이 살게 하한
+  const v = {};
+  if(mode==='pastel'){
+    v['--bg']     = hslCss(h, Math.min(72,sat+18), 95);
+    v['--panel']  = hslCss(h, 60, 99);
+    v['--head']   = hslCss(h, Math.min(78,sat+22), 89);
+    v['--border'] = hslCss(h, Math.min(58,sat+6), 79);
+    v['--text']   = hslCss(h, 38, 16);
+    v['--muted']  = hslCss(h, 20, 44);
+    v['--accent'] = hslCss(h, Math.max(48,sat+8), Math.min(48, Math.max(36, a1.l*100)));
+    v['--accent2']= hslCss(h2, Math.max(42,a2.s*100), 44);
+    v['--ok']     = hslCss(150, 45, 34);
+    v['--termbg'] = hslCss(h, 34, 11);
+    v['--termfg'] = hslCss(h, 30, 92);
+    v['--onacc']  = '#ffffff';
+  }else{
+    // 캐릭터 색이 배경에도 확실히 묻어나게 — 채도/명도 하한을 올림 (무채색 다크 회피)
+    const bs = Math.max(26, Math.min(58, sat*0.85));
+    v['--bg']     = hslCss(h, bs, 10);
+    v['--panel']  = hslCss(h, bs*0.95, 14);
+    v['--head']   = hslCss(h, bs, 18);
+    v['--border'] = hslCss(h, bs*0.9, 31);
+    v['--text']   = hslCss(h, 30, 94);
+    v['--muted']  = hslCss(h, 17, 64);
+    const accL = Math.min(76, Math.max(60, a1.l*100));
+    v['--accent'] = hslCss(h, Math.max(62,sat+16), accL);
+    v['--accent2']= hslCss(h2, Math.max(52,a2.s*100), Math.min(80, Math.max(64, a2.l*100)));
+    v['--ok']     = hslCss(150, 52, 64);
+    v['--termbg'] = hslCss(h, bs*0.8, 7);
+    v['--termfg'] = hslCss(h, 26, 91);
+    v['--onacc']  = accL > 62 ? hslCss(h, 60, 12) : '#ffffff';
+  }
+  return { vars:v, raw:ranked.slice(0,5) };
+}
+const VAR_KEYS = ['--bg','--panel','--head','--border','--text','--muted','--accent','--accent2','--ok','--termbg','--termfg','--onacc'];
+const applyVars = (el,v) => { if(el) VAR_KEYS.forEach(k=> v[k] ? el.style.setProperty(k,v[k]) : el.style.removeProperty(k)); };
+const clearVars = el => { if(el) VAR_KEYS.forEach(k=>el.style.removeProperty(k)); };
+
+async function applyPalette(){
+  const targets = [app, document.getElementById('m2'), document.getElementById('m3')];
+  const rawBox = document.getElementById('rawCols');
+  if(paletteMode==='manual'){
+    targets.forEach(clearVars);
+    rawBox.innerHTML = '<span class="muted" style="font-size:11.5px">수동 지정 팔레트 — 캐릭터별로 손으로 고른 색을 씁니다.</span>';
+    return;
+  }
+  try{
+    const key = cur().key;
+    const cols = await extractColors(fullOf(cur()));
+    const { vars, raw } = buildPalette(cols, app.dataset.mode, ACC_PICK[key]);
+    targets.forEach(el=>applyVars(el, vars));
+    const chosen = ACC_PICK[key] || (raw[0] && raw[0].hex);
+    rawBox.innerHTML = '<span class="muted" style="font-size:11.5px">이미지에서 뽑은 색 — <b style="color:#d7dbe6">클릭하면 그 색을 기준으로 팔레트가 다시 만들어집니다</b> →</span>' +
+      raw.map(c=>`<span class="rawchip${c.hex===chosen?' on':''}" data-hex="${c.hex}"><i style="background:${c.hex}"></i>${c.hex}</span>`).join('');
+  }catch(e){
+    targets.forEach(clearVars);
+    rawBox.innerHTML = '<span class="muted" style="font-size:11.5px">이미지를 못 읽어 수동 팔레트로 표시합니다.</span>';
+  }
+}
+
+/* ============ 컨트롤 ============ */
 const chBtns = document.getElementById('chBtns');
 function paintChips(){
   chBtns.innerHTML = THEMES.map(t=>
     `<button class="chip${t.key===app.dataset.ch?' on':''}" data-ch="${t.key}">
-      <img src="${srcOf(t)}" alt=""><span>${t.name}<small>${t.ip}</small></span></button>`).join('');
+      <img src="${iconOf(t)}" alt=""><span>${t.name}<small>${t.ip}</small></span></button>`).join('');
 }
 chBtns.addEventListener('click', e=>{
   const b=e.target.closest('.chip'); if(!b) return;
@@ -539,15 +674,24 @@ document.getElementById('lvBtns').addEventListener('click', e=>{
   app.dataset.level=b.dataset.lv;
   e.currentTarget.querySelectorAll('.chip').forEach(x=>x.classList.toggle('on',x===b)); render();
 });
+document.getElementById('rawCols').addEventListener('click', e=>{
+  const c=e.target.closest('.rawchip'); if(!c) return;
+  ACC_PICK[cur().key] = c.dataset.hex; render();
+});
+document.getElementById('palBtns').addEventListener('click', e=>{
+  const b=e.target.closest('.chip'); if(!b) return;
+  paletteMode=b.dataset.pal;
+  e.currentTarget.querySelectorAll('.chip').forEach(x=>x.classList.toggle('on',x===b)); render();
+});
 
-/* 에셋 슬롯 */
+/* ============ 에셋 슬롯 ============ */
 const slots = document.getElementById('slots');
 function paintSlots(){
   slots.innerHTML = THEMES.map(t=>
     `<div class="slot" data-key="${t.key}">
-      <img src="${srcOf(t)}" alt="">
+      <img src="${iconOf(t)}" alt="">
       <div class="sn">${t.name}</div>
-      <div class="sf">${override[t.key] ? '(내 이미지)' : t.file}</div>
+      <div class="sf">${override[t.key] ? '(내 이미지)' : t.icon}</div>
       <div class="rep">클릭 · 드래그로 교체</div></div>`).join('');
 }
 function takeImage(key, file){
@@ -568,8 +712,8 @@ slots.addEventListener('drop', e=>{
   takeImage(s.dataset.key, e.dataTransfer.files[0]);
 });
 
-/* 커서 */
-const CUR = { src:'theme', size:32, hot:'tl', tip:'1', scope:'both', fit:'head', customUrl:null };
+/* ============ 커서 ============ */
+const CUR = { src:'theme', size:32, hot:'tl', tip:'1', scope:'both', fit:'contain', customUrl:null };
 const ARROW_D = "M4 2 L4 21 L9.2 16.3 L12.4 22.6 L15.4 21.2 L12.2 15 L19 15 Z";
 function arrowDataUri(fill, size){
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 24 24">`
@@ -577,27 +721,23 @@ function arrowDataUri(fill, size){
     + `<path d="${ARROW_D}" fill="${fill}" stroke="#ffffff" stroke-width="1.3" stroke-linejoin="round"/></svg>`;
   return 'data:image/svg+xml,'+encodeURIComponent(svg);
 }
-const loadImg = src => new Promise((res,rej)=>{ const i=new Image(); i.onload=()=>res(i); i.onerror=rej; i.src=src; });
-
 async function buildCursor(){
   const s = CUR.size;
   const accent = getComputedStyle(app).getPropertyValue('--accent').trim() || '#4c8bf5';
   const c = document.createElement('canvas'); c.width=s; c.height=s;
   const g = c.getContext('2d');
   let used = null;
-  if(CUR.src==='theme') used = srcOf(cur());
+  if(CUR.src==='theme') used = iconOf(cur());
   else if(CUR.src==='custom' && CUR.customUrl) used = CUR.customUrl;
   if(used){
     try{
       const im = await loadImg(used);
       if(CUR.fit==='head'){
-        // 전신 렌더 대응: 상단 정사각 영역(얼굴)만 잘라서 꽉 채움
         const side = Math.min(im.width, im.height*0.6);
-        const sx = (im.width-side)/2, sy = im.height*0.02;
-        g.drawImage(im, sx, sy, side, side, 0, 0, s, s);
+        g.drawImage(im, (im.width-side)/2, im.height*0.02, side, side, 0, 0, s, s);
       }else{
         const r = Math.min(s/im.width, s/im.height);
-        g.drawImage(im, (s-im.width*r)/2, 0, im.width*r, im.height*r);
+        g.drawImage(im, (s-im.width*r)/2, (s-im.height*r)/2, im.width*r, im.height*r);
       }
     }catch(e){ used = null; }
   }
@@ -605,14 +745,15 @@ async function buildCursor(){
     const im = await loadImg(arrowDataUri(accent, s));
     g.drawImage(im,0,0,s,s);
   }else if(CUR.tip==='1'){
-    const t = Math.round(s*0.45);
+    const t = Math.round(s*0.42);
     const im = await loadImg(arrowDataUri(accent, t));
     g.drawImage(im,0,0,t,t);
   }
   const hot = CUR.hot==='center' ? [Math.round(s/2),Math.round(s/2)]
             : CUR.hot==='tip'    ? [Math.max(1,Math.round(s*0.07)),Math.max(1,Math.round(s*0.04))]
             : [1,1];
-  return { uri:c.toDataURL('image/png'), hot, size:s, used: used ? (CUR.src==='theme'?'테마 캐릭터':'내 이미지') : '기본 화살표' };
+  return { uri:c.toDataURL('image/png'), hot, size:s,
+           used: used ? (CUR.src==='theme'?'테마 얼굴 아이콘':'내 이미지') : '기본 화살표' };
 }
 async function applyCursorPreview(){
   const { uri, hot, size, used } = await buildCursor();
@@ -648,9 +789,9 @@ document.getElementById('curFile').addEventListener('change', e=>{
   applyCursorPreview();
 });
 
-/* 컴포즈 */
+/* ============ 컴포즈 ============ */
 function paintCompose(t){
-  const av = `<img class="av l" src="${srcOf(t)}" alt="">`;
+  const av = `<img class="av l" src="${iconOf(t)}" alt="">`;
   document.getElementById('m2').innerHTML =
     `<div class="kterm">$ claude
 <span style="color:var(--accent)">✻</span> 테마 기능 추가 · ~/claude-terminal-hub
@@ -669,12 +810,12 @@ function paintCompose(t){
     <div class="kin"><span class="kf">${t.ph}</span><span class="ks">➤</span></div>`;
 }
 
-/* 렌더 */
-function render(){
-  const t = cur(), src = srcOf(t), cs = getComputedStyle(app);
-  document.getElementById('headAv').src = src;
-  document.getElementById('wm').src = src;
-  app.querySelectorAll('[data-av]').forEach(el=>{ el.src = src; });
+/* ============ 렌더 ============ */
+async function render(){
+  const t = cur(), icon = iconOf(t), full = fullOf(t);
+  document.getElementById('headAv').src = icon;
+  document.getElementById('wm').src = full;
+  app.querySelectorAll('[data-av]').forEach(el=>{ el.src = icon; });
   document.getElementById('themeLabel').textContent = '🎨 ' + t.name;
   document.getElementById('quirk').textContent = t.quirk;
   document.getElementById('bubText').textContent = t.bub;
@@ -684,22 +825,26 @@ function render(){
   app.style.setProperty('--appui', app.dataset.level==='1'
     ? '"Noto Sans KR","Segoe UI",system-ui,sans-serif'
     : `"${t.ui}","Noto Sans KR","Segoe UI",sans-serif`);
-  document.getElementById('patt').style.backgroundImage = `url("${src}")`;
+  document.getElementById('patt').style.backgroundImage = `url("${full}")`;
 
+  ['m2','m3'].forEach(id=>{ const el=document.getElementById(id);
+    el.dataset.ch=app.dataset.ch; el.dataset.mode=app.dataset.mode;
+    el.style.setProperty('--appui', app.style.getPropertyValue('--appui')); });
+
+  await applyPalette();
+
+  const cs=getComputedStyle(app);
   const keys=['--bg','--panel','--head','--border','--accent','--accent2','--text','--ok'];
   const vals=keys.map(k=>cs.getPropertyValue(k).trim());
   document.getElementById('pal').innerHTML = vals.map(v=>`<i style="background:${v}"></i>`).join('');
   document.getElementById('palrow').innerHTML =
     keys.map((k,i)=>`<span>${k.replace('--','')} <b style="color:#d7dbe6">${vals[i]}</b></span>`).join('');
 
-  ['m2','m3'].forEach(id=>{ const el=document.getElementById(id);
-    el.dataset.ch=app.dataset.ch; el.dataset.mode=app.dataset.mode;
-    el.style.setProperty('--appui', app.style.getPropertyValue('--appui')); });
   paintCompose(t);
   applyCursorPreview();
 }
 
-/* 폰트 검사 */
+/* ============ 폰트 검사 ============ */
 const PROBE = [
   ['Cascadia Code','현재 기본값 — 윈도우 터미널/VS Code 동봉'],
   ['Cascadia Mono','위와 동일 계열'],
