@@ -173,9 +173,37 @@ ipcMain.on('cth-notify', (e, payload) => {
 // 사용자 확인 후(또는 다음 종료 시 자동으로) 설치한다. 개발 실행(패키징 안 됨)일 땐 업데이트 서버가 없어 스킵.
 autoUpdater.autoDownload = true;
 autoUpdater.autoInstallOnAppQuit = true;
+
+// 렌더러(헤더의 버전 팝오버)로 진행 상황을 그대로 흘려보낸다.
+let updateWin = null;
+function sendUpdateStatus(payload) {
+  if (updateWin && !updateWin.isDestroyed()) {
+    try { updateWin.webContents.send('cth-update-status', payload); } catch {}
+  }
+}
+ipcMain.handle('update-check', async () => {
+  if (!app.isPackaged) { sendUpdateStatus({ state: 'dev' }); return { state: 'dev' }; }
+  sendUpdateStatus({ state: 'checking' });
+  try {
+    await autoUpdater.checkForUpdates();
+    return { state: 'checking' };
+  } catch (e) {
+    const message = (e && e.message) ? e.message : String(e);
+    sendUpdateStatus({ state: 'error', message });
+    return { state: 'error', message };
+  }
+});
+ipcMain.handle('update-install', () => { autoUpdater.quitAndInstall(); });
+
 function initAutoUpdate(win) {
+  updateWin = win;
   if (!app.isPackaged) return;
-  autoUpdater.on('update-downloaded', async () => {
+  autoUpdater.on('checking-for-update', () => sendUpdateStatus({ state: 'checking' }));
+  autoUpdater.on('update-not-available', () => sendUpdateStatus({ state: 'none' }));
+  autoUpdater.on('update-available', (info) => sendUpdateStatus({ state: 'available', version: info && info.version }));
+  autoUpdater.on('download-progress', (p) => sendUpdateStatus({ state: 'progress', percent: p && p.percent }));
+  autoUpdater.on('update-downloaded', async (info) => {
+    sendUpdateStatus({ state: 'downloaded', version: info && info.version });
     const r = await dialog.showMessageBox(win, {
       type: 'info',
       title: 'Claude Terminal Hub 업데이트',
@@ -187,7 +215,9 @@ function initAutoUpdate(win) {
     if (r.response === 0) autoUpdater.quitAndInstall();
   });
   autoUpdater.on('error', (err) => {
-    console.error('[auto-update] 확인/다운로드 실패:', err && err.message ? err.message : err);
+    const message = (err && err.message) ? err.message : String(err);
+    console.error('[auto-update] 확인/다운로드 실패:', message);
+    sendUpdateStatus({ state: 'error', message });
   });
   autoUpdater.checkForUpdates().catch(() => {});
 }

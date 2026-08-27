@@ -335,11 +335,19 @@
     body.cth-char.lv3 .compose{border-radius:18px;margin:0 2px 2px}
     body.cth-char.lv3 .compose textarea{border-radius:999px;padding:9px 15px}
     body.cth-char.lv3 .compose .cbtn.send{border-radius:999px;padding:5px 14px}
-    .chatlog{display:none;flex-direction:column;gap:7px;max-height:190px;overflow-y:auto;padding:4px 2px 8px}
-    body.cth-char.lv3 .compose .chatlog{display:flex}
+    /* ================= 대화 로그 (컴포즈 안) =================
+     * 테마와 무관하게 동작한다. 표시 방식: 끄기 / 말풍선(카톡) / 디스코드
+     * ======================================================== */
+    .chatlog{display:none;flex-direction:column;gap:7px;max-height:210px;overflow-y:auto;padding:4px 2px 8px}
+    body.chat-on .compose .chatlog{display:flex}
+    .chatlog .cempty{font-size:11px;color:var(--muted);text-align:center;padding:8px;line-height:1.6}
+    .chatlog .cempty b{color:var(--text)}
+    .chatlog .pending{opacity:.55}
+
+    /* --- 말풍선(카톡) --- */
     .chatlog .cbub{display:flex;align-items:flex-end;gap:7px;max-width:82%}
     .chatlog .cbub .cav{width:26px;height:26px;flex:none;border-radius:50%;
-      background:var(--cth-av) center 15%/cover no-repeat,var(--panel);border:1px solid var(--border)}
+      background:var(--cth-av,none) center 15%/cover no-repeat,var(--accent);border:1px solid var(--border)}
     .chatlog .cbub .ctx{background:var(--panel);border:1px solid var(--border);border-radius:13px 13px 13px 4px;
       padding:6px 11px;font-size:12px;color:var(--text);white-space:pre-wrap;word-break:break-word}
     .chatlog .cbub.me{margin-left:auto;flex-direction:row-reverse}
@@ -347,7 +355,31 @@
       border-radius:13px 13px 4px 13px;font-weight:600}
     .chatlog .ctool{font-size:10.5px;color:var(--muted);font-family:var(--mono-font);
       background:var(--panel);border:1px solid var(--border);border-left:3px solid var(--ok);border-radius:8px;padding:4px 9px}
-    .chatlog .cempty{font-size:11px;color:var(--muted);text-align:center;padding:6px}
+
+    /* --- 디스코드 --- */
+    .chatlog.discord{gap:0;padding:4px 0 8px}
+    .chatlog.discord .dmsg{display:flex;gap:10px;padding:3px 8px}
+    .chatlog.discord .dmsg:hover{background:color-mix(in srgb,var(--text) 5%,transparent)}
+    .chatlog.discord .dmsg.first{margin-top:8px}
+    .chatlog.discord .dav{width:34px;height:34px;flex:none;border-radius:50%;
+      background:var(--cth-av,none) center 15%/cover no-repeat,var(--accent);border:1px solid var(--border)}
+    .chatlog.discord .dmsg.me .dav{background:var(--head);border-color:var(--accent);
+      display:grid;place-items:center;font-size:13px;font-weight:700;color:var(--accent)}
+    .chatlog.discord .dav.spacer{background:none;border:none}
+    .chatlog.discord .dbody{flex:1;min-width:0}
+    .chatlog.discord .dhead{display:flex;align-items:baseline;gap:7px;line-height:1.3}
+    .chatlog.discord .dhead b{font-size:12.5px;color:var(--accent);font-weight:700}
+    .chatlog.discord .dmsg.me .dhead b{color:var(--text)}
+    .chatlog.discord .dhead span{font-size:10px;color:var(--muted)}
+    .chatlog.discord .dtext{font-size:12px;color:var(--text);white-space:pre-wrap;word-break:break-word;line-height:1.5}
+    .chatlog.discord .dtool{display:flex;align-items:center;gap:6px;margin:3px 0;padding:4px 9px;
+      border-left:3px solid var(--ok);border-radius:0 6px 6px 0;background:color-mix(in srgb,var(--text) 6%,transparent);
+      font-family:var(--mono-font);font-size:10.5px;color:var(--muted)}
+    .chatlog.discord .dtool.task{border-left-color:var(--accent)}
+    .chatlog.discord .dtool b{color:var(--text);font-weight:600}
+    .chatlog.discord .dresult{margin:3px 0;padding:5px 9px;border-radius:6px;background:var(--panel);
+      border:1px solid var(--border);font-family:var(--mono-font);font-size:10.5px;color:var(--muted);
+      white-space:pre-wrap;word-break:break-word;max-height:76px;overflow:hidden}
     /* 대화만 보기 (M3) */
     .pane.chatonly .term{display:none}
     .pane.chatonly .chatlog{max-height:none;flex:1}
@@ -355,6 +387,13 @@
     .compose .cbtn.chatonly-btn.on{color:var(--accent);border-color:var(--accent)}
 
     /* 테마 팝오버 확장 */
+    .popover-note{font-size:10.5px;color:var(--muted);padding:6px 10px 4px;line-height:1.5;white-space:normal}
+    .upd-row{display:flex;justify-content:space-between;gap:10px;padding:4px 10px;font-size:12px;color:var(--muted)}
+    .upd-row b{color:var(--text);font-weight:600}
+    .upd-actions{display:flex;gap:6px;padding:8px 10px 4px}
+    .upd-actions button{flex:1;font-size:11.5px;padding:6px 8px}
+    .upd-progress{height:5px;margin:4px 10px;border-radius:3px;background:var(--head);overflow:hidden}
+    .upd-progress i{display:block;height:100%;width:0;background:var(--accent);transition:width .2s}
     .popover-sep{font-size:10.5px;color:var(--muted);font-weight:700;padding:8px 10px 4px;letter-spacing:.3px}
     .popover-item .avatar{width:20px;height:20px;border-radius:50%;flex:none;object-fit:cover;object-position:50% 15%;
       background:var(--head);border:1px solid var(--border)}
@@ -481,6 +520,30 @@
       <button id="fontUp" title="터미널 글자 크기 크게 (Ctrl++)">A+</button>
     </div>
     <button id="composeBtn" class="ghost icon-btn" title="입력창(컴포즈) 켜기/끄기 — 터미널 아래 GUI 입력"><span data-icon="keyboard"></span></button>
+    <div class="popover-wrap">
+      <button id="chatBtn" class="ghost icon-btn" title="대화 보기 — 보낸 메시지와 Claude 응답을 메신저처럼 표시"><span data-icon="chat"></span></button>
+      <div id="chatPopover" class="popover" style="min-width:210px">
+        <div class="popover-sep">대화 표시 방식</div>
+        <div class="popover-item" data-chat="off"><span class="swatch" style="background:var(--border)"></span>끄기 (터미널만)</div>
+        <div class="popover-item" data-chat="bubble"><span class="swatch" style="background:var(--accent)"></span>말풍선 (카톡)</div>
+        <div class="popover-item" data-chat="discord"><span class="swatch" style="background:#5865f2"></span>디스코드</div>
+        <div class="popover-note" id="chatNote"></div>
+      </div>
+    </div>
+    <div class="popover-wrap">
+      <button id="updateBtn" class="ghost icon-btn" title="버전 · 업데이트"><span data-icon="download"></span></button>
+      <div id="updatePopover" class="popover" style="min-width:250px">
+        <div class="popover-sep">버전</div>
+        <div class="upd-row"><span>현재</span><b id="updCur">…</b></div>
+        <div class="upd-row"><span>상태</span><b id="updState">확인 안 함</b></div>
+        <div class="upd-progress" id="updProgress" style="display:none"><i></i></div>
+        <div class="upd-actions">
+          <button id="updCheck" class="primary">업데이트 확인</button>
+          <button id="updInstall" style="display:none">재시작해서 설치</button>
+        </div>
+        <div class="popover-note" id="updNote"></div>
+      </div>
+    </div>
     <button id="helpBtn" class="ghost icon-btn" title="단축키 · 명령어 도움말 (?)"><span data-icon="help"></span></button>
   </header>
 

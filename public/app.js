@@ -22,6 +22,7 @@ const ICON = {
   back: ic('<path d="M19 12H5M12 19l-7-7 7-7"/>'),
   search: ic('<circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/>'),
   warn: ic('<path d="M12 9v4M12 17h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/>'),
+  download: ic('<path d="M12 3v12M7 11l5 5 5-5M4 20h16"/>'),
   pointer: ic('<path d="M5 3 L5 20 L9.5 16 L12.5 21.5 L15 20.3 L12 15 L18 15 Z"/>'),
   palette: ic('<path d="M12 3a9 9 0 1 0 0 18c1.1 0 1.6-.7 1.1-1.6-.3-.6-.1-1.4.6-1.7.5-.2 1-.2 1.5-.2 2 0 3.8-1.7 3.8-4.5C19 6.9 15.9 3 12 3z"/><circle cx="7.5" cy="11.5" r="1.2"/><circle cx="10.5" cy="7.5" r="1.2"/><circle cx="15" cy="8" r="1.2"/>'),
   droplet: ic('<path d="M12 3s6 6.5 6 11a6 6 0 0 1-12 0c0-4.5 6-11 6-11z"/>'),
@@ -163,6 +164,51 @@ async function markMissingFonts(sel, list) {
     const opt = sel.options[i];
     if (!ok && opt && !/미설치/.test(opt.textContent)) opt.textContent += '  (미설치)';
   }
+}
+
+/* ================= 대화 로그(메신저 뷰) =================
+ * 컴포즈 입력창 위에 "내가 보낸 메시지 + Claude 응답"을 메신저처럼 보여준다.
+ * 테마·강도와 무관하게 동작하며 표시 방식만 고른다: off / bubble(카톡) / discord.
+ * 보낸 메시지는 transcript 에 반영되기 전에도 즉시 보이도록 로컬 에코를 함께 그린다.
+ * ======================================================== */
+const CHAT_MODES = ['off', 'bubble', 'discord'];
+function chatMode() {
+  const m = localStorage.getItem('cth_chat_mode');
+  return CHAT_MODES.includes(m) ? m : 'off';
+}
+function aiName() {
+  const k = document.body.dataset.char;
+  const t = k && window.CHAR_THEME_MAP ? window.CHAR_THEME_MAP[k] : null;
+  return (t && t.name) || 'Claude';
+}
+function fmtTime(ts) {
+  if (!ts) return '';
+  const d = new Date(ts);
+  if (isNaN(d)) return '';
+  const h = d.getHours(), m = String(d.getMinutes()).padStart(2, '0');
+  return `${h < 12 ? '오전' : '오후'} ${((h + 11) % 12) + 1}:${m}`;
+}
+function refreshAllChats() {
+  columns.forEach((c) => c.panes.forEach((p) => { if (p._refreshLog) p._refreshLog(); }));
+  minimized.forEach((p) => { if (p._refreshLog) p._refreshLog(); });
+}
+function applyChatMode(m) {
+  if (!CHAT_MODES.includes(m)) m = 'off';
+  localStorage.setItem('cth_chat_mode', m);
+  document.body.classList.toggle('chat-on', m !== 'off');
+  document.querySelectorAll('#chatPopover .popover-item').forEach((el) => el.classList.toggle('active', el.dataset.chat === m));
+  const btn = document.getElementById('chatBtn');
+  if (btn) btn.classList.toggle('on', m !== 'off');
+  const note = document.getElementById('chatNote');
+  if (note) {
+    note.textContent = m === 'off'
+      ? '대화 보기를 켜면 입력창 위에 주고받은 메시지가 쌓입니다.'
+      : 'Claude 세션의 대화를 읽어 표시합니다(셸 세션은 내가 보낸 것만). 패널의 “대화만” 버튼으로 터미널을 접을 수 있습니다.';
+  }
+  // 대화 보기를 켰는데 컴포즈가 꺼져 있으면 아무것도 안 보이므로 같이 켠다.
+  if (m !== 'off') setCompose(true);
+  refreshAllChats();
+  setTimeout(() => { try { fitAll(); } catch {} }, 60);
 }
 
 /* ---------- 계정 프로필 / 탭 ---------- */
@@ -1314,6 +1360,7 @@ function addPane(cfg, placement) {
   (function wireCompose() {
     const box = pane.querySelector('.compose');
     if (!box) return;
+    const localMsgs = [];   // 컴포즈로 방금 보낸 메시지 (transcript 반영 전 임시 표시)
     const ta = box.querySelector('textarea');
     const sendToPty = (data) => {
       if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: 'input', data }));
@@ -1325,7 +1372,13 @@ function addPane(cfg, placement) {
       ta.value = ta.value.slice(0, s) + t + ta.value.slice(e);
       ta.selectionStart = ta.selectionEnd = s + t.length; autoGrow(); ta.focus();
     };
-    const submit = () => { const v = ta.value; sendToPty(v ? v + '\r' : '\r'); ta.value = ''; autoGrow(); };
+    const submit = () => {
+      const v = ta.value;
+      sendToPty(v ? v + '\r' : '\r');
+      // 로컬 에코: transcript 에 반영되기 전에도 방금 보낸 메시지가 바로 보이게 한다.
+      if (v.trim()) { localMsgs.push({ role: 'user', text: v, ts: Date.now(), pending: true }); renderChat(); }
+      ta.value = ''; autoGrow();
+    };
     ta.addEventListener('focus', () => setActive(paneObj));
     ta.addEventListener('input', autoGrow);
     ta.addEventListener('keydown', (e) => {
@@ -1343,6 +1396,7 @@ function addPane(cfg, placement) {
           try { const p = await window.claudeHub.pickFile(); if (p) insertAtCursor(p + ' '); } catch {}
         } else { insertAtCursor(''); ta.focus(); }
       } else if (act === 'chatonly') {
+        if (chatMode() === 'off') applyChatMode('bubble');   // 대화가 꺼져 있으면 켜주고 접는다
         pane.classList.toggle('chatonly');
         b.classList.toggle('on', pane.classList.contains('chatonly'));
         refreshLog();
@@ -1350,32 +1404,81 @@ function addPane(cfg, placement) {
       }
     }));
 
-    // 캐릭터 테마 Lv3(풀캐릭터)에서만: 컴포즈 위에 대화가 말풍선으로 쌓인다.
-    // 세션 뷰어와 같은 /api/transcript 를 재사용한다.
+    // ---- 대화 로그 (세션 뷰어와 같은 /api/transcript 재사용 + 로컬 에코) ----
     const log = box.querySelector('.chatlog');
-    const bubble = (it) => {
-      if (it.role === 'user') return `<div class="cbub me"><span class="ctx">${escapeHtml(it.text || '')}</span></div>`;
+    let lastItems = [];       // 서버에서 읽은 transcript
+    let transcriptReady = false;
+
+    // transcript 에 아직 안 나타난 내 메시지만 뒤에 붙인다(반영되면 로컬 것은 버림).
+    function mergedItems() {
+      const items = lastItems.slice();
+      const recent = new Set(items.filter((i) => i.role === 'user').map((i) => (i.text || '').trim()));
+      const now = Date.now();
+      for (let i = localMsgs.length - 1; i >= 0; i--) {
+        const m = localMsgs[i];
+        if (recent.has((m.text || '').trim()) || now - m.ts > 15 * 60 * 1000) localMsgs.splice(i, 1);
+      }
+      return items.concat(localMsgs);
+    }
+    const bubbleHtml = (items) => items.map((it) => {
+      if (it.role === 'user') return `<div class="cbub me${it.pending ? ' pending' : ''}"><span class="ctx">${escapeHtml(it.text || '')}</span></div>`;
       if (it.role === 'tool_result') return '';
       const tools = (it.tools || []).map((t) => `<div class="ctool">● ${escapeHtml(t.name)}${t.preview ? ' · ' + escapeHtml(t.preview) : ''}</div>`).join('');
       const txt = it.text ? `<div class="cbub"><span class="cav"></span><span class="ctx">${escapeHtml(it.text)}</span></div>` : '';
       return txt + tools;
+    }).join('');
+    // 디스코드: 아바타 + 이름 + 시각, 같은 사람이 연속으로 말하면 헤더/아바타 생략
+    const discordHtml = (items) => {
+      let prevWho = null, prevTs = 0;
+      const out = [];
+      for (const it of items) {
+        if (it.role === 'tool_result') {
+          out.push(`<div class="dmsg"><div class="dav spacer"></div><div class="dbody"><div class="dresult">${escapeHtml((it.text || '').slice(0, 400))}</div></div></div>`);
+          prevWho = null; continue;
+        }
+        const me = it.role === 'user';
+        const who = me ? 'me' : 'ai';
+        const ts = it.ts ? new Date(it.ts).getTime() : 0;
+        const cont = who === prevWho && ts && prevTs && Math.abs(ts - prevTs) < 5 * 60 * 1000;
+        const head = cont ? '' : `<div class="dhead"><b>${escapeHtml(me ? '나' : aiName())}</b><span>${fmtTime(it.ts)}</span></div>`;
+        const av = cont ? '<div class="dav spacer"></div>' : (me ? '<div class="dav">나</div>' : '<div class="dav"></div>');
+        const tools = (it.tools || []).map((t) => `<div class="dtool${t.isTask ? ' task' : ''}">● <b>${escapeHtml(t.name)}</b>${t.preview ? ' · ' + escapeHtml(t.preview) : ''}</div>`).join('');
+        const txt = it.text ? `<div class="dtext">${escapeHtml(it.text)}</div>` : '';
+        out.push(`<div class="dmsg ${who}${cont ? '' : ' first'}${it.pending ? ' pending' : ''}">${av}<div class="dbody">${head}${txt}${tools}</div></div>`);
+        prevWho = who; prevTs = ts || Date.now();
+      }
+      return out.join('');
     };
+    function renderChat() {
+      if (!log) return;
+      const mode = chatMode();
+      if (mode === 'off') return;
+      const all = mergedItems();
+      const items = all.slice(pane.classList.contains('chatonly') ? -60 : -14);
+      log.className = 'chatlog' + (mode === 'discord' ? ' discord' : '');
+      const html = items.length ? (mode === 'discord' ? discordHtml(items) : bubbleHtml(items))
+        : `<div class="cempty">${transcriptReady ? '아직 주고받은 메시지가 없습니다.' : '이 세션의 대화 기록을 아직 못 찾았습니다.<br><b>여기서 메시지를 보내면 바로 표시됩니다.</b>'}</div>`;
+      if (html !== log.dataset.html) {
+        const atBottom = log.scrollHeight - log.scrollTop - log.clientHeight < 40;
+        log.innerHTML = html; log.dataset.html = html;
+        if (atBottom) log.scrollTop = log.scrollHeight;
+      }
+    }
     let logBusy = false;
     async function refreshLog() {
       if (!log) return;
-      if (!document.body.contains(pane)) { clearInterval(logTimer); return; }   // 패널이 사라지면 폴링 정리
-      const wanted = document.body.classList.contains('lv3') && document.body.classList.contains('compose-on');
-      if (!wanted || logBusy) return;
+      if (!document.body.contains(pane) && pane.parentElement !== minStash) { clearInterval(logTimer); return; }
+      if (chatMode() === 'off' || !document.body.classList.contains('compose-on')) return;
+      if (logBusy) { renderChat(); return; }
       logBusy = true;
       try {
         const r = await fetch(`/api/transcript?key=${encodeURIComponent(cfg.key)}`).then((x) => x.json());
-        if (!r.ready) { log.innerHTML = '<div class="cempty">첫 메시지 이후 표시됩니다…</div>'; return; }
-        const items = (r.items || []).slice(pane.classList.contains('chatonly') ? -40 : -10);
-        const html = items.map(bubble).join('');
-        if (html !== log.dataset.html) { log.innerHTML = html || '<div class="cempty">아직 메시지가 없습니다.</div>'; log.dataset.html = html; log.scrollTop = log.scrollHeight; }
-      } catch {} finally { logBusy = false; }
+        transcriptReady = !!r.ready;
+        lastItems = r.ready ? (r.items || []) : [];
+      } catch { /* 네트워크 실패 시 로컬 에코만 유지 */ } finally { logBusy = false; }
+      renderChat();
     }
-    const logTimer = setInterval(refreshLog, 4000);
+    const logTimer = setInterval(refreshLog, 3000);
     paneObj._refreshLog = refreshLog;
     refreshLog();
     updateComposePlaceholders(CHAR_MAP()[document.body.dataset.char] || null);
@@ -2090,21 +2193,65 @@ loadThemeAssets().then(() => {
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && ov.classList.contains('open')) hide(); });
 })();
 
-// 컴포즈 입력창 토글 (기본 꺼짐 → 켜면 기존과 동일하지 않고 입력창 추가)
+// 컴포즈 입력창 토글
+function setCompose(on) {
+  document.body.classList.toggle('compose-on', !!on);
+  localStorage.setItem('cth_compose', on ? '1' : '0');
+  const btn = document.getElementById('composeBtn');
+  if (btn) btn.classList.toggle('on', !!on);
+  if (on) refreshAllChats();
+  setTimeout(() => { try { fitAll(); } catch {} }, 60);
+}
 (function initCompose() {
   const btn = document.getElementById('composeBtn');
-  const on = localStorage.getItem('cth_compose') === '1';
-  document.body.classList.toggle('compose-on', on);
-  if (btn) {
-    btn.classList.toggle('on', on);
-    btn.addEventListener('click', () => {
-      const now = !document.body.classList.contains('compose-on');
-      document.body.classList.toggle('compose-on', now);
-      btn.classList.toggle('on', now);
-      localStorage.setItem('cth_compose', now ? '1' : '0');
-      setTimeout(() => { try { fitAll(); } catch {} }, 60);
-    });
+  setCompose(localStorage.getItem('cth_compose') === '1');
+  if (btn) btn.addEventListener('click', () => setCompose(!document.body.classList.contains('compose-on')));
+})();
+
+// 대화 표시 방식 (끄기 / 말풍선 / 디스코드)
+(function initChatMode() {
+  setupPopover('chatBtn', 'chatPopover');
+  document.querySelectorAll('#chatPopover .popover-item').forEach((el) => {
+    el.addEventListener('click', () => { applyChatMode(el.dataset.chat); closePopovers(); });
+  });
+  applyChatMode(chatMode());
+})();
+
+/* ---------- 버전 · 업데이트 ---------- */
+(function initUpdateUI() {
+  setupPopover('updateBtn', 'updatePopover');
+  const $ = (id) => document.getElementById(id);
+  const state = $('updState'), note = $('updNote'), prog = $('updProgress');
+  const btnCheck = $('updCheck'), btnInstall = $('updInstall');
+  const hub = window.claudeHub;
+  const isApp = !!(hub && hub.isApp && hub.checkUpdate);
+
+  fetch('/health').then((r) => r.json()).then((d) => { if ($('updCur')) $('updCur').textContent = 'v' + d.version; }).catch(() => {});
+
+  if (!isApp) {
+    if (state) state.textContent = '브라우저 모드';
+    if (note) note.innerHTML = '자동 업데이트는 <b>데스크톱 앱</b>에서만 동작합니다. 브라우저/탭 모드는 <code>git pull</code> 후 서버를 재시작하세요.';
+    if (btnCheck) { btnCheck.disabled = true; btnCheck.textContent = '앱에서만 가능'; }
+    return;
   }
+  const set = (txt, hint) => { if (state) state.textContent = txt; if (hint != null && note) note.innerHTML = hint; };
+  hub.onUpdateStatus((p) => {
+    if (!p || !p.state) return;
+    if (p.state === 'checking') { set('확인 중…', ''); }
+    else if (p.state === 'available') { set(`새 버전 v${p.version} 내려받는 중`, ''); if (prog) prog.style.display = 'block'; }
+    else if (p.state === 'progress') {
+      if (prog) { prog.style.display = 'block'; const bar = prog.querySelector('i'); if (bar) bar.style.width = Math.round(p.percent || 0) + '%'; }
+      set(`다운로드 ${Math.round(p.percent || 0)}%`, '');
+    } else if (p.state === 'downloaded') {
+      set(`v${p.version} 설치 준비 완료`, '지금 재시작하거나, 앱을 종료하면 자동으로 설치됩니다.');
+      if (prog) prog.style.display = 'none';
+      if (btnInstall) btnInstall.style.display = 'block';
+    } else if (p.state === 'none') { set('최신 버전입니다', ''); }
+    else if (p.state === 'dev') { set('개발 실행', '패키징된 앱에서만 업데이트를 확인할 수 있습니다.'); }
+    else if (p.state === 'error') { set('확인 실패', escapeHtml(p.message || '')); }
+  });
+  if (btnCheck) btnCheck.addEventListener('click', () => { set('확인 중…', ''); hub.checkUpdate(); });
+  if (btnInstall) btnInstall.addEventListener('click', () => hub.installUpdate());
 })();
 
 document.getElementById('fontDown').addEventListener('click', () => applyFontSize(termFontSize - 1));

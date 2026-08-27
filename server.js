@@ -580,12 +580,13 @@ function parseTranscript(file) {
       }
     }
     const text = texts.join('\n').trim();
+    const ts = o.timestamp || null;   // 메신저 뷰에서 시각 표시용
     if (role === 'user' && !text && results.length) {
-      for (const r of results) items.push({ role: 'tool_result', text: r });
+      for (const r of results) items.push({ role: 'tool_result', text: r, ts });
       continue;
     }
     if (!text && !tools.length) continue;
-    items.push({ role, text, tools });
+    items.push({ role, text, tools, ts });
   }
   return items.slice(-500); // 상한 (오래된 것부터 잘라 최근 500개)
 }
