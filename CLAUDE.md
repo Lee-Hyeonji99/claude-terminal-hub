@@ -69,10 +69,11 @@ UI/서버 변경 후 가능하면 실제로 확인한다.
 1. 변경 커밋 & push (§1)
 2. `npm version patch|minor|major -m "vX.Y.Z: 요약"` → package.json bump + 커밋 + 태그 생성 (§5)
 3. `git push && git push --tags`
-4. 태그 push 가 GitHub Actions 2개를 자동 기동한다 — `build-windows.yml`(windows-latest, NSIS exe), `build-mac.yml`(macos-latest, dmg/zip). 각 워크플로는:
-   - draft 릴리즈를 먼저 만들고(동시 생성 레이스 방지),
-   - `electron-builder --publish always` 로 설치파일 + `latest.yml`/`latest-mac.yml`(auto-update 에 필요) 업로드,
-   - **`Publish release (draft 해제)` 스텝에서 `gh release edit <tag> --draft=false` 로 정식 발행**한다. (두 워크플로가 같이 실행돼도 두 번째는 no-op)
+4. 태그 push 가 **`release.yml` 하나**를 기동한다. job 3개:
+   - `windows` (windows-latest): draft 릴리즈 확보 → `electron-builder --win --publish always` → **업로드 검증**(exe·`latest.yml` 존재 확인, 없으면 실패)
+   - `mac` (macos-latest): 같은 방식으로 dmg/zip·`latest-mac.yml`
+   - `publish` (`needs: [windows, mac]`): **두 빌드가 모두 끝난 뒤에만** `gh release edit <tag> --draft=false` 로 정식 발행
+   - `build-windows.yml` / `build-mac.yml` 은 **수동 테스트 빌드 전용**(workflow_dispatch, 릴리즈 안 건드림).
 5. 완료 확인 (인증 없이 가능):
    ```bash
    # 빌드 성공 여부
@@ -86,6 +87,7 @@ UI/서버 변경 후 가능하면 실제로 확인한다.
 - 릴리즈가 draft 로 남았으면 → Actions 의 **`Publish draft release`** 워크플로를 `workflow_dispatch` 로 실행(입력: 태그명). GitHub UI 의 Release 편집 화면에서 `Publish release` 를 눌러도 된다.
 - 로컬에는 GitHub API 토큰이 없다(원격이 SSH). 즉 **에이전트가 직접 릴리즈를 발행할 수는 없으므로**, 발행은 반드시 CI 워크플로 스텝(위 4-3)에 맡긴다. 워크플로에서 그 스텝이 빠지면 배포가 draft 로 멈춘다.
 - 빌드는 성공했는데 auto-update 가 안 잡히면 `latest.yml` 이 릴리즈에 올라갔는지 먼저 확인한다.
+- **electron-builder 는 이미 published 된 릴리즈에는 업로드를 조용히 건너뛴다(스텝은 success 로 끝남).** 그래서 발행은 반드시 모든 플랫폼 빌드가 끝난 뒤 마지막에 한 번만 해야 한다. v1.14.1 에서 이 레이스로 Windows exe 와 `latest.yml` 이 통째로 누락된 적이 있다 — `release.yml` 의 `publish` job(`needs`) 구조를 깨지 말 것.
 
 ### 주의
 

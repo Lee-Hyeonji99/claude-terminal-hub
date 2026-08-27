@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.14.2] - 2026-08-27
+
+### Fixed
+- **릴리즈에 Windows exe 와 `latest.yml` 이 누락되던 문제**(1.14.1 에서 발생): Windows/macOS 워크플로가 각자 마지막에 draft 를 해제하는 구조라, 먼저 끝난 mac 이 릴리즈를 발행해버리면 뒤늦게 끝난 Windows 의 `electron-builder` 가 "이미 published" 를 보고 업로드를 조용히 건너뛰었다(스텝은 success). Windows 사용자는 auto-update 를 받을 수 없었음.
+  - 태그 push 를 처리하는 워크플로를 **`release.yml` 하나로 통합**하고, `publish` job 이 `needs: [windows, mac]` 로 **두 빌드가 모두 끝난 뒤에만** draft 를 해제하도록 변경.
+  - 각 빌드 job 에 **업로드 검증 스텝** 추가 — 릴리즈에 exe/dmg 와 `latest*.yml` 이 실제로 있는지 확인하고 없으면 빌드를 실패시킨다.
+  - `build-windows.yml` / `build-mac.yml` 은 수동 테스트 빌드 전용으로 축소(태그 트리거·발행 제거).
+
 ## [1.14.1] - 2026-08-27
 
 ### Fixed

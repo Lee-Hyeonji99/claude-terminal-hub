@@ -1,18 +1,15 @@
-name: Build Windows exe
+name: Build Windows exe (test)
+
+# 릴리즈 발행은 release.yml 이 담당한다(태그 push). 이 워크플로는 **수동 테스트 빌드 전용** —
+# Release 를 건드리지 않고 워크플로 아티팩트로만 exe 를 남긴다.
+# (예전에는 이 파일도 태그 push 로 돌면서 릴리즈를 발행했는데, mac 워크플로와 draft 해제 시점이
+#  엇갈려 늦게 끝난 쪽 업로드가 통째로 누락되는 문제가 있었다. → release.yml 로 일원화)
 
 on:
-  push:
-    tags:
-      - 'v*.*.*'
   workflow_dispatch:
-    inputs:
-      publish:
-        description: 'GitHub Release 로 발행할지 여부 (태그 push 없이 수동 릴리즈용)'
-        type: boolean
-        default: false
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   build:
@@ -30,43 +27,7 @@ jobs:
         run: Invoke-WebRequest -Uri https://aka.ms/vs/17/release/vc_redist.x64.exe -OutFile build/vc_redist.x64.exe
         shell: pwsh
 
-      # electron-builder 가 exe/blockmap/latest.yml 을 동시에 업로드하면서 릴리즈가 없으면
-      # 각자 "만들기"를 레이스로 시도해 draft 가 중복 생성되는 문제가 있음 → 미리 draft 를
-      # 하나 만들어두면(이미 있으면 건너뜀) electron-builder 는 거기에 파일만 채워 넣는다.
-      - if: startsWith(github.ref, 'refs/tags/') || inputs.publish == true
-        name: Ensure draft release exists (avoid electron-builder concurrent-create race)
-        shell: pwsh
-        run: |
-          $tag = "v" + (node -p "require('./package.json').version")
-          gh release view $tag 2>$null
-          if ($LASTEXITCODE -ne 0) {
-            gh release create $tag --draft --title $tag --notes "Automated build"
-          }
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      # 태그 push 또는 수동 릴리즈 발행: electron-builder 가 (위에서 미리 만들어둔) draft 릴리즈에
-      # 설치파일+latest.yml 을 올림(auto-update 에 필요). 태그가 없으면 package.json 버전 기준으로 만듦.
-      - if: startsWith(github.ref, 'refs/tags/') || inputs.publish == true
-        run: npx electron-builder --win --x64 --publish always
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      # electron-builder 는 릴리즈를 draft 로 남긴다 → 그대로 두면 사용자에게 안 보이고
-      # auto-update 도 안 잡힌다. 업로드가 끝났으니 여기서 정식 발행으로 바꾼다.
-      # (mac 워크플로도 같은 걸 하지만 이미 발행돼 있으면 no-op 이라 안전)
-      - if: startsWith(github.ref, 'refs/tags/') || inputs.publish == true
-        name: Publish release (draft 해제)
-        shell: pwsh
-        run: |
-          $tag = "v" + (node -p "require('./package.json').version")
-          gh release edit $tag --draft=false --repo $env:GITHUB_REPOSITORY
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      # 그 외(수동 테스트 빌드): Release 를 건드리지 않고 워크플로 아티팩트로만 남김.
-      - if: "!(startsWith(github.ref, 'refs/tags/') || inputs.publish == true)"
-        run: npm run dist:win
+      - run: npm run dist:win
 
       - uses: actions/upload-artifact@v4
         with:
