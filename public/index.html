@@ -7,7 +7,17 @@
   <link rel="icon" href="data:," />
   <link rel="stylesheet" href="/vendor/xterm/css/xterm.css" />
   <style>
+    /* 번들 글꼴 (오프라인 앱이므로 CDN 대신 동봉) — 전부 OFL 1.1 */
+    @font-face{font-family:'Pretendard';src:url('/fonts/pretendard-400.woff2') format('woff2');font-weight:400;font-display:swap}
+    @font-face{font-family:'Pretendard';src:url('/fonts/pretendard-600.woff2') format('woff2');font-weight:600 700;font-display:swap}
+    @font-face{font-family:'Gowun Dodum';src:url('/fonts/gowun-dodum-400.woff2') format('woff2');font-weight:400;font-display:swap}
+    @font-face{font-family:'Jua';src:url('/fonts/jua-400.woff2') format('woff2');font-weight:400;font-display:swap}
+    @font-face{font-family:'JetBrains Mono';src:url('/fonts/jetbrains-mono-400.woff2') format('woff2');font-weight:400;font-display:swap}
+    @font-face{font-family:'JetBrains Mono';src:url('/fonts/jetbrains-mono-700.woff2') format('woff2');font-weight:700;font-display:swap}
+    @font-face{font-family:'Fira Code';src:url('/fonts/fira-code-400.woff2') format('woff2');font-weight:400;font-display:swap}
     :root{
+      --ui-font:'Pretendard','Segoe UI',system-ui,sans-serif;   /* UI 전역 글꼴 (JS가 덮어씀) */
+      --mono-font:'JetBrains Mono','Cascadia Mono',Consolas,monospace;
       --bg:#0c0e14; --panel:#12151f; --head:#1a1e2b; --border:#262c3d;
       --active:#4c8bf5; --text:#d7dbe6; --muted:#8a91a5; --accent:#4c8bf5; --danger:#e5484d; --ok:#3fb950;
       --sb-thumb:#39415a;
@@ -66,7 +76,7 @@
     ::-webkit-scrollbar-corner{background:var(--bg)}
     ::-webkit-scrollbar-thumb{background:var(--sb-thumb);border-radius:8px;border:3px solid var(--bg)}
     ::-webkit-scrollbar-thumb:hover{background:var(--muted)}
-    body{background:var(--bg);color:var(--text);font:13px/1.4 "Segoe UI",system-ui,sans-serif;display:flex;flex-direction:column;overflow:hidden}
+    body{background:var(--bg);color:var(--text);font:13px/1.4 var(--ui-font);display:flex;flex-direction:column;overflow:hidden}
     header{display:flex;align-items:center;gap:10px;padding:8px 14px;background:var(--head);border-bottom:1px solid var(--border);flex:none}
     header .brand{font-weight:600;letter-spacing:.3px}
     header .brand span{color:var(--accent)}
@@ -259,7 +269,7 @@
     /* 컴포즈 입력창 (토글 시에만 표시 — 끄면 기존과 동일) */
     .compose{display:none;flex-direction:column;gap:6px;padding:8px;border-top:1px solid var(--border);background:var(--head);flex:none}
     body.compose-on .compose{display:flex}
-    .compose textarea{width:100%;resize:none;min-height:38px;max-height:160px;background:var(--panel);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:8px 10px;font:13px/1.4 "Segoe UI",system-ui,sans-serif;outline:none}
+    .compose textarea{width:100%;resize:none;min-height:38px;max-height:160px;background:var(--panel);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:8px 10px;font:13px/1.4 var(--ui-font);outline:none}
     .compose textarea:focus{border-color:var(--accent)}
     .compose .crow{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
     .compose .cbtn{font-size:11px;color:var(--muted);background:var(--panel);border:1px solid var(--border);border-radius:6px;padding:3px 9px}
@@ -280,11 +290,92 @@
     .vbub.user{background:transparent;border-style:dashed}
     .vcard{margin-left:30px;border:1px solid var(--border);border-radius:8px;background:var(--bg);overflow:hidden}
     .vcard.task{border-color:var(--accent)}
-    .vcard .vch{display:flex;align-items:center;gap:6px;padding:6px 10px;font-size:11.5px;color:var(--muted);font-family:"Cascadia Code",Consolas,monospace}
+    .vcard .vch{display:flex;align-items:center;gap:6px;padding:6px 10px;font-size:11.5px;color:var(--muted);font-family:var(--mono-font)}
     .vcard .vch svg{width:13px;height:13px;flex:none}
     .vcard.task .vch{color:var(--accent)}
-    .vcard .vch .vp{color:var(--text);font-family:"Segoe UI",system-ui,sans-serif}
-    .vcard.result .vcc{padding:8px 10px;font-size:11px;color:var(--muted);white-space:pre-wrap;word-break:break-word;max-height:130px;overflow:auto;font-family:"Cascadia Code",Consolas,monospace}
+    .vcard .vch .vp{color:var(--text);font-family:var(--ui-font)}
+    .vcard.result .vcc{padding:8px 10px;font-size:11px;color:var(--muted);white-space:pre-wrap;word-break:break-word;max-height:130px;overflow:auto;font-family:var(--mono-font)}
+
+    /* ================= 캐릭터 테마 ================= */
+    /* --cth-av: 캐릭터 얼굴 이미지, --cth-full: 전신 이미지 (app.js 가 body 에 세팅) */
+    body.cth-char{--radius-soft:14px}
+    body.cth-char.lv2 header .brand::before,
+    body.cth-char.lv3 header .brand::before{
+      content:'';width:26px;height:26px;border-radius:50%;flex:none;margin-right:2px;
+      background:var(--cth-av) center 15%/cover no-repeat,var(--panel);
+      border:1px solid var(--border);display:inline-block;vertical-align:-8px;
+    }
+    body.cth-char header .brand{display:flex;align-items:center;gap:8px}
+    body.cth-char.lv2 .pane .bar .dot,
+    body.cth-char.lv3 .pane .bar .dot{
+      width:18px;height:18px;border-radius:50%;
+      background:var(--cth-av) center 15%/cover no-repeat,var(--panel);
+      box-shadow:0 0 0 1px var(--border);
+    }
+    body.cth-char.lv2 .pane.done .bar .dot,
+    body.cth-char.lv3 .pane.done .bar .dot{box-shadow:0 0 0 2px var(--ok)}
+    body.cth-char.lv2 .vwho.ai,body.cth-char.lv3 .vwho.ai{
+      background:var(--cth-av) center 15%/cover no-repeat,var(--accent);color:transparent;
+    }
+    body.cth-char.lv2 .pane,body.cth-char.lv3 .pane,
+    body.cth-char.lv2 .popover,body.cth-char.lv3 .popover{border-radius:var(--radius-soft)}
+    /* Lv3: 터미널 워터마크 + 배경 타일 */
+    body.cth-char.lv3 .pane .term::after{
+      content:'';position:absolute;right:12px;bottom:10px;width:110px;height:110px;
+      background:var(--cth-full) center/contain no-repeat;opacity:.13;pointer-events:none;z-index:1;
+    }
+    body.cth-char.lv3 #stage{position:relative}
+    body.cth-char.lv3 #stage::before{
+      content:'';position:absolute;inset:0;pointer-events:none;z-index:0;opacity:.05;
+      background-image:var(--cth-full);background-size:110px 110px;background-repeat:repeat;
+    }
+    body.cth-char.lv3 #stage>*{position:relative;z-index:1}
+
+    /* Lv3 메신저 컴포즈 */
+    body.cth-char.lv3 .compose{border-radius:18px;margin:0 2px 2px}
+    body.cth-char.lv3 .compose textarea{border-radius:999px;padding:9px 15px}
+    body.cth-char.lv3 .compose .cbtn.send{border-radius:999px;padding:5px 14px}
+    .chatlog{display:none;flex-direction:column;gap:7px;max-height:190px;overflow-y:auto;padding:4px 2px 8px}
+    body.cth-char.lv3 .compose .chatlog{display:flex}
+    .chatlog .cbub{display:flex;align-items:flex-end;gap:7px;max-width:82%}
+    .chatlog .cbub .cav{width:26px;height:26px;flex:none;border-radius:50%;
+      background:var(--cth-av) center 15%/cover no-repeat,var(--panel);border:1px solid var(--border)}
+    .chatlog .cbub .ctx{background:var(--panel);border:1px solid var(--border);border-radius:13px 13px 13px 4px;
+      padding:6px 11px;font-size:12px;color:var(--text);white-space:pre-wrap;word-break:break-word}
+    .chatlog .cbub.me{margin-left:auto;flex-direction:row-reverse}
+    .chatlog .cbub.me .ctx{background:var(--accent);color:var(--on-accent,#fff);border-color:transparent;
+      border-radius:13px 13px 4px 13px;font-weight:600}
+    .chatlog .ctool{font-size:10.5px;color:var(--muted);font-family:var(--mono-font);
+      background:var(--panel);border:1px solid var(--border);border-left:3px solid var(--ok);border-radius:8px;padding:4px 9px}
+    .chatlog .cempty{font-size:11px;color:var(--muted);text-align:center;padding:6px}
+    /* 대화만 보기 (M3) */
+    .pane.chatonly .term{display:none}
+    .pane.chatonly .chatlog{max-height:none;flex:1}
+    .pane.chatonly .compose{flex:1;display:flex;flex-direction:column;min-height:0}
+    .compose .cbtn.chatonly-btn.on{color:var(--accent);border-color:var(--accent)}
+
+    /* 테마 팝오버 확장 */
+    .popover-sep{font-size:10.5px;color:var(--muted);font-weight:700;padding:8px 10px 4px;letter-spacing:.3px}
+    .popover-item .avatar{width:20px;height:20px;border-radius:50%;flex:none;object-fit:cover;object-position:50% 15%;
+      background:var(--head);border:1px solid var(--border)}
+    .popover-item .ipname{color:var(--muted);font-size:10.5px;margin-left:auto}
+    .seg-row{display:flex;gap:4px;padding:2px 8px 8px}
+    .seg-row button{flex:1;font-size:11px;padding:5px 6px;border-radius:6px;background:var(--bg);border:1px solid var(--border);color:var(--muted)}
+    .seg-row button.on{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:700}
+    .knob-row{padding:4px 10px 10px}
+    .knob-row label{display:flex;justify-content:space-between;font-size:10.5px;color:var(--muted);font-weight:700;margin-bottom:5px}
+    .knob-row input[type=range]{width:100%;accent-color:var(--accent)}
+    .knob-row input[type=file]{width:100%;font-size:10.5px;color:var(--muted)}
+    .cursor-preview{display:flex;align-items:center;gap:10px;padding:6px 10px 10px;font-size:10.5px;color:var(--muted)}
+    .cursor-preview img{width:52px;height:52px;image-rendering:pixelated;border:1px solid var(--border);border-radius:8px;
+      background:repeating-conic-gradient(var(--head) 0 25%,var(--bg) 0 50%) 0 0/12px 12px}
+    .colorchips{display:flex;gap:5px;flex-wrap:wrap;padding:2px 10px 8px}
+    .colorchips button{width:26px;height:26px;border-radius:50%;border:2px solid var(--border);padding:0;cursor:pointer}
+    .colorchips button.on{border-color:var(--text);box-shadow:0 0 0 2px var(--accent)}
+    .assetdrop{margin:2px 8px 8px;padding:10px;border:1px dashed var(--border);border-radius:10px;text-align:center;
+      font-size:10.5px;color:var(--muted);cursor:pointer}
+    .assetdrop.over{border-color:var(--accent);color:var(--text)}
+    .font-missing{color:var(--danger)}
 
     /* 도움말 오버레이 */
     #helpOverlay{position:fixed;inset:0;background:rgba(0,0,0,.55);display:none;align-items:center;justify-content:center;z-index:80}
@@ -324,12 +415,65 @@
         <div class="popover-item" data-theme="tokyonight"><span class="swatch" style="background:#1a1b26"></span>Tokyo Night</div>
         <div class="popover-item" data-theme="catppuccin"><span class="swatch" style="background:#1e1e2e"></span>Catppuccin Mocha</div>
         <div class="popover-item" data-theme="githubdark"><span class="swatch" style="background:#0d1117"></span>GitHub Dark</div>
+        <div class="popover-sep">캐릭터 테마 <span style="font-weight:400">— 이미지에서 색 추출</span></div>
+        <div id="charThemeList"></div>
+        <div class="popover-sep" id="charOptsSep" style="display:none">모드 · 강도</div>
+        <div class="seg-row" id="themeModeRow" style="display:none">
+          <button data-mode="dark">🌙 다크</button>
+          <button data-mode="pastel">🍡 파스텔</button>
+        </div>
+        <div class="seg-row" id="themeLevelRow" style="display:none">
+          <button data-lv="1">색만</button>
+          <button data-lv="2">이미지</button>
+          <button data-lv="3">풀캐릭</button>
+        </div>
+        <div class="popover-sep" id="charColorSep" style="display:none">기준색 — 눌러서 바꾸기</div>
+        <div class="colorchips" id="charColors" style="display:none"></div>
+        <div class="assetdrop" id="assetDrop" style="display:none">
+          캐릭터 이미지 넣기 — 클릭하거나 여기로 드래그<br>
+          <span id="assetDropHint" style="opacity:.7"></span>
+        </div>
+      </div>
+    </div>
+    <div class="popover-wrap">
+      <button id="cursorBtn" class="ghost icon-btn" title="마우스 커서 바꾸기"><span data-icon="pointer"></span></button>
+      <div id="cursorPopover" class="popover" style="min-width:240px">
+        <div class="popover-sep">커서 이미지</div>
+        <div class="seg-row" id="curSrcRow">
+          <button data-src="theme">테마 캐릭터</button>
+          <button data-src="custom">내 이미지</button>
+          <button data-src="arrow">화살표</button>
+        </div>
+        <div class="knob-row"><input type="file" id="curFile" accept="image/*"></div>
+        <div class="popover-sep">모양</div>
+        <div class="knob-row">
+          <label>크기 <span id="curSizeLabel">32px</span></label>
+          <input type="range" id="curSize" min="16" max="64" step="2" value="32">
+        </div>
+        <div class="seg-row" id="curFitRow">
+          <button data-fit="contain">원본 그대로</button>
+          <button data-fit="head">얼굴 크롭</button>
+        </div>
+        <div class="seg-row" id="curHotRow">
+          <button data-hot="tl">좌상단</button>
+          <button data-hot="center">가운데</button>
+        </div>
+        <div class="seg-row" id="curTipRow">
+          <button data-tip="1">촉 켜기</button>
+          <button data-tip="0">촉 끄기</button>
+        </div>
+        <div class="seg-row" id="curScopeRow">
+          <button data-scope="both">전체+클릭</button>
+          <button data-scope="pointer">클릭요소만</button>
+        </div>
+        <div class="cursor-preview"><img id="curPreview" alt=""><span id="curInfo">32×32</span></div>
       </div>
     </div>
     <div class="popover-wrap">
       <button id="accentBtn" class="ghost icon-btn" title="강조 색상"><span data-icon="droplet"></span></button>
       <div id="accentPopover" class="popover"></div>
     </div>
+    <select id="uiFontFamily" class="ghost" title="화면(UI) 글꼴 — 헤더·목록·입력창" style="padding:4px 6px;font-size:11px"></select>
     <select id="fontFamily" class="ghost" title="터미널 글꼴" style="padding:4px 6px;font-size:11px"></select>
     <div class="fontsize-group">
       <button id="fontDown" title="터미널 글자 크기 작게 (Ctrl+-)">A−</button>
@@ -480,6 +624,7 @@
   <script src="/vendor/addon-fit/lib/addon-fit.js"></script>
   <script src="/vendor/addon-canvas/lib/addon-canvas.js"></script>
   <script src="/vendor/split/split.min.js"></script>
+  <script src="/themes.js"></script>
   <script src="/app.js"></script>
 </body>
 </html>

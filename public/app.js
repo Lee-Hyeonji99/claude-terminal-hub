@@ -22,6 +22,7 @@ const ICON = {
   back: ic('<path d="M19 12H5M12 19l-7-7 7-7"/>'),
   search: ic('<circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/>'),
   warn: ic('<path d="M12 9v4M12 17h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/>'),
+  pointer: ic('<path d="M5 3 L5 20 L9.5 16 L12.5 21.5 L15 20.3 L12 15 L18 15 Z"/>'),
   palette: ic('<path d="M12 3a9 9 0 1 0 0 18c1.1 0 1.6-.7 1.1-1.6-.3-.6-.1-1.4.6-1.7.5-.2 1-.2 1.5-.2 2 0 3.8-1.7 3.8-4.5C19 6.9 15.9 3 12 3z"/><circle cx="7.5" cy="11.5" r="1.2"/><circle cx="10.5" cy="7.5" r="1.2"/><circle cx="15" cy="8" r="1.2"/>'),
   droplet: ic('<path d="M12 3s6 6.5 6 11a6 6 0 0 1-12 0c0-4.5 6-11 6-11z"/>'),
   minimize: ic('<path d="M5 12h14"/>'),
@@ -75,7 +76,8 @@ const TERM_THEMES = {
   catppuccin: { background: '#1e1e2e', foreground: '#cdd6f4', black: '#45475a', red: '#f38ba8', green: '#a6e3a1', yellow: '#f9e2af', blue: '#89b4fa', magenta: '#f5c2e7', cyan: '#94e2d5', white: '#bac2de', brightBlack: '#585b70', brightRed: '#f38ba8', brightGreen: '#a6e3a1', brightYellow: '#f9e2af', brightBlue: '#89b4fa', brightMagenta: '#f5c2e7', brightCyan: '#94e2d5', brightWhite: '#a6adc8' },
   githubdark: { background: '#0d1117', foreground: '#c9d1d9', black: '#484f58', red: '#ff7b72', green: '#3fb950', yellow: '#d29922', blue: '#58a6ff', magenta: '#bc8cff', cyan: '#39c5cf', white: '#b1bac4', brightBlack: '#6e7681', brightRed: '#ffa198', brightGreen: '#56d364', brightYellow: '#e3b341', brightBlue: '#79c0ff', brightMagenta: '#d2a8ff', brightCyan: '#56d4dd', brightWhite: '#f0f6fc' },
 };
-function currentTermTheme() { return TERM_THEMES[document.body.dataset.theme] || TERM_THEMES.dark; }
+let activeTermTheme = null; // 캐릭터 테마일 때 이미지에서 만든 팔레트가 들어간다
+function currentTermTheme() { return activeTermTheme || TERM_THEMES[document.body.dataset.theme] || TERM_THEMES.dark; }
 let activePane = null;
 
 /* ---------- 새 메시지 알림 (OS 알림 / 브라우저 알림) ---------- */
@@ -111,10 +113,10 @@ function applyFontSize(px) {
 
 /* ---------- 터미널 글꼴(폰트) 선택 ---------- */
 const FONT_FAMILIES = [
+  { label: 'JetBrains Mono (번들)', css: "'JetBrains Mono',Consolas,monospace" },
+  { label: 'Fira Code (번들)', css: "'Fira Code',Consolas,monospace" },
   { label: 'Cascadia Code', css: "'Cascadia Code','Cascadia Mono',Consolas,monospace" },
   { label: 'Cascadia Mono', css: "'Cascadia Mono',Consolas,monospace" },
-  { label: 'JetBrains Mono', css: "'JetBrains Mono',Consolas,monospace" },
-  { label: 'Fira Code', css: "'Fira Code',Consolas,monospace" },
   { label: 'D2Coding', css: "'D2Coding',Consolas,monospace" },
   { label: 'Consolas', css: "Consolas,'Courier New',monospace" },
 ];
@@ -122,8 +124,45 @@ let termFontFamily = localStorage.getItem('cth_font_family') || FONT_FAMILIES[0]
 function applyFontFamily(css) {
   termFontFamily = css;
   localStorage.setItem('cth_font_family', css);
-  columns.forEach((c) => c.panes.forEach((p) => { if (p.term) { try { p.term.options.fontFamily = css; } catch {} } }));
+  columns.forEach((c) => c.panes.forEach((p) => {
+    if (!p.term) return;
+    try {
+      p.term.options.fontFamily = css;
+      // 캔버스 렌더러는 글리프를 캐시하므로 아틀라스를 비우고 다시 그려야 실제로 바뀐다.
+      if (typeof p.term.clearTextureAtlas === 'function') p.term.clearTextureAtlas();
+      p.term.refresh(0, Math.max(0, (p.term.rows || 1) - 1));
+    } catch {}
+  }));
   setTimeout(() => { try { fitAll(); } catch {} }, 30);
+}
+
+/* ---------- 화면(UI) 글꼴 — 헤더·목록·입력창 등 터미널 밖 전부 ---------- */
+const DEFAULT_UI_FONT = "'Pretendard','Segoe UI',system-ui,sans-serif";
+let uiFontFamily = localStorage.getItem('cth_ui_font') || DEFAULT_UI_FONT;
+function applyUiFont(css, remember) {
+  uiFontFamily = css || DEFAULT_UI_FONT;
+  if (remember !== false) localStorage.setItem('cth_ui_font', uiFontFamily);
+  document.documentElement.style.setProperty('--ui-font', uiFontFamily);
+}
+
+// 로컬에 설치된 글꼴인지 검사 — 없으면 조용히 폴백되므로 목록에 표시해준다.
+async function fontInstalled(name) {
+  try {
+    if (!('FontFace' in window)) return true;
+    await new FontFace('__cthprobe__', `local("${name}")`).load();
+    return true;
+  } catch { return false; }
+}
+const BUNDLED_FONTS = ['JetBrains Mono', 'Fira Code', 'Pretendard', 'Gowun Dodum', 'Jua'];
+async function markMissingFonts(sel, list) {
+  if (!sel) return;
+  for (let i = 0; i < list.length; i++) {
+    const first = (list[i].css.match(/'([^']+)'|"([^"]+)"|^([^,]+)/) || [])[0].replace(/['"]/g, '').trim();
+    if (BUNDLED_FONTS.includes(first)) continue;
+    const ok = await fontInstalled(first);
+    const opt = sel.options[i];
+    if (!ok && opt && !/미설치/.test(opt.textContent)) opt.textContent += '  (미설치)';
+  }
 }
 
 /* ---------- 계정 프로필 / 탭 ---------- */
@@ -300,11 +339,242 @@ function setupPopover(btnId, popId) {
 }
 document.addEventListener('click', closePopovers);
 
+/* ================= 캐릭터 테마 =================
+ * 색은 하드코딩하지 않고 캐릭터 이미지에서 뽑아 팔레트를 만든다.
+ * 이미지는 ~/.claude-terminal-hub/theme-assets/ (저장소·설치파일에 없음).
+ * ============================================== */
+const CHAR_MAP = () => window.CHAR_THEME_MAP || {};
+let themeAssetFiles = [];
+async function loadThemeAssets() {
+  try { themeAssetFiles = (await fetch('/api/theme-assets').then((r) => r.json())).files || []; }
+  catch { themeAssetFiles = []; }
+}
+function pickAsset(cands) {
+  for (const c of (cands || [])) if (themeAssetFiles.includes(c)) return '/theme-assets/' + encodeURIComponent(c);
+  return null;
+}
+function charAssets(key) {
+  const t = CHAR_MAP()[key];
+  if (!t) return { icon: null, full: null };
+  const icon = pickAsset(t.icon), full = pickAsset(t.full);
+  return { icon: icon || full, full: full || icon };
+}
+
+function rgb2hsl(r, g, b) {
+  r /= 255; g /= 255; b /= 255;
+  const mx = Math.max(r, g, b), mn = Math.min(r, g, b), l = (mx + mn) / 2;
+  let h = 0, sa = 0;
+  if (mx !== mn) {
+    const d = mx - mn;
+    sa = l > 0.5 ? d / (2 - mx - mn) : d / (mx + mn);
+    h = mx === r ? (g - b) / d + (g < b ? 6 : 0) : mx === g ? (b - r) / d + 2 : (r - g) / d + 4;
+    h *= 60;
+  }
+  return [h, sa, l];
+}
+const hsl = (h, s, l) => `hsl(${h.toFixed(0)} ${Math.max(0, Math.min(100, s)).toFixed(0)}% ${Math.max(0, Math.min(100, l)).toFixed(0)}%)`;
+const toHex = (r, g, b) => '#' + [r, g, b].map((v) => Math.round(v).toString(16).padStart(2, '0')).join('');
+function hexToHsl(hex) {
+  const m = /^#?([0-9a-f]{6})$/i.exec(String(hex || '').trim());
+  if (!m) return [220, 0.6, 0.6];
+  const n = parseInt(m[1], 16);
+  return rgb2hsl((n >> 16) & 255, (n >> 8) & 255, n & 255);
+}
+
+const palCache = {};
+function loadPalCache() {
+  try { Object.assign(palCache, JSON.parse(localStorage.getItem('cth_pal_cache') || '{}')); } catch {}
+}
+function savePalCache() {
+  try { localStorage.setItem('cth_pal_cache', JSON.stringify(palCache)); } catch {}
+}
+// 이미지에서 대표색 뽑기 (흰/검 제외, 비슷한 색 병합)
+function extractColors(url) {
+  if (palCache[url]) return Promise.resolve(palCache[url]);
+  return new Promise((resolve, reject) => {
+    const im = new Image();
+    im.onerror = reject;
+    im.onload = () => {
+      try {
+        const n = 56, c = document.createElement('canvas');
+        c.width = n; c.height = n;
+        const g = c.getContext('2d', { willReadFrequently: true });
+        g.drawImage(im, 0, 0, n, n);
+        const d = g.getImageData(0, 0, n, n).data;
+        const buckets = new Map();
+        for (let i = 0; i < d.length; i += 4) {
+          if (d[i + 3] < 200) continue;
+          const r = d[i], gg = d[i + 1], b = d[i + 2];
+          const [h, sa, l] = rgb2hsl(r, gg, b);
+          if (l > 0.93 || l < 0.07) continue;
+          const key = Math.round(h / 14) + '|' + Math.round(sa * 5) + '|' + Math.round(l * 6);
+          const o = buckets.get(key) || { n: 0, r: 0, g: 0, b: 0 };
+          o.n++; o.r += r; o.g += gg; o.b += b; buckets.set(key, o);
+        }
+        const list = [...buckets.values()].map((o) => {
+          const r = o.r / o.n, g2 = o.g / o.n, b = o.b / o.n, [h, sa, l] = rgb2hsl(r, g2, b);
+          return { n: o.n, h, s: sa, l, hex: toHex(r, g2, b) };
+        }).sort((a, b) => b.n - a.n);
+        const out = [];
+        for (const c2 of list) {
+          if (out.some((o) => Math.abs(o.h - c2.h) < 22 && Math.abs(o.l - c2.l) < 0.18)) continue;
+          out.push(c2);
+          if (out.length >= 6) break;
+        }
+        palCache[url] = out; savePalCache();
+        resolve(out);
+      } catch (e) { reject(e); }
+    };
+    im.src = url;
+  });
+}
+function rankColors(cols) {
+  return cols.map((c) => ({ c, w: (c.s * 1.6 + 0.25) * Math.sqrt(c.n) * ((c.l > 0.2 && c.l < 0.85) ? 1 : 0.5) }))
+    .sort((a, b) => b.w - a.w).map((x) => x.c);
+}
+// 대표색 → UI 팔레트 (다크는 배경까지 캐릭터 색으로 물들인다)
+function buildCharPalette(cols, mode, fallbackHex, forceHex) {
+  let a1, a2;
+  if (cols && cols.length) {
+    let ranked = rankColors(cols);
+    if (forceHex) {                                   // 사용자가 고른 기준색을 맨 앞으로
+      const i = ranked.findIndex((c) => c.hex === forceHex);
+      if (i > 0) ranked = [ranked[i]].concat(ranked.slice(0, i), ranked.slice(i + 1));
+    }
+    a1 = ranked[0];
+    a2 = ranked.find((c) => Math.abs(c.h - a1.h) > 28) || ranked[1] || a1;
+  } else {
+    const [h, sa, l] = hexToHsl(fallbackHex);
+    a1 = { h, s: sa, l }; a2 = { h: (h + 40) % 360, s: sa, l };
+  }
+  const h = a1.h, h2 = a2.h;
+  const sat = Math.max(28, Math.min(70, a1.s * 100));
+  const v = {};
+  if (mode === 'pastel') {
+    v['--bg'] = hsl(h, Math.min(72, sat + 18), 95);
+    v['--panel'] = hsl(h, 60, 99);
+    v['--head'] = hsl(h, Math.min(78, sat + 22), 89);
+    v['--border'] = hsl(h, Math.min(58, sat + 6), 79);
+    v['--text'] = hsl(h, 38, 16);
+    v['--muted'] = hsl(h, 20, 42);
+    v['--accent'] = hsl(h, Math.max(48, sat + 8), Math.min(48, Math.max(36, a1.l * 100)));
+    v['--active'] = v['--accent'];
+    v['--ok'] = hsl(150, 45, 34);
+    v['--danger'] = hsl(2, 62, 46);
+    v['--sb-thumb'] = hsl(h, 35, 76);
+    v['--term-bg'] = hsl(h, 34, 11);
+    v['--term-fg'] = hsl(h, 30, 92);
+    v['--accent2'] = hsl(h2, Math.max(42, a2.s * 100), 44);
+    v['--on-accent'] = '#ffffff';
+  } else {
+    const bs = Math.max(26, Math.min(58, sat * 0.85));
+    v['--bg'] = hsl(h, bs, 10);
+    v['--panel'] = hsl(h, bs * 0.95, 14);
+    v['--head'] = hsl(h, bs, 18);
+    v['--border'] = hsl(h, bs * 0.9, 31);
+    v['--text'] = hsl(h, 30, 94);
+    v['--muted'] = hsl(h, 17, 64);
+    const accL = Math.min(76, Math.max(60, a1.l * 100));
+    v['--accent'] = hsl(h, Math.max(62, sat + 16), accL);
+    v['--active'] = v['--accent'];
+    v['--ok'] = hsl(150, 52, 64);
+    v['--danger'] = hsl(2, 78, 66);
+    v['--sb-thumb'] = hsl(h, bs, 34);
+    v['--term-bg'] = hsl(h, bs * 0.8, 7);
+    v['--term-fg'] = hsl(h, 26, 91);
+    v['--accent2'] = hsl(h2, Math.max(52, a2.s * 100), Math.min(80, Math.max(64, a2.l * 100)));
+    v['--on-accent'] = accL > 62 ? hsl(h, 60, 12) : '#ffffff';
+  }
+  return v;
+}
+// UI 팔레트 → xterm ANSI 16색 (배경/전경/파랑·시안만 캐릭터 색으로, 나머지는 가독성 좋은 기본값)
+function ansiFromVars(v, mode) {
+  const base = mode === 'pastel' ? TERM_THEMES.tokyonight : TERM_THEMES.tokyonight;
+  return Object.assign({}, base, {
+    background: v['--term-bg'], foreground: v['--term-fg'],
+    blue: v['--accent'], brightBlue: v['--accent'],
+    cyan: v['--accent2'], brightCyan: v['--accent2'],
+  });
+}
+
+const CHAR_VARS = ['--bg', '--panel', '--head', '--border', '--text', '--muted', '--accent', '--active',
+  '--ok', '--danger', '--sb-thumb', '--term-bg', '--term-fg', '--accent2', '--on-accent', '--cth-av', '--cth-full'];
+function clearCharVars() { CHAR_VARS.forEach((k) => document.body.style.removeProperty(k)); }
+
+function themeMode() { return localStorage.getItem('cth_theme_mode') === 'pastel' ? 'pastel' : 'dark'; }
+function themeLevel() { const n = parseInt(localStorage.getItem('cth_theme_level'), 10); return (n >= 1 && n <= 3) ? n : 2; }
+
+async function applyCharTheme(key) {
+  const t = CHAR_MAP()[key];
+  if (!t) return;
+  const { icon, full } = charAssets(key);
+  const mode = themeMode(), lv = themeLevel();
+  let cols = null;
+  if (full) { try { cols = await extractColors(full); } catch {} }
+  const v = buildCharPalette(cols, mode, t.fallback, localStorage.getItem('cth_pick_' + key) || null);
+  const b = document.body;
+  b.dataset.theme = 'char';
+  b.dataset.char = key;
+  b.classList.add('cth-char');
+  b.classList.remove('lv1', 'lv2', 'lv3');
+  b.classList.add('lv' + lv);
+  Object.entries(v).forEach(([k, val]) => b.style.setProperty(k, val));
+  b.style.setProperty('--cth-av', icon ? `url("${icon}")` : 'none');
+  b.style.setProperty('--cth-full', full ? `url("${full}")` : 'none');
+  if (lv >= 2 && t.ui) applyUiFont(`'${t.ui}',${DEFAULT_UI_FONT}`, false);
+  else applyUiFont(localStorage.getItem('cth_ui_font') || DEFAULT_UI_FONT, false);
+  activeTermTheme = ansiFromVars(v, mode);
+  const termTheme = currentTermTheme();
+  columns.forEach((c) => c.panes.forEach((p) => { if (p.term) { try { p.term.options.theme = termTheme; } catch {} } }));
+  updateComposePlaceholders(t);
+  renderCharColors(key, cols);
+  applyCursors();
+  setTimeout(() => { try { fitAll(); } catch {} }, 60);
+}
+// 이미지에서 뽑은 색들 — 누르면 그 색을 기준으로 팔레트를 다시 만든다.
+function renderCharColors(key, cols) {
+  const box = document.getElementById('charColors');
+  const sep = document.getElementById('charColorSep');
+  if (!box) return;
+  const ranked = (cols && cols.length) ? rankColors(cols).slice(0, 6) : [];
+  const show = ranked.length > 1;
+  box.style.display = show ? 'flex' : 'none';
+  if (sep) sep.style.display = show ? 'block' : 'none';
+  if (!show) { box.innerHTML = ''; return; }
+  const picked = localStorage.getItem('cth_pick_' + key) || ranked[0].hex;
+  box.innerHTML = ranked.map((c) => `<button data-hex="${c.hex}" title="${c.hex}" style="background:${c.hex}" class="${c.hex === picked ? 'on' : ''}"></button>`).join('');
+  box.querySelectorAll('button').forEach((b) => b.addEventListener('click', () => {
+    localStorage.setItem('cth_pick_' + key, b.dataset.hex);
+    applyCharTheme(key);
+  }));
+}
+
+function updateComposePlaceholders(t) {
+  const ph = (t && themeLevel() === 3 && t.ph) ? t.ph : '메시지 입력…   Enter 전송 · Shift+Enter 줄바꿈';
+  document.querySelectorAll('.compose textarea').forEach((ta) => { ta.placeholder = ph; });
+}
+
 function applyTheme(t) {
-  if (!TERM_THEMES[t]) t = 'dark';
-  document.body.dataset.theme = t;
+  const isChar = !!CHAR_MAP()[t];
   localStorage.setItem('cth_theme', t);
   document.querySelectorAll('#themePopover .popover-item').forEach((el) => el.classList.toggle('active', el.dataset.theme === t));
+  const charOn = ['charOptsSep', 'themeModeRow', 'themeLevelRow', 'assetDrop', 'charColorSep', 'charColors'];
+  charOn.forEach((id) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    if (!isChar) { el.style.display = 'none'; return; }
+    if (id === 'charColorSep' || id === 'charColors') return;   // 색 칩은 팔레트 계산 후 renderCharColors 가 정한다
+    el.style.display = (id === 'charOptsSep' ? 'block' : (id === 'assetDrop' ? 'block' : 'flex'));
+  });
+  if (isChar) { applyCharTheme(t); return; }
+  if (!TERM_THEMES[t]) t = 'dark';
+  activeTermTheme = null;
+  clearCharVars();
+  document.body.classList.remove('cth-char', 'lv1', 'lv2', 'lv3');
+  document.body.removeAttribute('data-char');
+  document.body.dataset.theme = t;
+  applyUiFont(localStorage.getItem('cth_ui_font') || DEFAULT_UI_FONT, false);
+  updateComposePlaceholders(null);
   const termTheme = currentTermTheme();
   columns.forEach((c) => c.panes.forEach((p) => { if (p.term) { try { p.term.options.theme = termTheme; } catch {} } }));
   applyCursors();
@@ -328,16 +598,93 @@ function cursorUri(fill, glow) {
   const main = `<path d='${D}' fill='${enc(fill)}' stroke='%23ffffff' stroke-width='${glow ? 1.7 : 1.3}' stroke-linejoin='round'/>`;
   return `url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='26' height='26' viewBox='0 0 24 24'>${shadow}${main}</svg>") 4 2`;
 }
-function applyCursors() {
-  const accent = (getComputedStyle(document.body).getPropertyValue('--accent') || '').trim() || '#4c8bf5';
-  const arrow = cursorUri(accent, false);
-  const point = cursorUri(lightenHex(accent, 0.4), true);
+/* ---------- 커서: 캐릭터 이미지 / 내 이미지 / 기본 화살표 ---------- */
+const CURSOR = {
+  get src() { return localStorage.getItem('cth_cursor_src') || 'theme'; },
+  get size() { const n = parseInt(localStorage.getItem('cth_cursor_size'), 10); return (n >= 16 && n <= 64) ? n : 32; },
+  get fit() { return localStorage.getItem('cth_cursor_fit') === 'head' ? 'head' : 'contain'; },
+  get hot() { return localStorage.getItem('cth_cursor_hotspot') === 'center' ? 'center' : 'tl'; },
+  get tip() { return localStorage.getItem('cth_cursor_tip') !== '0'; },
+  get scope() { return localStorage.getItem('cth_cursor_scope') === 'pointer' ? 'pointer' : 'both'; },
+  get customFile() { return localStorage.getItem('cth_cursor_custom_file') || null; },
+};
+const POINTER_SEL = 'a,button,summary,select,[role="button"],.tab,.ic,.chip,.recent-item,.sesitem,.fsitem,'
+  + '.popover-item,.lnb-alltoggle,.disc-banner button,.placement label,.rcont';
+function cursorStyleEl() {
   let st = document.getElementById('cthCursorStyle');
   if (!st) { st = document.createElement('style'); st.id = 'cthCursorStyle'; document.head.appendChild(st); }
-  st.textContent =
-    `body{cursor:${arrow},auto}\n` +
-    `a,button,summary,select,[role="button"],.tab,.ic,.chip,.recent-item,.sesitem,.fsitem,` +
-    `.popover-item,.lnb-alltoggle,.disc-banner button,.placement label,.rcont{cursor:${point},pointer}`;
+  return st;
+}
+function cursorImageSource() {
+  if (CURSOR.src === 'arrow') return null;
+  if (CURSOR.src === 'custom') return CURSOR.customFile ? '/theme-assets/' + encodeURIComponent(CURSOR.customFile) : null;
+  const key = document.body.dataset.char;
+  if (!key) return null;
+  return charAssets(key).icon;
+}
+// 원본 이미지를 커서 크기로 축소 + (옵션) 좌상단 화살표 촉 합성
+function buildImageCursor(url, accent) {
+  return new Promise((resolve, reject) => {
+    const s = CURSOR.size;
+    const im = new Image();
+    im.onerror = reject;
+    im.onload = () => {
+      try {
+        const c = document.createElement('canvas'); c.width = s; c.height = s;
+        const g = c.getContext('2d');
+        if (CURSOR.fit === 'head') {
+          const side = Math.min(im.width, im.height * 0.6);
+          g.drawImage(im, (im.width - side) / 2, im.height * 0.02, side, side, 0, 0, s, s);
+        } else {
+          const r = Math.min(s / im.width, s / im.height);
+          g.drawImage(im, (s - im.width * r) / 2, (s - im.height * r) / 2, im.width * r, im.height * r);
+        }
+        if (CURSOR.tip) {
+          const t = Math.round(s * 0.42);
+          const tip = new Image();
+          tip.onload = () => {
+            g.drawImage(tip, 0, 0, t, t);
+            resolve(c.toDataURL('image/png'));
+          };
+          tip.onerror = () => resolve(c.toDataURL('image/png'));
+          tip.src = cursorUri(accent, false).replace(/^url\("|"\) \d+ \d+$/g, '');
+        } else resolve(c.toDataURL('image/png'));
+      } catch (e) { reject(e); }
+    };
+    im.src = url;
+  });
+}
+async function applyCursors() {
+  const accent = (getComputedStyle(document.body).getPropertyValue('--accent') || '').trim() || '#4c8bf5';
+  const st = cursorStyleEl();
+  const url = cursorImageSource();
+  if (!url) {
+    const arrow = cursorUri(accent, false);
+    const point = cursorUri(lightenHex(accent, 0.4), true);
+    st.textContent = `body{cursor:${arrow},auto}\n${POINTER_SEL}{cursor:${point},pointer}`;
+    updateCursorPreview(null);
+    return;
+  }
+  try {
+    const data = await buildImageCursor(url, accent);
+    const s = CURSOR.size;
+    const hot = CURSOR.hot === 'center' ? [Math.round(s / 2), Math.round(s / 2)] : [1, 1];
+    const cur = `url("${data}") ${hot[0]} ${hot[1]}`;
+    const arrow = cursorUri(accent, false);
+    st.textContent = (CURSOR.scope === 'both' ? `body{cursor:${cur},auto}\n` : `body{cursor:${arrow},auto}\n`)
+      + `${POINTER_SEL}{cursor:${cur},pointer}`;
+    updateCursorPreview(data, s, hot);
+  } catch {
+    const arrow = cursorUri(accent, false);
+    st.textContent = `body{cursor:${arrow},auto}`;
+    updateCursorPreview(null);
+  }
+}
+function updateCursorPreview(data, s, hot) {
+  const img = document.getElementById('curPreview');
+  const info = document.getElementById('curInfo');
+  if (img) img.src = data || cursorUri('#888', false).replace(/^url\("|"\) \d+ \d+$/g, '');
+  if (info) info.textContent = data ? `${s}×${s} · 핫스팟 (${hot[0]}, ${hot[1]})` : '기본 화살표';
 }
 
 const ACCENTS = { blue: '#4c8bf5', purple: '#bd93f9', green: '#3fb950', red: '#e5484d', orange: '#f0a020', pink: '#ff79c6', cyan: '#22d3ee' };
@@ -692,12 +1039,14 @@ function addPane(cfg, placement) {
     </div>
     <div class="term"></div>
     <div class="compose">
+      <div class="chatlog"></div>
       <textarea rows="1" spellcheck="false" placeholder="메시지 입력…   Enter 전송 · Shift+Enter 줄바꿈"></textarea>
       <div class="crow">
         <button class="cbtn" data-act="esc" title="중단 (Esc)">Esc</button>
         <button class="cbtn" data-act="shifttab" title="모드 전환 (Shift+Tab)">모드</button>
         <button class="cbtn" data-act="clear" title="/clear 전송">/clear</button>
         <button class="cbtn" data-act="image" title="이미지 파일 경로 추가">이미지</button>
+        <button class="cbtn chatonly-btn" data-act="chatonly" title="터미널 접고 대화만 보기 / 되돌리기">대화만</button>
         <span class="chint">터미널 단축키·붙여넣기는 그대로 사용 가능</span>
         <button class="cbtn send" data-act="send">보내기</button>
       </div>
@@ -993,8 +1342,43 @@ function addPane(cfg, placement) {
         if (window.claudeHub && window.claudeHub.pickFile) {
           try { const p = await window.claudeHub.pickFile(); if (p) insertAtCursor(p + ' '); } catch {}
         } else { insertAtCursor(''); ta.focus(); }
+      } else if (act === 'chatonly') {
+        pane.classList.toggle('chatonly');
+        b.classList.toggle('on', pane.classList.contains('chatonly'));
+        refreshLog();
+        setTimeout(() => { try { fitAll(); } catch {} }, 60);
       }
     }));
+
+    // 캐릭터 테마 Lv3(풀캐릭터)에서만: 컴포즈 위에 대화가 말풍선으로 쌓인다.
+    // 세션 뷰어와 같은 /api/transcript 를 재사용한다.
+    const log = box.querySelector('.chatlog');
+    const bubble = (it) => {
+      if (it.role === 'user') return `<div class="cbub me"><span class="ctx">${escapeHtml(it.text || '')}</span></div>`;
+      if (it.role === 'tool_result') return '';
+      const tools = (it.tools || []).map((t) => `<div class="ctool">● ${escapeHtml(t.name)}${t.preview ? ' · ' + escapeHtml(t.preview) : ''}</div>`).join('');
+      const txt = it.text ? `<div class="cbub"><span class="cav"></span><span class="ctx">${escapeHtml(it.text)}</span></div>` : '';
+      return txt + tools;
+    };
+    let logBusy = false;
+    async function refreshLog() {
+      if (!log) return;
+      if (!document.body.contains(pane)) { clearInterval(logTimer); return; }   // 패널이 사라지면 폴링 정리
+      const wanted = document.body.classList.contains('lv3') && document.body.classList.contains('compose-on');
+      if (!wanted || logBusy) return;
+      logBusy = true;
+      try {
+        const r = await fetch(`/api/transcript?key=${encodeURIComponent(cfg.key)}`).then((x) => x.json());
+        if (!r.ready) { log.innerHTML = '<div class="cempty">첫 메시지 이후 표시됩니다…</div>'; return; }
+        const items = (r.items || []).slice(pane.classList.contains('chatonly') ? -40 : -10);
+        const html = items.map(bubble).join('');
+        if (html !== log.dataset.html) { log.innerHTML = html || '<div class="cempty">아직 메시지가 없습니다.</div>'; log.dataset.html = html; log.scrollTop = log.scrollHeight; }
+      } catch {} finally { logBusy = false; }
+    }
+    const logTimer = setInterval(refreshLog, 4000);
+    paneObj._refreshLog = refreshLog;
+    refreshLog();
+    updateComposePlaceholders(CHAR_MAP()[document.body.dataset.char] || null);
   })();
 
   pane.querySelector('.x').addEventListener('click', async (e) => {
@@ -1538,9 +1922,159 @@ document.querySelectorAll('#themePopover .popover-item').forEach((el) => {
 });
 setupPopover('themeBtn', 'themePopover');
 setupPopover('accentBtn', 'accentPopover');
-applyTheme(localStorage.getItem('cth_theme') || 'dark');
+setupPopover('cursorBtn', 'cursorPopover');
 buildAccentPicker();
-applyAccent(localStorage.getItem('cth_accent') || null);
+
+/* ---------- 캐릭터 테마 · 커서 UI 배선 ---------- */
+function segSelect(rowId, value) {
+  const row = document.getElementById(rowId);
+  if (!row) return;
+  row.querySelectorAll('button').forEach((b) => {
+    const v = b.dataset.mode || b.dataset.lv || b.dataset.src || b.dataset.fit || b.dataset.hot || b.dataset.tip || b.dataset.scope;
+    b.classList.toggle('on', String(v) === String(value));
+  });
+}
+function buildCharThemeList() {
+  const box = document.getElementById('charThemeList');
+  if (!box || !window.CHAR_THEMES) return;
+  box.innerHTML = window.CHAR_THEMES.map((t) => {
+    const a = charAssets(t.key);
+    const av = a.icon
+      ? `<img class="avatar" src="${a.icon}" alt="">`
+      : `<span class="swatch" style="background:${t.fallback}"></span>`;
+    return `<div class="popover-item" data-theme="${t.key}">${av}${t.name}<span class="ipname">${t.ip}</span></div>`;
+  }).join('');
+  box.querySelectorAll('.popover-item').forEach((el) => {
+    el.addEventListener('click', () => { applyTheme(el.dataset.theme); });
+  });
+  const cur = localStorage.getItem('cth_theme');
+  box.querySelectorAll('.popover-item').forEach((el) => el.classList.toggle('active', el.dataset.theme === cur));
+}
+document.getElementById('themeModeRow').addEventListener('click', (e) => {
+  const b = e.target.closest('button'); if (!b) return;
+  localStorage.setItem('cth_theme_mode', b.dataset.mode);
+  segSelect('themeModeRow', b.dataset.mode);
+  applyTheme(localStorage.getItem('cth_theme') || 'dark');
+});
+document.getElementById('themeLevelRow').addEventListener('click', (e) => {
+  const b = e.target.closest('button'); if (!b) return;
+  localStorage.setItem('cth_theme_level', b.dataset.lv);
+  segSelect('themeLevelRow', b.dataset.lv);
+  applyTheme(localStorage.getItem('cth_theme') || 'dark');
+});
+
+// 캐릭터 이미지 넣기 (클릭 · 드래그&드롭) → 서버의 theme-assets 폴더에 저장
+async function uploadThemeAsset(file, name) {
+  const dataUrl = await new Promise((res, rej) => {
+    const fr = new FileReader();
+    fr.onload = () => res(fr.result);
+    fr.onerror = rej;
+    fr.readAsDataURL(file);
+  });
+  const r = await fetch('/api/theme-assets', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name, dataUrl }),
+  }).then((x) => x.json());
+  if (r.error) throw new Error(r.error);
+  return r.file;
+}
+function extOf(file) {
+  const m = /\.(png|webp|jpe?g|gif|svg)$/i.exec(file.name || '');
+  return m ? m[0].toLowerCase() : (file.type === 'image/webp' ? '.webp' : '.png');
+}
+async function takeThemeImage(file) {
+  const key = document.body.dataset.char;
+  if (!key || !file) return;
+  const hint = document.getElementById('assetDropHint');
+  try {
+    if (hint) hint.textContent = '저장 중…';
+    const saved = await uploadThemeAsset(file, key + '-icon' + extOf(file));
+    // 얼굴 아이콘만 바꾸면 전신(팔레트 추출용)이 없는 경우가 있으므로 없으면 같이 저장
+    const t = (window.CHAR_THEME_MAP || {})[key];
+    if (t && !pickAsset(t.full)) await uploadThemeAsset(file, key + extOf(file));
+    // 새 이미지이므로 팔레트 캐시 무효화
+    Object.keys(palCache).forEach((k) => { if (k.includes(key)) delete palCache[k]; });
+    savePalCache();
+    await loadThemeAssets();
+    buildCharThemeList();
+    applyTheme(key);
+    if (hint) hint.textContent = saved + ' 저장됨';
+  } catch (e) {
+    if (hint) hint.textContent = '실패: ' + ((e && e.message) || e);
+  }
+}
+(function wireAssetDrop() {
+  const dz = document.getElementById('assetDrop');
+  if (!dz) return;
+  dz.addEventListener('click', () => {
+    const inp = document.createElement('input');
+    inp.type = 'file'; inp.accept = 'image/*';
+    inp.onchange = () => takeThemeImage(inp.files[0]);
+    inp.click();
+  });
+  dz.addEventListener('dragover', (e) => { e.preventDefault(); dz.classList.add('over'); });
+  dz.addEventListener('dragleave', () => dz.classList.remove('over'));
+  dz.addEventListener('drop', (e) => {
+    e.preventDefault(); dz.classList.remove('over');
+    takeThemeImage(e.dataTransfer.files[0]);
+  });
+})();
+
+// 커서 설정
+(function wireCursorUI() {
+  const rows = [['curSrcRow', 'src', 'cth_cursor_src'], ['curFitRow', 'fit', 'cth_cursor_fit'],
+    ['curHotRow', 'hot', 'cth_cursor_hotspot'], ['curTipRow', 'tip', 'cth_cursor_tip'],
+    ['curScopeRow', 'scope', 'cth_cursor_scope']];
+  rows.forEach(([id, attr, key]) => {
+    const row = document.getElementById(id);
+    if (!row) return;
+    row.addEventListener('click', (e) => {
+      const b = e.target.closest('button'); if (!b) return;
+      localStorage.setItem(key, b.dataset[attr]);
+      segSelect(id, b.dataset[attr]);
+      applyCursors();
+    });
+  });
+  const size = document.getElementById('curSize');
+  if (size) {
+    size.value = CURSOR.size;
+    const lab = document.getElementById('curSizeLabel');
+    if (lab) lab.textContent = CURSOR.size + 'px';
+    size.addEventListener('input', () => {
+      localStorage.setItem('cth_cursor_size', size.value);
+      if (lab) lab.textContent = size.value + 'px';
+      applyCursors();
+    });
+  }
+  const f = document.getElementById('curFile');
+  if (f) f.addEventListener('change', async () => {
+    const file = f.files[0]; if (!file) return;
+    try {
+      const saved = await uploadThemeAsset(file, 'cursor-custom' + extOf(file));
+      localStorage.setItem('cth_cursor_custom_file', saved);
+      localStorage.setItem('cth_cursor_src', 'custom');
+      segSelect('curSrcRow', 'custom');
+      await loadThemeAssets();
+      applyCursors();
+    } catch (e) { showBanner('커서 이미지 저장 실패: ' + ((e && e.message) || e)); }
+  });
+  segSelect('curSrcRow', CURSOR.src);
+  segSelect('curFitRow', CURSOR.fit);
+  segSelect('curHotRow', CURSOR.hot);
+  segSelect('curTipRow', CURSOR.tip ? '1' : '0');
+  segSelect('curScopeRow', CURSOR.scope);
+})();
+
+// 테마 적용 — 이미지 목록을 먼저 받아와야 캐릭터 테마가 아이콘/팔레트를 쓸 수 있다.
+loadPalCache();
+applyUiFont(localStorage.getItem('cth_ui_font') || DEFAULT_UI_FONT, false);
+segSelect('themeModeRow', themeMode());
+segSelect('themeLevelRow', String(themeLevel()));
+loadThemeAssets().then(() => {
+  buildCharThemeList();
+  applyTheme(localStorage.getItem('cth_theme') || 'dark');
+  applyAccent(localStorage.getItem('cth_accent') || null);
+});
 
 // 도움말 오버레이 (단축키 · 명령어)
 (function initHelp() {
@@ -1583,6 +2117,22 @@ document.addEventListener('keydown', (e) => {
 });
 applyFontSize(termFontSize);
 
+// 화면(UI) 글꼴 선택
+(function initUiFont() {
+  const sel = document.getElementById('uiFontFamily');
+  if (!sel || !window.UI_FONTS) return;
+  sel.innerHTML = window.UI_FONTS.map((f) => `<option value="${f.css.replace(/"/g, '&quot;')}">${f.label}</option>`).join('');
+  if (!window.UI_FONTS.some((f) => f.css === uiFontFamily)) uiFontFamily = window.UI_FONTS[0].css;
+  sel.value = uiFontFamily;
+  sel.addEventListener('change', () => {
+    applyUiFont(sel.value);
+    // 캐릭터 테마 Lv2+ 는 테마 추천 글꼴을 쓰므로, 직접 고르면 그 선택이 우선하도록 다시 적용
+    applyTheme(localStorage.getItem('cth_theme') || 'dark');
+    applyUiFont(sel.value);
+  });
+  markMissingFonts(sel, window.UI_FONTS);
+})();
+
 // 글꼴 선택 채우기 + 배선
 (function initFontFamily() {
   const sel = document.getElementById('fontFamily');
@@ -1594,6 +2144,7 @@ applyFontSize(termFontSize);
   }
   sel.value = termFontFamily;
   sel.addEventListener('change', () => applyFontFamily(sel.value));
+  markMissingFonts(sel, FONT_FAMILIES);
 })();
 
 ensureNotifyPermission();

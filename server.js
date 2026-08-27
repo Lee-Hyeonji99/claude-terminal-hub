@@ -72,11 +72,13 @@ function listSessionsScoped(profileParam) {
 }
 
 const app = express();
-app.use(express.json({ limit: '256kb' }));
+app.use(express.json({ limit: '12mb' })); // 테마 이미지 업로드(dataUrl) 때문에 여유있게
 
 // ---- 전역 상태(세션 이름/프로필) — 앱 전용 폴더에 저장(브라우저·계정 무관) ----
 const HUB_DATA_DIR = path.join(os.homedir(), '.claude-terminal-hub');
 const STATE_FILE = path.join(HUB_DATA_DIR, 'state.json');
+// 캐릭터 테마 이미지 폴더 — 저장소/설치파일에 포함하지 않고 사용자 PC 에만 둔다.
+const THEME_ASSETS_DIR = path.join(HUB_DATA_DIR, 'theme-assets');
 function readState() {
   try { return JSON.parse(fs.readFileSync(STATE_FILE, 'utf8')); } catch { return {}; }
 }
@@ -91,6 +93,40 @@ app.use(express.static(path.join(__dirname, 'public'), {
   etag: false,
   setHeaders: (res) => res.setHeader('Cache-Control', 'no-store'), // 항상 최신 프론트 로드
 }));
+// 캐릭터 테마 이미지 (사용자 로컬 폴더). 없으면 404 → 프론트가 알아서 아이콘을 숨긴다.
+app.use('/theme-assets', express.static(THEME_ASSETS_DIR, {
+  etag: false,
+  setHeaders: (res) => res.setHeader('Cache-Control', 'no-store'),
+}));
+
+const ASSET_EXT_RE = /\.(png|webp|jpe?g|gif|svg)$/i;
+
+// 폴더에 어떤 이미지가 있는지 — 프론트가 테마별로 쓸 파일을 고른다.
+app.get('/api/theme-assets', (_req, res) => {
+  let files = [];
+  try { files = fs.readdirSync(THEME_ASSETS_DIR).filter((f) => ASSET_EXT_RE.test(f)); } catch {}
+  res.json({ dir: THEME_ASSETS_DIR, files });
+});
+
+// 앱에서 드래그&드롭 / 파일 선택으로 넣은 이미지를 저장.
+// body = { name: 'hachiware-icon.png', dataUrl: 'data:image/png;base64,...' }
+app.post('/api/theme-assets', (req, res) => {
+  const { name, dataUrl } = req.body || {};
+  const safe = String(name || '').replace(/[^a-zA-Z0-9._-]/g, '');
+  if (!safe || !ASSET_EXT_RE.test(safe)) return res.status(400).json({ error: '파일명이 올바르지 않습니다 (png/webp/jpg/gif/svg)' });
+  const m = /^data:image\/[a-z0-9.+-]+;base64,(.+)$/i.exec(String(dataUrl || ''));
+  if (!m) return res.status(400).json({ error: '이미지 데이터가 올바르지 않습니다' });
+  const buf = Buffer.from(m[1], 'base64');
+  if (buf.length > 8 * 1024 * 1024) return res.status(413).json({ error: '이미지가 너무 큽니다 (8MB 제한)' });
+  try {
+    fs.mkdirSync(THEME_ASSETS_DIR, { recursive: true });
+    fs.writeFileSync(path.join(THEME_ASSETS_DIR, safe), buf);
+    res.json({ ok: true, file: safe });
+  } catch (e) {
+    res.status(500).json({ error: String((e && e.message) || e) });
+  }
+});
+
 app.use('/vendor/xterm', express.static(path.join(__dirname, 'node_modules/@xterm/xterm')));
 app.use('/vendor/addon-fit', express.static(path.join(__dirname, 'node_modules/@xterm/addon-fit')));
 app.use('/vendor/addon-canvas', express.static(path.join(__dirname, 'node_modules/@xterm/addon-canvas')));
