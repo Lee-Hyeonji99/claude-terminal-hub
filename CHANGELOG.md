@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.14.1] - 2026-08-27
+
+### Fixed
+- **릴리즈가 draft 로 멈춰 배포가 안 되던 문제**: `electron-builder` 가 설치파일을 올린 뒤에도 릴리즈가 draft 로 남아 사용자에게 보이지 않고 auto-update 도 잡지 못했음. CI 워크플로(win/mac)에 `Publish release (draft 해제)` 스텝을 추가해 **태그 push 만으로 정식 발행까지 완료**되도록 수정.
+
+### Changed
+- `CLAUDE.md` 에 배포(릴리즈 발행) 절차 문서화 — 발행 확인 방법과 실패 시 폴백 포함.
+
 ## [1.14.0] - 2026-08-27
 
 ### Added
