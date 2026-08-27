@@ -3,12 +3,11 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>캐릭터 테마 · 폰트 개편 시안 — Claude Terminal Hub</title>
+<title>캐릭터 테마 · 폰트 개편 시안 v2 — Claude Terminal Hub</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Fira+Code:wght@400;600&family=IBM+Plex+Mono:wght@400;600&family=Noto+Sans+KR:wght@400;600;700&family=Gowun+Dodum&family=Jua&family=Gaegu:wght@400;700&family=Nanum+Gothic+Coding:wght@400;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Fira+Code:wght@400;600&family=Noto+Sans+KR:wght@400;600;700&family=Gowun+Dodum&family=Jua&family=Gaegu:wght@400;700&family=Nanum+Gothic+Coding:wght@400;700&display=swap" rel="stylesheet">
 <style>
-/* ================= 문서 셸 (앱 다크 톤) ================= */
 :root{
   --doc-bg:#07080c; --doc-panel:#12151f; --doc-head:#1a1e2b; --doc-border:#262c3d;
   --doc-text:#d7dbe6; --doc-muted:#8a91a5; --doc-accent:#4c8bf5; --doc-new:#f0a020;
@@ -22,10 +21,10 @@ body{background:var(--doc-bg);color:var(--doc-text);font-family:var(--ui);font-s
 .wrap{max-width:1240px;margin:0 auto;padding:28px 20px 90px}
 h1{font-size:24px;margin:0 0 6px;font-weight:700;letter-spacing:-.2px}
 h1 b{color:var(--doc-accent)}
-.lead{color:var(--doc-muted);margin:0 0 28px;font-size:13.5px}
+.lead{color:var(--doc-muted);margin:0 0 26px;font-size:13.5px}
 h2{font-size:17px;margin:0 0 4px;display:flex;align-items:center;gap:10px}
 h2 .n{width:24px;height:24px;flex:none;border-radius:8px;background:var(--doc-accent);color:#fff;font-size:12px;font-weight:700;display:grid;place-items:center}
-h3{font-size:13.5px;margin:24px 0 8px;color:var(--doc-text)}
+h3{font-size:13.5px;margin:24px 0 8px}
 section{margin:0 0 44px;padding:22px;background:var(--doc-panel);border:1px solid var(--doc-border);border-radius:16px}
 .sub{color:var(--doc-muted);font-size:12.5px;margin:2px 0 18px 34px}
 p{margin:0 0 10px}
@@ -40,122 +39,130 @@ th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--doc-border)
 th{color:var(--doc-muted);font-weight:600;font-size:11.5px;background:var(--doc-head)}
 .callout{background:var(--doc-head);border:1px solid var(--doc-border);border-left:3px solid var(--doc-new);border-radius:10px;padding:12px 14px;font-size:12.5px;margin:14px 0}
 .callout b{color:var(--doc-new)}
-.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:14px}
-.grid3{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px}
+.callout.info{border-left-color:var(--doc-accent)} .callout.info b{color:var(--doc-accent)}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(330px,1fr));gap:14px}
+.card{background:var(--doc-head);border:1px solid var(--doc-border);border-radius:14px;padding:16px;display:flex;flex-direction:column;gap:10px}
+.card h4{margin:0;font-size:13px;display:flex;align-items:center;gap:8px}
+.card .d{color:var(--doc-muted);font-size:12px;margin:0}
+.pros{font-size:12px;color:var(--doc-muted);margin:0;padding-left:16px}
+.pros li{margin:3px 0}
 
-/* ================= 컨트롤 바 ================= */
+/* 컨트롤 */
 .controls{display:flex;flex-wrap:wrap;gap:18px;align-items:flex-start;background:var(--doc-head);border:1px solid var(--doc-border);border-radius:12px;padding:14px;margin-bottom:16px}
 .cgroup{display:flex;flex-direction:column;gap:7px}
 .cgroup>span{font-size:10.5px;color:var(--doc-muted);font-weight:700;letter-spacing:.4px}
 .cbtns{display:flex;gap:6px;flex-wrap:wrap}
-.chip{display:inline-flex;align-items:center;gap:7px;padding:6px 11px;border-radius:999px;border:1px solid var(--doc-border);background:var(--doc-panel);color:var(--doc-muted);font-size:12px;font-family:inherit;cursor:pointer;transition:.12s}
+.chip{display:inline-flex;align-items:center;gap:8px;padding:4px 12px 4px 4px;border-radius:999px;border:1px solid var(--doc-border);background:var(--doc-panel);color:var(--doc-muted);font-size:12px;font-family:inherit;cursor:pointer;transition:.12s;text-align:left}
+.chip.plain{padding:6px 12px}
 .chip:hover{border-color:var(--doc-accent);color:var(--doc-text)}
 .chip.on{background:#fff;color:#111;border-color:#fff;font-weight:700}
-.chip svg{width:22px;height:22px;flex:none}
-.chip small{font-size:10px;opacity:.75}
+.chip img{width:32px;height:32px;border-radius:50%;object-fit:cover;object-position:50% 8%;background:#fff;flex:none}
+.chip small{font-size:10px;opacity:.7;display:block;line-height:1.2}
 
-/* ================= 라이브 앱 목업 ================= */
-.app{
-  --radius:8px;
-  border-radius:14px;overflow:hidden;border:1px solid var(--border);
-  background:var(--bg);color:var(--text);font-family:var(--appui);
-  display:flex;flex-direction:column;height:540px;position:relative;
-  transition:background .18s,color .18s,border-color .18s;
-}
+/* 라이브 앱 목업 */
+.app{--radius:8px;border-radius:14px;overflow:hidden;border:1px solid var(--border);background:var(--bg);color:var(--text);
+  font-family:var(--appui);display:flex;flex-direction:column;height:560px;position:relative;transition:background .18s,color .18s}
 .app[data-level="2"],.app[data-level="3"]{--radius:14px}
-.app .patt{position:absolute;inset:0;pointer-events:none;opacity:0;transition:opacity .2s;
-  background-image:radial-gradient(circle at 10px 10px, var(--accent) 2px, transparent 2.4px);background-size:32px 32px}
-.app[data-level="3"] .patt{opacity:.14}
-.app .ahead{display:flex;align-items:center;gap:10px;padding:9px 14px;background:var(--head);border-bottom:1px solid var(--border);flex:none;position:relative;z-index:1}
-.app .brand{font-weight:700;font-size:13.5px;display:flex;align-items:center;gap:8px}
+.app .patt{position:absolute;inset:0;pointer-events:none;opacity:0;transition:opacity .2s;background-repeat:repeat;background-size:110px 110px}
+.app[data-level="3"] .patt{opacity:.06}
+.app .ahead{display:flex;align-items:center;gap:10px;padding:8px 14px;background:var(--head);border-bottom:1px solid var(--border);flex:none;position:relative;z-index:1}
+.app .brand{font-weight:700;font-size:13.5px;display:flex;align-items:center;gap:9px}
 .app .brand em{font-style:normal;color:var(--accent)}
 .app .sp{flex:1}
-.app .hbtn{border:1px solid var(--border);background:var(--panel);color:var(--muted);border-radius:var(--radius);padding:4px 9px;font-size:11px;font-family:inherit;cursor:pointer}
+.app .hbtn{border:1px solid var(--border);background:var(--panel);color:var(--muted);border-radius:var(--radius);padding:4px 9px;font-size:11px;font-family:inherit;cursor:pointer;display:inline-flex;align-items:center;gap:6px}
 .app .hbtn.acc{border-color:var(--accent);color:var(--accent)}
 .app .abody{flex:1;display:flex;min-height:0;position:relative;z-index:1}
-.app .lnb{width:196px;flex:none;background:var(--panel);border-right:1px solid var(--border);padding:10px;display:flex;flex-direction:column;gap:5px;overflow:hidden}
+.app .lnb{width:200px;flex:none;background:var(--panel);border-right:1px solid var(--border);padding:10px;display:flex;flex-direction:column;gap:5px;overflow:hidden}
 .app .lnb .lt{font-size:10.5px;color:var(--muted);font-weight:700;padding:2px 4px}
-.app .sitem{display:flex;align-items:center;gap:8px;padding:7px 9px;border-radius:var(--radius);font-size:11.5px;color:var(--muted);border:1px solid transparent;white-space:nowrap;overflow:hidden}
+.app .sitem{display:flex;align-items:center;gap:8px;padding:6px 9px;border-radius:var(--radius);font-size:11.5px;color:var(--muted);border:1px solid transparent;white-space:nowrap;overflow:hidden}
 .app .sitem.on{background:var(--head);color:var(--text);border-color:var(--accent)}
-.app .sitem .av{width:22px;height:22px;flex:none;border-radius:50%;background:var(--bg);display:grid;place-items:center;overflow:hidden}
-.app .sitem .av svg{width:20px;height:20px}
-.app[data-level="1"] .sitem .av{background:var(--accent);opacity:.55}
-.app[data-level="1"] .sitem .av svg{display:none}
 .app .stage{flex:1;min-width:0;display:flex;flex-direction:column;padding:10px;gap:10px}
 .app .pane{flex:1;min-height:0;display:flex;flex-direction:column;background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden}
-.app .pbar{display:flex;align-items:center;gap:8px;padding:6px 10px;background:var(--head);border-bottom:1px solid var(--border);font-size:11.5px}
+.app .pbar{display:flex;align-items:center;gap:8px;padding:5px 10px;background:var(--head);border-bottom:1px solid var(--border);font-size:11.5px}
 .app .pbar .pd{width:8px;height:8px;border-radius:50%;background:var(--ok);flex:none}
 .app .pbar .px{margin-left:auto;color:var(--muted);font-size:11px}
-.app .term{flex:1;min-height:0;background:var(--termbg);color:var(--termfg);font-family:var(--appmono);font-size:11.5px;line-height:1.7;padding:10px 12px;overflow:hidden;white-space:pre-wrap}
-.app .term .a{color:var(--accent)}
-.app .term .g{color:var(--ok)}
-.app .term .m{color:var(--muted)}
-.app .term .y{color:var(--accent2)}
+.app .term{flex:1;min-height:0;background:var(--termbg);color:var(--termfg);font-family:var(--appmono);font-size:11.5px;line-height:1.7;padding:10px 12px;overflow:hidden;white-space:pre-wrap;position:relative}
+.app .term .a{color:var(--accent)} .app .term .g{color:var(--ok)}
+.app .term .m{color:var(--muted)} .app .term .y{color:var(--accent2)}
+.app .watermark{position:absolute;right:12px;bottom:8px;width:110px;opacity:0;transition:opacity .2s;pointer-events:none}
+.app[data-level="3"] .watermark{opacity:.18}
 .app .cursorline{display:inline-block;width:7px;height:13px;background:var(--accent);vertical-align:-2px;animation:blink 1.1s steps(1) infinite}
 @keyframes blink{50%{opacity:0}}
+.av{border-radius:50%;object-fit:cover;object-position:50% 8%;background:#fff;flex:none;border:1px solid var(--border)}
+.av.s{width:22px;height:22px} .av.m{width:28px;height:28px} .av.l{width:32px;height:32px}
+.app[data-level="1"] .av{display:none}
 .app .compose{flex:none;background:var(--head);border:1px solid var(--border);border-radius:var(--radius);padding:8px}
+.app[data-level="3"] .compose{border-radius:18px}
 .app .cbar{display:flex;gap:6px;align-items:center}
 .app .cin{flex:1;background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);padding:7px 10px;color:var(--muted);font-size:11.5px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.app[data-level="3"] .cin{border-radius:999px;padding:9px 14px}
 .app .csend{background:var(--accent);color:var(--onacc);border:none;border-radius:var(--radius);padding:7px 13px;font-size:11.5px;font-weight:700;font-family:inherit;cursor:pointer;flex:none}
+.app[data-level="3"] .csend{border-radius:50%;width:36px;height:36px;padding:0;display:grid;place-items:center;font-size:14px}
 .app .chatlog{display:none;flex-direction:column;gap:8px;padding:2px 2px 10px}
 .app[data-level="3"] .chatlog{display:flex}
-.app[data-level="3"] .compose{border-radius:18px}
-.app[data-level="3"] .cin{border-radius:999px;padding:9px 14px}
-.app[data-level="3"] .csend{border-radius:999px;width:36px;height:36px;padding:0;display:grid;place-items:center;font-size:14px}
-.app .bub{display:flex;align-items:flex-end;gap:7px;max-width:80%}
-.app .bub .av{width:30px;height:30px;flex:none;border-radius:50%;background:var(--panel);border:1px solid var(--border);display:grid;place-items:center;overflow:hidden}
-.app .bub .av svg{width:28px;height:28px}
-.app .bub .txt{background:var(--panel);border:1px solid var(--border);border-radius:14px 14px 14px 4px;padding:7px 11px;font-size:11.5px;color:var(--text)}
-.app .bub.me{margin-left:auto;flex-direction:row-reverse}
-.app .bub.me .txt{background:var(--accent);color:var(--onacc);border-color:transparent;border-radius:14px 14px 4px 14px;font-weight:600}
-.app .mascot{width:26px;height:26px;flex:none;display:inline-flex}
-.app[data-level="1"] .mascot{display:none}
+.bub{display:flex;align-items:flex-end;gap:7px;max-width:80%}
+.bub .txt{background:var(--panel);border:1px solid var(--border);border-radius:14px 14px 14px 4px;padding:7px 11px;font-size:11.5px;color:var(--text)}
+.bub.me{margin-left:auto;flex-direction:row-reverse}
+.bub.me .txt{background:var(--accent);color:var(--onacc);border-color:transparent;border-radius:14px 14px 4px 14px;font-weight:600}
 .app .quirk{font-size:11px;color:var(--accent);font-weight:700;background:var(--panel);border:1px solid var(--border);border-radius:999px;padding:2px 9px}
 .app[data-level="1"] .quirk,.app[data-level="2"] .quirk{display:none}
 
-/* ================= 팔레트 (다크) ================= */
-.app{--bg:#0c0e14;--panel:#12151f;--head:#1a1e2b;--border:#262c3d;--text:#d7dbe6;--muted:#8a91a5;--accent:#4c8bf5;--accent2:#9ec5ff;--ok:#3fb950;--termbg:#0b0d13;--termfg:#d7dbe6;--onacc:#ffffff;
+/* 팔레트 */
+.app,.skin{--bg:#0c0e14;--panel:#12151f;--head:#1a1e2b;--border:#262c3d;--text:#d7dbe6;--muted:#8a91a5;--accent:#4c8bf5;--accent2:#9ec5ff;--ok:#3fb950;--termbg:#0b0d13;--termfg:#d7dbe6;--onacc:#fff;
   --appui:"Noto Sans KR","Segoe UI",system-ui,sans-serif;--appmono:"JetBrains Mono",Consolas,monospace}
-.app[data-ch="hachiware"]{--onacc:#06243a;--bg:#0e1626;--panel:#131f36;--head:#17273f;--border:#23405f;--text:#e4f0ff;--muted:#8aa4c4;--accent:#55b6f5;--accent2:#a8dcff;--ok:#5fd6a8;--termbg:#0b1220;--termfg:#dbe9fb}
-.app[data-ch="usagi"]{--onacc:#2b2003;--bg:#191204;--panel:#221a08;--head:#2b210a;--border:#4a3a12;--text:#fff3d6;--muted:#b9a06a;--accent:#ffcf3f;--accent2:#ffe89a;--ok:#a8d24a;--termbg:#14100a;--termfg:#ffeec9}
-.app[data-ch="momonga"]{--onacc:#3a1030;--bg:#191225;--panel:#211830;--head:#291d3c;--border:#443160;--text:#f4e9fb;--muted:#a893c0;--accent:#ff8fd0;--accent2:#c4a7f5;--ok:#7fe0c4;--termbg:#150f1f;--termfg:#f0e4fa}
-.app[data-ch="rakko"]{--onacc:#241a05;--bg:#14130f;--panel:#1c1a13;--head:#24211a;--border:#423b2c;--text:#f6ecd7;--muted:#ab9c7b;--accent:#f0c46a;--accent2:#d8b877;--ok:#9ec46a;--termbg:#100f0b;--termfg:#f2e7cf}
-.app[data-ch="flurry"]{--onacc:#40060f;--bg:#1a1215;--panel:#221619;--head:#2a1b1f;--border:#4b2b31;--text:#fdeef0;--muted:#bd9298;--accent:#ff6f7d;--accent2:#ffb3bb;--ok:#7fd6a0;--termbg:#150f11;--termfg:#fbe7ea}
-.app[data-ch="rasher"]{--onacc:#ffffff;--bg:#17101a;--panel:#1e1522;--head:#251a2a;--border:#442f4d;--text:#f2e7f5;--muted:#a892b0;--accent:#d1516b;--accent2:#a06ad0;--ok:#86cf9a;--termbg:#120d15;--termfg:#efe2f2}
-.app[data-ch="marshal"]{--onacc:#40142a;--bg:#10131d;--panel:#161a27;--head:#1b2132;--border:#2e3a58;--text:#eef2fb;--muted:#93a0c0;--accent:#ff9db8;--accent2:#6f8ae0;--ok:#7fd6a0;--termbg:#0d1017;--termfg:#e9eefb}
+[data-ch="hachiware"]{--bg:#0e1626;--panel:#131f36;--head:#17273f;--border:#23405f;--text:#e4f0ff;--muted:#8aa4c4;--accent:#55b6f5;--accent2:#a8dcff;--ok:#5fd6a8;--termbg:#0b1220;--termfg:#dbe9fb;--onacc:#06243a}
+[data-ch="usagi"]{--bg:#191204;--panel:#221a08;--head:#2b210a;--border:#4a3a12;--text:#fff3d6;--muted:#b9a06a;--accent:#ffcf3f;--accent2:#ffe89a;--ok:#a8d24a;--termbg:#14100a;--termfg:#ffeec9;--onacc:#2b2003}
+[data-ch="momonga"]{--bg:#191225;--panel:#211830;--head:#291d3c;--border:#443160;--text:#f4e9fb;--muted:#a893c0;--accent:#ff8fd0;--accent2:#c4a7f5;--ok:#7fe0c4;--termbg:#150f1f;--termfg:#f0e4fa;--onacc:#3a1030}
+[data-ch="rakko"]{--bg:#14130f;--panel:#1c1a13;--head:#24211a;--border:#423b2c;--text:#f6ecd7;--muted:#ab9c7b;--accent:#f0c46a;--accent2:#d8b877;--ok:#9ec46a;--termbg:#100f0b;--termfg:#f2e7cf;--onacc:#241a05}
+[data-ch="flurry"]{--bg:#1a1215;--panel:#221619;--head:#2a1b1f;--border:#4b2b31;--text:#fdeef0;--muted:#bd9298;--accent:#ff6f7d;--accent2:#ffb3bb;--ok:#7fd6a0;--termbg:#150f11;--termfg:#fbe7ea;--onacc:#40060f}
+[data-ch="rasher"]{--bg:#17101a;--panel:#1e1522;--head:#251a2a;--border:#442f4d;--text:#f2e7f5;--muted:#a892b0;--accent:#d1516b;--accent2:#a06ad0;--ok:#86cf9a;--termbg:#120d15;--termfg:#efe2f2;--onacc:#fff}
+[data-ch="marshal"]{--bg:#10131d;--panel:#161a27;--head:#1b2132;--border:#2e3a58;--text:#eef2fb;--muted:#93a0c0;--accent:#ff9db8;--accent2:#6f8ae0;--ok:#7fd6a0;--termbg:#0d1017;--termfg:#e9eefb;--onacc:#40142a}
+[data-mode="pastel"][data-ch="hachiware"]{--bg:#eaf4ff;--panel:#fff;--head:#dcecff;--border:#bcd8f5;--text:#17293f;--muted:#64809f;--accent:#2f8fd8;--accent2:#7cc3f0;--ok:#2aa07a;--termbg:#12233a;--termfg:#dbe9fb;--onacc:#fff}
+[data-mode="pastel"][data-ch="usagi"]{--bg:#fff8e3;--panel:#fffdf7;--head:#ffefbd;--border:#f0d999;--text:#3a2c08;--muted:#8a7440;--accent:#e6a700;--accent2:#c98f00;--ok:#6d9c1f;--termbg:#241c08;--termfg:#ffeec9;--onacc:#2b2003}
+[data-mode="pastel"][data-ch="momonga"]{--bg:#fbeffb;--panel:#fffaff;--head:#f6e2f8;--border:#e5c8ec;--text:#331f3d;--muted:#7d6489;--accent:#d2569f;--accent2:#9a7ae0;--ok:#2fa189;--termbg:#241a30;--termfg:#f0e4fa;--onacc:#fff}
+[data-mode="pastel"][data-ch="rakko"]{--bg:#f8f1e2;--panel:#fffdf8;--head:#efe4cd;--border:#dcccae;--text:#33291a;--muted:#7d6d51;--accent:#c08b2b;--accent2:#8a7a5c;--ok:#6f9a3a;--termbg:#1e1a12;--termfg:#f2e7cf;--onacc:#241a05}
+[data-mode="pastel"][data-ch="flurry"]{--bg:#fff1f2;--panel:#fff;--head:#ffe0e3;--border:#f5c4c9;--text:#3a2226;--muted:#8c6469;--accent:#e04a5b;--accent2:#ff9aa5;--ok:#2f9c6b;--termbg:#26161a;--termfg:#fbe7ea;--onacc:#fff}
+[data-mode="pastel"][data-ch="rasher"]{--bg:#f6edf7;--panel:#fffbff;--head:#ecdcf0;--border:#d6bede;--text:#2c1f31;--muted:#715f77;--accent:#b03650;--accent2:#7f49b0;--ok:#379a5c;--termbg:#1f1424;--termfg:#efe2f2;--onacc:#fff}
+[data-mode="pastel"][data-ch="marshal"]{--bg:#f2f5fd;--panel:#fff;--head:#e4eaf9;--border:#c8d3ee;--text:#1e2740;--muted:#6a7797;--accent:#e0708f;--accent2:#41539b;--ok:#2f9c6b;--termbg:#171d2c;--termfg:#e9eefb;--onacc:#fff}
 
-/* ================= 팔레트 (파스텔 = 라이트 UI + 잉크 터미널) ================= */
-.app[data-mode="pastel"][data-ch="hachiware"]{--onacc:#ffffff;--bg:#eaf4ff;--panel:#ffffff;--head:#dcecff;--border:#bcd8f5;--text:#17293f;--muted:#64809f;--accent:#2f8fd8;--accent2:#7cc3f0;--ok:#2aa07a;--termbg:#12233a;--termfg:#dbe9fb}
-.app[data-mode="pastel"][data-ch="usagi"]{--onacc:#2b2003;--bg:#fff8e3;--panel:#fffdf7;--head:#ffefbd;--border:#f0d999;--text:#3a2c08;--muted:#8a7440;--accent:#e6a700;--accent2:#c98f00;--ok:#6d9c1f;--termbg:#241c08;--termfg:#ffeec9}
-.app[data-mode="pastel"][data-ch="momonga"]{--onacc:#ffffff;--bg:#fbeffb;--panel:#fffaff;--head:#f6e2f8;--border:#e5c8ec;--text:#331f3d;--muted:#7d6489;--accent:#d2569f;--accent2:#9a7ae0;--ok:#2fa189;--termbg:#241a30;--termfg:#f0e4fa}
-.app[data-mode="pastel"][data-ch="rakko"]{--onacc:#241a05;--bg:#f8f1e2;--panel:#fffdf8;--head:#efe4cd;--border:#dcccae;--text:#33291a;--muted:#7d6d51;--accent:#c08b2b;--accent2:#8a7a5c;--ok:#6f9a3a;--termbg:#1e1a12;--termfg:#f2e7cf}
-.app[data-mode="pastel"][data-ch="flurry"]{--onacc:#ffffff;--bg:#fff1f2;--panel:#ffffff;--head:#ffe0e3;--border:#f5c4c9;--text:#3a2226;--muted:#8c6469;--accent:#e04a5b;--accent2:#ff9aa5;--ok:#2f9c6b;--termbg:#26161a;--termfg:#fbe7ea}
-.app[data-mode="pastel"][data-ch="rasher"]{--onacc:#ffffff;--bg:#f6edf7;--panel:#fffbff;--head:#ecdcf0;--border:#d6bede;--text:#2c1f31;--muted:#715f77;--accent:#b03650;--accent2:#7f49b0;--ok:#379a5c;--termbg:#1f1424;--termfg:#efe2f2}
-.app[data-mode="pastel"][data-ch="marshal"]{--onacc:#ffffff;--bg:#f2f5fd;--panel:#ffffff;--head:#e4eaf9;--border:#c8d3ee;--text:#1e2740;--muted:#6a7797;--accent:#e0708f;--accent2:#41539b;--ok:#2f9c6b;--termbg:#171d2c;--termfg:#e9eefb}
-
-/* ================= 팔레트 스와치 ================= */
-.pal{display:flex;border-radius:10px;overflow:hidden;border:1px solid var(--doc-border);height:36px;margin-top:12px}
+.pal{display:flex;border-radius:10px;overflow:hidden;border:1px solid var(--doc-border);height:34px;margin-top:12px}
 .pal i{flex:1}
 .palrow{display:flex;gap:14px;font-size:11px;color:var(--doc-muted);margin-top:6px;flex-wrap:wrap}
 .palrow span{font-family:var(--mono)}
 
-/* ================= 카드 ================= */
-.card{background:var(--doc-head);border:1px solid var(--doc-border);border-radius:14px;padding:16px;display:flex;flex-direction:column;gap:10px}
-.card h4{margin:0;font-size:13px;display:flex;align-items:center;gap:8px}
-.card .d{color:var(--doc-muted);font-size:12px;margin:0}
-.zone{border:1px dashed var(--doc-border);border-radius:10px;background:#0d1017;min-height:88px;display:grid;place-items:center;text-align:center;color:var(--doc-muted);font-size:12px;padding:10px}
-.zone b{color:var(--doc-text)}
-.cursorart{display:flex;gap:16px;align-items:center;justify-content:center;padding:4px 0}
-.cursorart svg{filter:drop-shadow(0 2px 3px rgba(0,0,0,.55))}
-.pros{font-size:12px;color:var(--doc-muted);margin:0;padding-left:16px}
-.pros li{margin:3px 0}
-.pick{margin-top:auto;font-size:11.5px;color:var(--doc-new);font-weight:700}
+/* 에셋 슬롯 */
+.slots{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px}
+.slot{background:var(--doc-panel);border:1px dashed var(--doc-border);border-radius:12px;padding:12px;text-align:center;transition:.15s;cursor:pointer}
+.slot.over{border-color:var(--doc-accent);background:#151d30}
+.slot img{width:74px;height:74px;object-fit:contain;display:block;margin:0 auto 8px;border-radius:10px}
+.slot .sn{font-size:12px;font-weight:700}
+.slot .sf{font-size:10.5px;color:var(--doc-muted);font-family:var(--mono);word-break:break-all}
+.slot .rep{font-size:10.5px;color:var(--doc-accent);margin-top:5px}
 
-/* ================= 폰트 ================= */
+/* 커서 스튜디오 */
+.studio{display:grid;grid-template-columns:minmax(280px,340px) 1fr;gap:16px}
+@media(max-width:820px){.studio{grid-template-columns:1fr}}
+.knobs{background:var(--doc-head);border:1px solid var(--doc-border);border-radius:12px;padding:14px;display:flex;flex-direction:column;gap:14px}
+.knob{display:flex;flex-direction:column;gap:6px}
+.knob>label{font-size:11px;color:var(--doc-muted);font-weight:700;display:flex;justify-content:space-between}
+.knob input[type=range]{width:100%;accent-color:var(--doc-accent)}
+.knob .seg{display:flex;gap:5px;flex-wrap:wrap}
+.knob .seg button{flex:1;min-width:66px;padding:6px 8px;font-size:11px;border-radius:8px;border:1px solid var(--doc-border);background:var(--doc-panel);color:var(--doc-muted);cursor:pointer;font-family:inherit}
+.knob .seg button.on{background:#fff;color:#111;border-color:#fff;font-weight:700}
+.knob input[type=file]{font-size:11px;color:var(--doc-muted)}
+.playground{background:#0d1017;border:1px dashed var(--doc-border);border-radius:12px;padding:18px;display:flex;flex-direction:column;gap:14px;min-height:300px}
+.pgrow{display:flex;gap:12px;flex-wrap:wrap}
+.pgbox{flex:1;min-width:150px;border:1px solid var(--doc-border);border-radius:10px;padding:16px;text-align:center;font-size:12px;color:var(--doc-muted);background:#12151f}
+.pgbox b{color:var(--doc-text);display:block;margin-bottom:4px}
+.preview-cursor{display:flex;align-items:center;gap:16px;padding:12px;background:#12151f;border:1px solid var(--doc-border);border-radius:10px}
+.preview-cursor img{image-rendering:pixelated;border:1px solid var(--doc-border);border-radius:8px;
+  background:repeating-conic-gradient(#1a1e2b 0 25%,#12151f 0 50%) 0 0/16px 16px;flex:none}
+
+/* 폰트 */
 .fcard{background:var(--doc-head);border:1px solid var(--doc-border);border-radius:12px;padding:14px}
 .fcard .fh{display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap}
 .fcard .fname{font-weight:700;font-size:12.5px}
-.fcard .fsample{font-size:15px;line-height:1.8;color:var(--doc-text);word-break:break-all}
+.fcard .fsample{font-size:15px;line-height:1.8;word-break:break-all}
 .fcard .fcode{font-size:12.5px;line-height:1.7;color:#9ec5ff;background:#0d1017;border:1px solid var(--doc-border);border-radius:8px;padding:8px 10px;margin-top:8px;white-space:pre;overflow-x:auto}
 .badge{font-size:10px;font-weight:700;padding:1px 6px;border-radius:999px;border:1px solid;white-space:nowrap}
 .badge.has{color:var(--doc-ok);border-color:rgba(63,185,80,.5);background:rgba(63,185,80,.12)}
@@ -163,103 +170,105 @@ th{color:var(--doc-muted);font-weight:600;font-size:11.5px;background:var(--doc-
 .badge.web{color:var(--doc-accent);border-color:rgba(76,139,245,.5);background:rgba(76,139,245,.12)}
 .scopebar{display:flex;height:28px;border-radius:8px;overflow:hidden;border:1px solid var(--doc-border);font-size:10.5px;margin:8px 0 4px}
 .scopebar div{display:grid;place-items:center;color:#0b0d13;font-weight:700}
+
+/* 컴포즈 시안 */
+.skin{background:var(--bg);border:1px solid var(--border);border-radius:14px;padding:12px;font-family:var(--appui);display:flex;flex-direction:column;gap:9px}
+.skin .khead{display:flex;align-items:center;gap:8px;font-size:12px;font-weight:700;color:var(--text);padding-bottom:8px;border-bottom:1px solid var(--border)}
+.skin .kmsg{display:flex;align-items:flex-end;gap:7px;max-width:90%}
+.skin .kmsg .kb{background:var(--panel);border:1px solid var(--border);border-radius:13px 13px 13px 4px;padding:7px 11px;font-size:11.5px;color:var(--text)}
+.skin .kmsg.me{margin-left:auto;flex-direction:row-reverse}
+.skin .kmsg.me .kb{background:var(--accent);color:var(--onacc);border-color:transparent;border-radius:13px 13px 4px 13px;font-weight:600}
+.skin .kmsg .kt{font-size:9.5px;color:var(--muted);align-self:flex-end}
+.skin .ktool{background:var(--panel);border:1px solid var(--border);border-left:3px solid var(--ok);border-radius:8px;padding:6px 10px;font-size:10.5px;color:var(--muted);font-family:var(--appmono)}
+.skin .kin{display:flex;gap:7px;align-items:center;margin-top:4px}
+.skin .kin .kf{flex:1;background:var(--panel);border:1px solid var(--border);border-radius:999px;padding:9px 14px;color:var(--muted);font-size:11.5px}
+.skin .kin .ks{background:var(--accent);color:var(--onacc);border-radius:50%;width:34px;height:34px;display:grid;place-items:center;font-size:14px;flex:none}
+.skin .kterm{background:var(--termbg);color:var(--termfg);font-family:var(--appmono);font-size:10.5px;line-height:1.6;border-radius:8px;padding:8px 10px;white-space:pre-wrap}
 </style>
 </head>
 <body>
 <div class="wrap">
 
-<h1>캐릭터 테마 &amp; 폰트 개편 — <b>시안 미리보기</b></h1>
+<h1>캐릭터 테마 &amp; 폰트 개편 — <b>시안 v2 (실제 캐릭터 이미지)</b></h1>
 <p class="lead">
-  Claude Terminal Hub v1.13.3 기준. ① 캐릭터 테마 7종(치이카와 4 · 동물의숲 3) ② 커서 / 메신저 입력창 시안 ③ 폰트가 안 바뀌는 원인과 개편안.<br>
-  아래 버튼을 눌러가며 <b class="muted">실제로 바뀌는 화면</b>을 보고 고르시면 됩니다. 앱 코드는 아직 하나도 안 건드렸습니다.
+  v1 피드백 반영: 마스코트를 직접 그리지 않고 <b>실제 캐릭터 이미지</b>를 쓰는 구조로 바꿨습니다. 커서도 <b>사용자가 원하는 이미지로 직접 교체</b>할 수 있게 설계했습니다.
+  입력창은 고르신 <b>M2 / M3</b> 두 안만 남겨 자세히 그렸습니다.
 </p>
 
-<!-- ============ 0. 진단 ============ -->
+<!-- 0 -->
 <section>
-  <h2><span class="n">0</span> 현재 상태 진단</h2>
-  <p class="sub">왜 "테마가 다 비슷"하고 "폰트가 안 바뀌는" 것처럼 느껴지는지 — 코드에서 확인한 원인.</p>
+  <h2><span class="n">0</span> 캐릭터 이미지를 어디에 두는가</h2>
+  <p class="sub">핵심 결정: 이미지는 <b>저장소(git)와 설치파일(.exe) 바깥</b>, 사용자 PC 로컬 폴더에 둡니다.</p>
 
-  <div class="grid2">
-    <div class="card">
-      <h4>🎨 테마 10종이 다 비슷한 이유</h4>
-      <p class="d">
-        지금 테마가 바꾸는 건 <code>index.html</code> 의 CSS 변수 <b>8개</b>(--bg/--panel/--head/--border/--accent/--text/--muted/--ok)와
-        <code>app.js</code> 의 <code>TERM_THEMES</code>(xterm ANSI 16색), 그리고 커서 색뿐입니다.
-      </p>
-      <ul class="pros">
-        <li>10종 전부 <b>다크 개발자 팔레트</b> — 배경이 #0c0e14 ~ #2e3440 사이라 명도가 거의 동일</li>
-        <li>레이아웃·모서리 반경·아이콘·타이포는 테마와 <b>무관하게 완전히 동일</b></li>
-        <li>결국 실질적으로 바뀌는 건 <b>강조색 hue 하나</b> → "다 비슷"하게 느껴지는 게 당연</li>
-      </ul>
-      <p class="pick">→ 캐릭터 테마는 색 말고 <b>마스코트 · 커서 · 입력창 · 모서리</b>까지 같이 바꿔야 체감이 납니다.</p>
-    </div>
-
-    <div class="card">
-      <h4>🔤 폰트가 일부만 바뀌는 이유 <span class="tag bad">버그성</span></h4>
-      <p class="d">원인 3개가 겹쳐 있습니다.</p>
-      <ul class="pros">
-        <li><b>① 적용 범위가 터미널뿐</b> — <code>applyFontFamily()</code> 는 <code>term.options.fontFamily</code> 만 바꿉니다.
-          헤더·세션목록·탭·입력창은 CSS에 <code>"Segoe UI"</code> 가 <b>하드코딩</b>(index.html body, .compose textarea)이라 절대 안 바뀜 → "일부만 바뀐다"</li>
-        <li><b>② 고른 폰트가 PC에 없음</b> — 목록의 JetBrains Mono / Fira Code / D2Coding 은 <b>앱에 번들되어 있지 않고</b> 로컬 설치 폰트에 의존.
-          없으면 조용히 <code>Consolas</code> 로 폴백 → 골라도 화면 그대로</li>
-        <li><b>③ 캔버스 렌더러 글리프 캐시</b> — <code>CanvasAddon</code> 사용 중이라 폰트 교체 뒤
-          <code>clearTextureAtlas()</code> / refresh 없이는 이전 글자가 남을 수 있음</li>
-      </ul>
-      <p class="pick">→ 6번 섹션에서 <b>이 PC에 실제로 뭐가 깔려 있는지</b> 자동 검사 결과를 보여드립니다.</p>
-    </div>
+  <div class="callout">
+    <b>먼저 확인하실 것</b> — 이 저장소는 GitHub에서 <b>public(전체 공개)</b> 이고 릴리즈로 <code>Setup.exe</code> 를 배포 중입니다.
+    (<code>CLAUDE.md</code> 에는 "개인 비공개"라고 적혀 있는데 실제 설정은 public 입니다.)
+    캐릭터 공식 이미지를 저장소에 커밋하거나 설치파일에 넣으면 <b>재배포</b>가 되어 저작권 문제가 생깁니다.
+    그래서 <b>앱은 이미지를 읽기만 하고, 파일은 각자 PC에만 두는</b> 구조로 설계했습니다 — 개인 사용에는 아무 제약이 없습니다.
   </div>
+
+  <h3>폴더 구조 (기존 상태 폴더 재사용)</h3>
+  <div class="fcard"><div class="fcode">~/.claude-terminal-hub/
+├─ state.json            ← 지금도 쓰는 세션/프로필 저장 파일
+└─ theme-assets/         ← [신규] 캐릭터 이미지 폴더
+   ├─ hachiware.webp     ← 테마 키와 같은 이름이면 자동 인식
+   ├─ usagi.webp
+   ├─ momonga.webp
+   ├─ rakko.webp
+   ├─ flurry.png
+   ├─ rasher.png
+   ├─ marshal.png
+   └─ cursor-custom.png  ← [선택] 커서 전용 이미지</div></div>
+
+  <table>
+    <tr><th style="width:200px">항목</th><th>동작</th></tr>
+    <tr><td>서버 라우트 <span class="tag new">신규</span></td><td><code>app.use('/theme-assets', express.static(~/.claude-terminal-hub/theme-assets))</code> — 한 줄</td></tr>
+    <tr><td>이미지 넣는 법</td><td>① 폴더에 직접 복사 ② 앱 안에서 <b>드래그&amp;드롭 / 파일 선택</b> → 자동 저장 (아래 1번에서 미리 써볼 수 있음)</td></tr>
+    <tr><td>git / 설치파일</td><td>사용자 홈 폴더라 애초에 포함 안 됨. <code>.gitignore</code> 에도 명시</td></tr>
+    <tr><td>이미지가 없을 때</td><td>테마는 <b>색상만</b> 적용되고 아이콘 자리는 숨김(Lv1과 동일) — 앱이 깨지지 않음</td></tr>
+  </table>
+  <p class="muted" style="font-size:12px">아래 미리보기에는 이 PC의 <code>theme-assets</code> 폴더에 받아둔 이미지가 그대로 표시됩니다.</p>
 </section>
 
-<!-- ============ 1. 라이브 테마 ============ -->
+<!-- 1 -->
 <section>
   <h2><span class="n">1</span> 캐릭터 테마 7종 — 라이브 미리보기</h2>
-  <p class="sub">캐릭터 · 모드(다크/파스텔) · 강도(Lv1~3)를 바꾸면 아래 목업이 즉시 다시 칠해집니다. 조합 7 × 2 × 3 = 42가지.</p>
+  <p class="sub">캐릭터 · 모드(다크/파스텔) · 강도(Lv1~3) 조합.</p>
 
   <div class="controls">
-    <div class="cgroup" style="flex:1;min-width:300px">
-      <span>캐릭터</span>
-      <div class="cbtns" id="chBtns"></div>
-    </div>
-    <div class="cgroup">
-      <span>모드</span>
-      <div class="cbtns" id="modeBtns">
-        <button class="chip on" data-mode="dark">🌙 다크</button>
-        <button class="chip" data-mode="pastel">🍡 파스텔</button>
-      </div>
-    </div>
-    <div class="cgroup">
-      <span>강도 — 얼마나 캐릭터스럽게</span>
-      <div class="cbtns" id="lvBtns">
-        <button class="chip" data-lv="1">Lv1 색만</button>
-        <button class="chip on" data-lv="2">Lv2 색+마스코트</button>
-        <button class="chip" data-lv="3">Lv3 풀캐릭터</button>
-      </div>
-    </div>
+    <div class="cgroup" style="flex:1;min-width:300px"><span>캐릭터</span><div class="cbtns" id="chBtns"></div></div>
+    <div class="cgroup"><span>모드</span><div class="cbtns" id="modeBtns">
+      <button class="chip plain on" data-mode="dark">🌙 다크</button>
+      <button class="chip plain" data-mode="pastel">🍡 파스텔</button></div></div>
+    <div class="cgroup"><span>강도</span><div class="cbtns" id="lvBtns">
+      <button class="chip plain" data-lv="1">Lv1 색만</button>
+      <button class="chip plain on" data-lv="2">Lv2 색+이미지</button>
+      <button class="chip plain" data-lv="3">Lv3 풀캐릭터</button></div></div>
   </div>
 
   <div class="app" id="app" data-ch="hachiware" data-mode="dark" data-level="2">
-    <div class="patt"></div>
+    <div class="patt" id="patt"></div>
     <div class="ahead">
-      <span class="brand"><span class="mascot" id="mHead"></span>Claude <em>Terminal Hub</em></span>
+      <span class="brand"><img class="av m" id="headAv" alt="">Claude <em>Terminal Hub</em></span>
       <span class="quirk" id="quirk">야하-!</span>
       <span class="sp"></span>
       <button class="hbtn">＋ 세션</button>
       <button class="hbtn acc" id="themeLabel">🎨 하치와레</button>
-      <button class="hbtn">Aa 13</button>
+      <button class="hbtn" id="cursorLabel">🖱 커서 32px</button>
     </div>
     <div class="abody">
       <div class="lnb">
         <div class="lt">최근 세션</div>
-        <div class="sitem on"><span class="av" data-av></span>claude-terminal-hub</div>
-        <div class="sitem"><span class="av" data-av></span>lexfarm-front</div>
-        <div class="sitem"><span class="av" data-av></span>ozreport-gen</div>
+        <div class="sitem on"><img class="av s" data-av alt="">claude-terminal-hub</div>
+        <div class="sitem"><img class="av s" data-av alt="">lexfarm-front</div>
+        <div class="sitem"><img class="av s" data-av alt="">ozreport-gen</div>
         <div class="lt" style="margin-top:8px">전체 세션</div>
-        <div class="sitem"><span class="av" data-av></span>api-server</div>
-        <div class="sitem"><span class="av" data-av></span>scratch</div>
+        <div class="sitem"><img class="av s" data-av alt="">api-server</div>
+        <div class="sitem"><img class="av s" data-av alt="">scratch</div>
       </div>
       <div class="stage">
         <div class="pane">
-          <div class="pbar"><span class="pd"></span><span class="mascot" data-av></span><b>테마 기능 추가</b><span class="px">~/claude-terminal-hub　✕</span></div>
+          <div class="pbar"><span class="pd"></span><img class="av s" data-av alt=""><b>테마 기능 추가</b><span class="px">~/claude-terminal-hub　✕</span></div>
           <div class="term"><span class="m">$</span> claude
 <span class="a">✻ Welcome to Claude Code</span>
 <span class="m">  cwd: D:\claude-terminal</span>
@@ -270,11 +279,11 @@ th{color:var(--doc-muted);font-weight:600;font-size:11.5px;background:var(--doc-
 <span class="g">● Update(public/app.js)</span>
 <span class="m">  ⎿  +64 lines</span>
 <span class="a">✓ 테마 7종 추가 완료</span>
-<span class="y">&gt;</span> <span class="cursorline"></span></div>
+<span class="y">&gt;</span> <span class="cursorline"></span><img class="watermark" id="wm" alt=""></div>
         </div>
         <div class="compose">
           <div class="chatlog">
-            <div class="bub"><span class="av" data-av></span><span class="txt" id="bubText">다 됐어! 테마 7개 넣었어</span></div>
+            <div class="bub"><img class="av l" data-av alt=""><span class="txt" id="bubText">다 됐어! 테마 7개 넣었어</span></div>
             <div class="bub me"><span class="txt">고마워, 커서도 바꿔줘</span></div>
           </div>
           <div class="cbar">
@@ -289,527 +298,459 @@ th{color:var(--doc-muted);font-weight:600;font-size:11.5px;background:var(--doc-
   <div class="pal" id="pal"></div>
   <div class="palrow" id="palrow"></div>
 
-  <h3>강도 3단계가 각각 바꾸는 것</h3>
+  <h3>이미지가 실제로 쓰이는 자리</h3>
   <table>
-    <tr><th style="width:150px">레벨</th><th>바꾸는 것</th><th style="width:210px">추천 상황</th></tr>
-    <tr><td><b>Lv1 색만</b></td><td>CSS 변수 8개 + 터미널 ANSI 16색만 교체. 지금 구조 그대로.</td><td>업무 화면 그대로, 색만 취향대로</td></tr>
-    <tr><td><b>Lv2 색+마스코트</b> <span class="tag new">추천</span></td><td>Lv1 + 마스코트 아이콘(헤더 / 세션목록 / 패널바) + 캐릭터 커서 + 둥근 모서리</td><td>귀엽지만 일할 때 안 거슬리는 선</td></tr>
-    <tr><td><b>Lv3 풀캐릭터</b></td><td>Lv2 + 메신저형 입력창(말풍선·아바타·원형 전송) + 배경 도트 패턴 + 캐릭터 말버릇 문구</td><td>"완전 캐릭터 앱"으로 쓰고 싶을 때</td></tr>
+    <tr><th style="width:170px">자리</th><th style="width:120px">크기</th><th>적용 레벨</th></tr>
+    <tr><td>헤더 로고 옆</td><td>28px 원형</td><td>Lv2 이상</td></tr>
+    <tr><td>세션 목록 / 패널바</td><td>22px 원형</td><td>Lv2 이상</td></tr>
+    <tr><td>테마 선택 팝오버</td><td>32px 원형</td><td>전부 (선택 UI)</td></tr>
+    <tr><td>마우스 커서</td><td>16~64px (조절)</td><td>Lv2 이상 · 개별 on/off</td></tr>
+    <tr><td>메신저 말풍선 프로필</td><td>32px 원형</td><td>Lv3</td></tr>
+    <tr><td>터미널 워터마크 · 배경 타일</td><td>가변 · 투명도 6~18%</td><td>Lv3</td></tr>
   </table>
-  <div class="callout">
-    <b>제안</b> — 강도는 <b>테마와 별개 설정</b>으로 두는 게 좋습니다(테마=하치와레, 강도=Lv2 자유 조합 · <code>localStorage: cth_theme_level</code>).
-    또 파스텔 모드에서도 <b>터미널 본문만 잉크색 다크로 유지</b>해서 밝은 배경에 흰 터미널이 눈부신 문제를 피했습니다.
-  </div>
+
+  <h3>내 이미지로 교체해보기 <span class="tag new">여기서 바로</span></h3>
+  <p class="muted" style="font-size:12px">칸을 클릭하거나 이미지를 끌어다 놓으면 즉시 교체됩니다. (미리보기 전용 — 실제 파일은 안 바뀝니다. 앱에서는 같은 동작으로 폴더에 저장됩니다.)</p>
+  <div class="slots" id="slots"></div>
 </section>
 
-<!-- ============ 2. 커서 ============ -->
+<!-- 2 -->
 <section>
-  <h2><span class="n">2</span> 캐릭터 커서 — 3안</h2>
-  <p class="sub">점선 영역에 마우스를 올리면 <b>진짜 커서가 바뀝니다</b>. 위에서 고른 캐릭터가 그대로 반영됩니다.</p>
+  <h2><span class="n">2</span> 커서 — 사용자가 직접 바꾸기</h2>
+  <p class="sub">이미지·크기·핫스팟·화살표 촉을 조절하면 <b>오른쪽 영역에서 진짜 커서가 즉시 바뀝니다.</b> 이 컨트롤을 그대로 앱 설정에 넣을 계획입니다.</p>
 
-  <div class="grid3">
-    <div class="card">
-      <h4>C1. 컬러 화살표 <span class="tag ok">현행 유지</span></h4>
-      <p class="d">지금 쓰는 게임풍 화살표를 테마 강조색으로만 칠함. 가장 안전하고 정확.</p>
-      <div class="cursorart" id="art1"></div>
-      <div class="zone" id="z1">여기에 올려보세요<br><b>강조색 화살표</b></div>
-      <ul class="pros"><li>클릭 지점(핫스팟)이 정확</li><li>캐릭터 느낌은 약함</li></ul>
-      <p class="pick">안정성 ★★★ · 귀여움 ★</p>
+  <div class="studio">
+    <div class="knobs">
+      <div class="knob">
+        <label>커서 이미지</label>
+        <div class="seg" id="curSrcSeg">
+          <button class="on" data-src="theme">테마 캐릭터</button>
+          <button data-src="custom">내 이미지</button>
+          <button data-src="arrow">기본 화살표</button>
+        </div>
+        <input type="file" id="curFile" accept="image/*">
+        <span class="muted" style="font-size:10.5px">PNG · WebP · GIF · SVG (투명 배경 권장)</span>
+      </div>
+      <div class="knob">
+        <label>이미지 맞춤</label>
+        <div class="seg" id="fitSeg">
+          <button class="on" data-fit="head">얼굴 크롭</button>
+          <button data-fit="contain">전체 넣기</button>
+        </div>
+        <span class="muted" style="font-size:10.5px">전신 이미지는 32px에서 얼굴이 너무 작아집니다 — 얼굴 크롭 권장</span>
+      </div>
+      <div class="knob">
+        <label>크기 <span id="szVal">32px</span></label>
+        <input type="range" id="szRange" min="16" max="64" step="2" value="32">
+        <span class="muted" style="font-size:10.5px">윈도우 권장 32~48px. 더 키우면 OS가 무시할 수 있음</span>
+      </div>
+      <div class="knob">
+        <label>클릭 지점(핫스팟)</label>
+        <div class="seg" id="hotSeg">
+          <button class="on" data-hot="tl">좌상단</button>
+          <button data-hot="center">가운데</button>
+          <button data-hot="tip">촉 끝</button>
+        </div>
+      </div>
+      <div class="knob">
+        <label>화살표 촉 겹치기</label>
+        <div class="seg" id="tipSeg">
+          <button class="on" data-tip="1">켜기 (정확도↑)</button>
+          <button data-tip="0">끄기 (이미지만)</button>
+        </div>
+      </div>
+      <div class="knob">
+        <label>적용 범위</label>
+        <div class="seg" id="scopeSeg">
+          <button class="on" data-scope="both">전체 + 클릭요소</button>
+          <button data-scope="pointer">클릭요소만</button>
+        </div>
+        <span class="muted" style="font-size:10.5px">터미널 본문(텍스트 선택)·분할 바는 항상 기본 커서 유지</span>
+      </div>
     </div>
 
-    <div class="card">
-      <h4>C2. 마스코트 커서 <span class="tag new">추천</span></h4>
-      <p class="d">캐릭터 얼굴이 커서. 좌상단에 작은 포인팅 촉을 붙여 클릭 지점을 유지.</p>
-      <div class="cursorart" id="art2"></div>
-      <div class="zone" id="z2">여기에 올려보세요<br><b>캐릭터 얼굴 커서</b></div>
-      <ul class="pros"><li>테마 바꾼 게 가장 확실히 체감됨</li><li>32px 권장(윈도우 커서 상한 안전)</li><li>텍스트/리사이즈 영역은 기존 커서 유지</li></ul>
-      <p class="pick">안정성 ★★ · 귀여움 ★★★</p>
-    </div>
-
-    <div class="card">
-      <h4>C3. 화살표 + 발바닥</h4>
-      <p class="d">평소엔 화살표, 버튼·목록 위에서만 발바닥(포인터)으로 변신. 절충안.</p>
-      <div class="cursorart" id="art3"></div>
-      <div class="zone" id="z3">여기에 올려보세요<br><b>발바닥 포인터</b></div>
-      <ul class="pros"><li>작업 중엔 방해 없음</li><li>클릭 가능 영역 인지도 ↑</li></ul>
-      <p class="pick">안정성 ★★★ · 귀여움 ★★</p>
+    <div class="playground" id="pg">
+      <div class="preview-cursor">
+        <img id="curZoom" width="128" height="128" alt="">
+        <div style="font-size:12px;color:var(--doc-muted)">
+          <b style="color:var(--doc-text)">실제 생성되는 커서</b><br>
+          <span id="curInfo">32×32</span><br>
+          <span style="font-size:11px">원본 이미지를 canvas 로 축소해 data URI 로 만듭니다.<br>브라우저·Electron 모두 동일하게 동작합니다.</span>
+        </div>
+      </div>
+      <div class="pgrow">
+        <div class="pgbox" id="pgA"><b>일반 영역</b>여기에 마우스를 올려보세요</div>
+        <div class="pgbox" id="pgB"><b>클릭 가능 요소</b>버튼·목록처럼 취급되는 영역</div>
+      </div>
+      <div class="pgrow">
+        <div class="pgbox" style="cursor:text"><b>터미널 본문</b>텍스트 선택 커서 유지 (I빔)</div>
+        <div class="pgbox" style="cursor:col-resize"><b>분할 바</b>리사이즈 커서 유지</div>
+      </div>
     </div>
   </div>
-  <div class="callout">
-    구현은 이미 있는 <code>applyCursors()</code> 를 확장하면 됩니다 — 지금도 SVG를 JS로 만들어 주입하는 구조라 <b>캐릭터별 SVG만 추가</b>하면 끝. 커서 종류도 별도 설정으로 뺄 수 있습니다.
-  </div>
-</section>
 
-<!-- ============ 3. 입력창 ============ -->
-<section>
-  <h2><span class="n">3</span> 입력창(컴포즈) 메신저화 — 3안</h2>
-  <p class="sub">현재 컴포즈는 <code>textarea</code> + 버튼 한 줄입니다. 위에서 고른 테마 색이 아래 3안에 그대로 적용됩니다.</p>
-  <div class="grid3" id="composeVariants"></div>
+  <h3>앱에 들어갈 설정</h3>
   <table>
-    <tr><th style="width:120px">안</th><th>특징</th><th style="width:230px">주의</th></tr>
-    <tr><td><b>M1 둥근 입력바</b></td><td>지금 구조 유지 + 알약형 입력창 + 캐릭터 아바타/플레이스홀더(말버릇)</td><td>변경 최소, 30분이면 끝</td></tr>
-    <tr><td><b>M2 메신저 로그</b> <span class="tag new">추천</span></td><td>내가 보낸 메시지 + Claude 응답 요약이 말풍선으로 쌓임. 터미널은 그대로 위에 유지</td><td>터미널 출력 파싱이 필요 — 이미 있는 <b>세션 뷰어</b> 로직 재사용 가능</td></tr>
-    <tr><td><b>M3 카톡형 전체</b></td><td>터미널을 접고 대화만 보는 모드. 우측=나(노랑), 좌측=캐릭터</td><td>가장 큼. 뷰어 패널을 캐릭터 스킨으로 감싸는 형태로 별도 작업 권장</td></tr>
+    <tr><th style="width:170px">설정</th><th>기본값</th><th style="width:240px">저장 키</th></tr>
+    <tr><td>커서 이미지</td><td>테마 캐릭터 이미지 자동 사용</td><td><code>cth_cursor_src</code> (theme/custom/arrow)</td></tr>
+    <tr><td>사용자 이미지</td><td>파일 선택 시 <code>theme-assets/cursor-custom.png</code> 로 저장</td><td>파일</td></tr>
+    <tr><td>이미지 맞춤</td><td>얼굴 크롭</td><td><code>cth_cursor_fit</code> (head/contain)</td></tr>
+    <tr><td>크기</td><td>32px</td><td><code>cth_cursor_size</code></td></tr>
+    <tr><td>핫스팟</td><td>좌상단</td><td><code>cth_cursor_hotspot</code></td></tr>
+    <tr><td>화살표 촉</td><td>켜기</td><td><code>cth_cursor_tip</code></td></tr>
+    <tr><td>적용 범위</td><td>전체 + 클릭요소</td><td><code>cth_cursor_scope</code></td></tr>
   </table>
+  <div class="callout info"><b>참고</b> — 커서는 테마와 독립입니다. 예: 테마는 기본 다크, 커서만 우사기. 캐릭터가 아닌 아무 이미지(짤·사진)도 가능합니다.</div>
 </section>
 
-<!-- ============ 4. 캐릭터 카드 ============ -->
+<!-- 3 -->
 <section>
-  <h2><span class="n">4</span> 캐릭터별 테마 정의</h2>
-  <p class="sub">각 캐릭터의 실제 설정(색·성격·말버릇)에서 팔레트와 문구를 뽑았습니다. 마스코트는 <b>원저작물 복제가 아닌 단순 도형으로 재해석한 아이콘</b>입니다(개인용/배포 리스크 회피).</p>
-  <div class="grid3" id="charCards"></div>
+  <h2><span class="n">3</span> 입력창 — M2 / M3 상세</h2>
+  <p class="sub">위에서 고른 캐릭터·색이 그대로 적용됩니다.</p>
+
+  <div class="grid2">
+    <div class="card">
+      <h4>M2. 메신저 로그 <span class="tag new">터미널 유지</span></h4>
+      <p class="d">터미널은 위에 그대로 두고, 아래 컴포즈가 대화 로그로 확장됩니다. 도구 실행은 회색 줄로 접혀서 표시.</p>
+      <div class="skin" id="m2"></div>
+      <ul class="pros">
+        <li>터미널을 보면서 대화 맥락도 같이 확인</li>
+        <li>기존 <b>세션 뷰어</b> 파싱 로직 재사용 가능</li>
+        <li>패널 높이를 먹음 → 접기/펴기 필요</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h4>M3. 카톡형 전체 <span class="tag new">터미널 접기</span></h4>
+      <p class="d">터미널을 접고 대화만 보는 모드. 상단에 캐릭터 이름·상태, 좌측 캐릭터 / 우측 나.</p>
+      <div class="skin" id="m3"></div>
+      <ul class="pros">
+        <li>가장 메신저다움 — 진행 상황 훑어보기 좋음</li>
+        <li>터미널 토글 버튼으로 즉시 복귀</li>
+        <li>세부 출력이 안 보임 → 긴 작업엔 M2가 유리</li>
+      </ul>
+    </div>
+  </div>
+  <div class="callout"><b>제안</b> — 배타 선택 대신 <b>같은 컴포즈의 2가지 표시 모드</b>로 만들 수 있습니다. 헤더 토글 하나로 <code>M2 ⇄ M3</code> 전환.</div>
 </section>
 
-<!-- ============ 5. 폰트 진단 ============ -->
+<!-- 4 -->
 <section>
-  <h2><span class="n">5</span> 폰트 — 지금 무엇이 문제인가</h2>
-  <p class="sub">아래 표는 <b>이 브라우저에서 실제로 검사한 결과</b>입니다(FontFace <code>local()</code> 로딩 테스트).</p>
+  <h2><span class="n">4</span> 폰트 — 진단과 개편안</h2>
+  <p class="sub">v1과 동일. 아래 표는 이 브라우저에서 실제 검사한 결과입니다.</p>
 
-  <h3>① 지금 폰트 설정이 실제로 적용되는 범위</h3>
+  <h3>지금 폰트 설정이 적용되는 범위</h3>
   <div class="scopebar">
     <div style="flex:22;background:#3fb950">터미널 본문 (적용됨)</div>
     <div style="flex:78;background:#e5484d;color:#fff">헤더 · 탭 · 세션목록 · 입력창 · 뷰어 · 팝오버 (Segoe UI 고정 — 안 바뀜)</div>
   </div>
-  <p class="muted" style="font-size:12px">화면 면적의 대부분이 폰트 설정과 무관하게 고정돼 있어서 "바뀌는 게 없는 것 같다"고 느껴지는 것입니다.</p>
 
-  <h3>② 이 PC에 실제로 설치된 폰트</h3>
-  <table id="fontProbe"><tr><th style="width:220px">폰트</th><th style="width:120px">로컬 설치</th><th>비고</th></tr></table>
-  <div id="probeSummary" class="callout" style="border-left-color:#4c8bf5">검사 중…</div>
+  <h3>이 PC에 실제로 설치된 폰트</h3>
+  <table id="fontProbe"><tr><th style="width:220px">폰트</th><th style="width:110px">로컬 설치</th><th>비고</th></tr></table>
+  <div id="probeSummary" class="callout info">검사 중…</div>
 
-  <div class="callout">
-    <b>결론</b> — 목록에 있어도 PC에 없으면 조용히 Consolas로 떨어집니다. 해결책은 <b>앱에 woff2 번들</b>(오프라인 Electron 앱이라 CDN 불가) + <b>UI 폰트/터미널 폰트 분리</b> + <b>글리프 캐시 초기화</b> 세 가지입니다.
-  </div>
-</section>
-
-<!-- ============ 6. 폰트 시안 ============ -->
-<section>
-  <h2><span class="n">6</span> 폰트 시안 — 번들 후보</h2>
-  <p class="sub">아래 샘플은 실제 웹폰트로 렌더링됩니다(미리보기 전용 CDN). 실제 앱에는 <code>public/fonts/*.woff2</code> 로 번들합니다.</p>
-
-  <h3>터미널용 (고정폭)</h3>
+  <h3>번들 후보 (실제 렌더 샘플)</h3>
   <div class="grid2" id="monoSamples"></div>
-
-  <h3>UI용 (헤더·목록·입력창 — 이번에 새로 적용되는 영역)</h3>
+  <h3>UI용 — 이번에 새로 적용되는 영역</h3>
   <div class="grid2" id="uiSamples"></div>
 
-  <h3>테마별 추천 프리셋</h3>
-  <p class="muted" style="font-size:12px">캐릭터 테마를 고르면 UI 폰트도 같이 제안(“이 테마의 추천 글꼴 쓰기” 체크박스). 터미널 폰트는 취향 유지가 나을 것 같아 <b>건드리지 않는</b> 걸 기본값으로 제안합니다.</p>
-  <table id="presetTable"><tr><th style="width:150px">테마</th><th style="width:190px">UI 폰트</th><th style="width:190px">터미널 폰트</th><th>이유</th></tr></table>
-
   <table>
-    <tr><th style="width:190px">폰트</th><th style="width:110px">라이선스</th><th style="width:110px">용량(대략)</th><th>비고</th></tr>
-    <tr><td>JetBrains Mono</td><td>OFL 1.1</td><td>~200KB</td><td>번들 자유. 리거처 지원</td></tr>
-    <tr><td>D2Coding</td><td>OFL 1.1</td><td>~2.5MB</td><td>한글 고정폭 — 한글 정렬 최강. 용량 큼(서브셋 권장)</td></tr>
-    <tr><td>나눔고딕코딩</td><td>OFL 1.1</td><td>~2MB</td><td>D2Coding 대안</td></tr>
-    <tr><td>Pretendard</td><td>OFL 1.1</td><td>~1.5MB(서브셋 시 ~300KB)</td><td>UI 기본값 추천. Segoe UI보다 한글 훨씬 예쁨</td></tr>
-    <tr><td>Gowun Dodum / Jua / Gaegu</td><td>OFL 1.1</td><td>~1~2MB</td><td>캐릭터 테마용 손글씨·둥근 글꼴</td></tr>
-    <tr><td>Cascadia Code/Mono</td><td>OFL 1.1</td><td>—</td><td>윈도우 기본 동봉이라 번들 불필요</td></tr>
+    <tr><th style="width:190px">폰트</th><th style="width:110px">라이선스</th><th style="width:130px">용량(대략)</th><th>비고</th></tr>
+    <tr><td>JetBrains Mono</td><td>OFL 1.1</td><td>~200KB</td><td>번들 자유 · 리거처</td></tr>
+    <tr><td>D2Coding</td><td>OFL 1.1</td><td>~2.5MB</td><td>이 PC에 이미 설치돼 있음</td></tr>
+    <tr><td>Pretendard</td><td>OFL 1.1</td><td>서브셋 ~300KB</td><td>UI 기본값 추천</td></tr>
+    <tr><td>Gowun Dodum / Jua / Gaegu</td><td>OFL 1.1</td><td>~1~2MB</td><td>캐릭터 테마용 둥근/손글씨</td></tr>
   </table>
-  <div class="callout">전부 <b>OFL(임베딩 허용)</b> 이라 앱 번들에 문제 없습니다. 한글 폰트는 용량이 크므로 <b>KS X 1001 서브셋</b>으로 줄여 넣는 걸 권장합니다(설치 파일 +3~4MB 수준).</div>
 </section>
 
-<!-- ============ 7. 구현 계획 ============ -->
+<!-- 5 -->
 <section>
-  <h2><span class="n">7</span> 구현 계획 (검토용)</h2>
-  <p class="sub">고르신 조합에 따라 아래 항목만 실제로 작업하면 됩니다.</p>
-
-  <h3>A. 테마</h3>
+  <h2><span class="n">5</span> 구현 계획</h2>
   <table>
-    <tr><th style="width:220px">파일</th><th>작업</th><th style="width:90px">규모</th></tr>
-    <tr><td><code>public/index.html</code></td><td>캐릭터 테마 7종 × 2모드 CSS 변수 블록 추가, 강도(Lv) 클래스 규칙 추가, 테마 팝오버에 항목/구분선 추가</td><td>~180줄</td></tr>
-    <tr><td><code>public/app.js</code></td><td><code>TERM_THEMES</code> 에 7종 ANSI 팔레트 추가, <code>applyTheme()</code> 에 모드/강도 처리, 마스코트 SVG 상수, <code>applyCursors()</code> 캐릭터 분기</td><td>~220줄</td></tr>
-    <tr><td>신규 <code>public/themes.js</code></td><td>테마 정의를 한 파일로 분리(색·마스코트·말버릇·추천폰트) — 앞으로 캐릭터 추가가 쉬워짐</td><td>~200줄</td></tr>
-    <tr><td>저장</td><td><code>cth_theme</code>(기존) + <code>cth_theme_mode</code> + <code>cth_theme_level</code> + <code>cth_cursor_style</code></td><td>—</td></tr>
+    <tr><th style="width:210px">파일</th><th>작업</th><th style="width:80px">규모</th></tr>
+    <tr><td><code>server.js</code></td><td><code>/theme-assets</code> 정적 라우트 + 목록 API + 업로드(드롭 저장)</td><td>~50줄</td></tr>
+    <tr><td>신규 <code>public/themes.js</code></td><td>테마 정의(색·이미지 파일명·말버릇·추천폰트) 분리 — 캐릭터 추가가 한 곳 수정으로 끝남</td><td>~180줄</td></tr>
+    <tr><td><code>public/index.html</code></td><td>테마 7종 × 2모드 CSS 변수, Lv 클래스, 커서 설정 팝오버, 드롭존</td><td>~220줄</td></tr>
+    <tr><td><code>public/app.js</code></td><td>ANSI 팔레트 7종, 이미지 아바타 주입, <code>applyCursors()</code> 이미지 커서 확장(canvas 축소), 설정 저장</td><td>~260줄</td></tr>
   </table>
 
-  <h3>B. 폰트</h3>
+  <h3>순서</h3>
   <table>
-    <tr><th style="width:220px">항목</th><th>작업</th><th style="width:90px">규모</th></tr>
-    <tr><td>번들</td><td><code>public/fonts/</code> 에 woff2 추가 + <code>@font-face</code> 선언(오프라인 동작 보장)</td><td>파일 5~7개</td></tr>
-    <tr><td>UI 폰트 분리</td><td>CSS <code>--ui-font</code> 변수 도입, <code>body</code>·<code>.compose textarea</code>·팝오버 등 하드코딩된 <code>"Segoe UI"</code> 전부 변수로 교체</td><td>~25곳</td></tr>
-    <tr><td>선택 UI</td><td>헤더 글꼴 셀렉트를 <b>[UI 글꼴] [터미널 글꼴]</b> 2개로 분리, 각 옵션을 <b>그 폰트로 렌더</b>해서 미리보기</td><td>~60줄</td></tr>
-    <tr><td>캐시 버그</td><td>폰트 변경 시 <code>term.clearTextureAtlas()</code> → <code>term.refresh(0, rows-1)</code> → <code>fitAll()</code> 순서 보장</td><td>~10줄</td></tr>
-    <tr><td>폴백 표시</td><td>선택한 폰트가 실제로 안 잡히면 셀렉트 옆에 <span class="tag bad">미설치</span> 배지 표시(지금처럼 조용히 폴백되지 않게)</td><td>~20줄</td></tr>
-  </table>
-
-  <h3>C. 순서 제안</h3>
-  <table>
-    <tr><th style="width:60px">단계</th><th>내용</th><th style="width:150px">결과</th></tr>
-    <tr><td><b>1</b></td><td>폰트 버그 수정(UI/터미널 분리 + 번들 + 캐시) — 테마와 무관하게 지금 바로 체감되는 개선</td><td>패치 릴리즈 v1.13.4</td></tr>
-    <tr><td><b>2</b></td><td>테마 엔진 확장(모드·강도·마스코트) + 캐릭터 7종 Lv1~2</td><td>마이너 v1.14.0</td></tr>
-    <tr><td><b>3</b></td><td>커서 시안 적용 + Lv3(메신저 컴포즈)</td><td>마이너 v1.15.0</td></tr>
+    <tr><th style="width:60px">단계</th><th>내용</th><th style="width:120px">릴리즈</th></tr>
+    <tr><td><b>1</b></td><td>폰트 버그 수정(UI/터미널 분리 · 번들 · 캐시 초기화 · 미설치 배지)</td><td>v1.13.4</td></tr>
+    <tr><td><b>2</b></td><td>테마 엔진 + 이미지 에셋 로더 + 캐릭터 7종(Lv1~2)</td><td>v1.14.0</td></tr>
+    <tr><td><b>3</b></td><td>커서 스튜디오(사용자 이미지 교체) + Lv3 메신저 컴포즈(M2/M3 토글)</td><td>v1.15.0</td></tr>
   </table>
 
   <div class="callout">
-    <b>검토해주실 것 4가지</b><br>
-    ① 캐릭터 7종 팔레트 — 색 조정 필요한 캐릭터 있는지<br>
-    ② 기본 강도 — Lv2(추천) / Lv3 중 어디를 기본값으로<br>
-    ③ 커서 — C1 / C2(추천) / C3<br>
-    ④ 입력창 — M1 / M2(추천) / M3, 그리고 UI 기본 폰트를 Pretendard 로 바꿔도 되는지
+    <b>확인 부탁</b><br>
+    ① 캐릭터 이미지 — 지금 받아둔 것으로 괜찮은지 (더 좋은 사진이 있으면 폴더에 넣거나 위에서 드롭)<br>
+    ② 커서 — 위에서 만져보고 마음에 드는 크기/핫스팟/촉 조합<br>
+    ③ 컴포즈 — M2 / M3 / 둘 다 토글<br>
+    ④ 기본 강도 Lv2 vs Lv3, UI 기본 폰트 Pretendard 적용 여부
   </div>
 </section>
 
 <p class="muted" style="font-size:11.5px;text-align:center">
-  Claude Terminal Hub · 테마/폰트 개편 시안 · 이 파일은 미리보기 전용이며 앱 동작에 영향을 주지 않습니다 (<code>public/theme-preview.html</code>)
+  Claude Terminal Hub · 시안 v2 · 미리보기 전용 (<code>public/theme-preview.html</code>) · 캐릭터 이미지는 저장소에 포함되지 않습니다
 </p>
 </div>
 
 <script>
-/* ==================== 마스코트 (단순 도형 재해석 아이콘) ==================== */
-const M = {
-hachiware:`<svg viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
-<path d="M12 22 L9 7 L22 15 Z" fill="#7fc7f2" stroke="#26405c" stroke-width="2.2" stroke-linejoin="round"/>
-<path d="M36 22 L39 7 L26 15 Z" fill="#ffffff" stroke="#26405c" stroke-width="2.2" stroke-linejoin="round"/>
-<circle cx="24" cy="28" r="14" fill="#ffffff"/>
-<path d="M24 14 A14 14 0 0 0 10 28 L24 28 Z" fill="#7fc7f2"/>
-<circle cx="24" cy="28" r="14" fill="none" stroke="#26405c" stroke-width="2.2"/>
-<circle cx="18" cy="27" r="2" fill="#26405c"/><circle cx="30" cy="27" r="2" fill="#26405c"/>
-<path d="M21 33 q3 3.4 6 0" fill="none" stroke="#26405c" stroke-width="2" stroke-linecap="round"/></svg>`,
-
-usagi:`<svg viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
-<rect x="13" y="3" width="7" height="20" rx="3.5" fill="#ffd447" stroke="#7a5a10" stroke-width="2.2"/>
-<rect x="28" y="3" width="7" height="20" rx="3.5" fill="#ffd447" stroke="#7a5a10" stroke-width="2.2"/>
-<circle cx="24" cy="30" r="13" fill="#ffd447" stroke="#7a5a10" stroke-width="2.2"/>
-<path d="M15 25 q3 -2.5 6 0" fill="none" stroke="#7a5a10" stroke-width="2" stroke-linecap="round"/>
-<path d="M27 25 q3 -2.5 6 0" fill="none" stroke="#7a5a10" stroke-width="2" stroke-linecap="round"/>
-<circle cx="18.5" cy="29" r="1.8" fill="#5b3f06"/><circle cx="29.5" cy="29" r="1.8" fill="#5b3f06"/>
-<ellipse cx="24" cy="35" rx="5" ry="3.6" fill="#8a2f2f"/></svg>`,
-
-momonga:`<svg viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
-<path d="M37 36 q11 -5 5 -18 q-1 9 -9 12 z" fill="#b9a7ee" stroke="#4a3a6b" stroke-width="2.2" stroke-linejoin="round"/>
-<path d="M13 19 L11 10 L20 15 Z" fill="#ffffff" stroke="#4a3a6b" stroke-width="2.2" stroke-linejoin="round"/>
-<path d="M35 19 L37 10 L28 15 Z" fill="#ffffff" stroke="#4a3a6b" stroke-width="2.2" stroke-linejoin="round"/>
-<circle cx="24" cy="28" r="14" fill="#ffffff" stroke="#4a3a6b" stroke-width="2.2"/>
-<circle cx="18.5" cy="27" r="4.2" fill="#31264d"/><circle cx="29.5" cy="27" r="4.2" fill="#31264d"/>
-<circle cx="17.2" cy="25.6" r="1.4" fill="#fff"/><circle cx="28.2" cy="25.6" r="1.4" fill="#fff"/>
-<ellipse cx="13.5" cy="32" rx="2.6" ry="1.7" fill="#ffb3dd"/><ellipse cx="34.5" cy="32" rx="2.6" ry="1.7" fill="#ffb3dd"/>
-<path d="M21.5 34 q2.5 2.4 5 0" fill="none" stroke="#4a3a6b" stroke-width="1.8" stroke-linecap="round"/></svg>`,
-
-rakko:`<svg viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
-<circle cx="12" cy="16" r="5" fill="#2f2a24"/><circle cx="36" cy="16" r="5" fill="#2f2a24"/>
-<circle cx="24" cy="27" r="14" fill="#f2dfae" stroke="#5a4a2c" stroke-width="2.2"/>
-<circle cx="18.5" cy="25" r="2" fill="#3b3122"/><circle cx="29.5" cy="25" r="2" fill="#3b3122"/>
-<ellipse cx="24" cy="32" rx="7" ry="5" fill="#fff7e4" stroke="#5a4a2c" stroke-width="1.6"/>
-<ellipse cx="24" cy="30" rx="2" ry="1.5" fill="#3b3122"/>
-<path d="M30 17 l6 6 M36 17 l-6 6" stroke="#b4553f" stroke-width="2" stroke-linecap="round"/></svg>`,
-
-flurry:`<svg viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
-<circle cx="12" cy="16" r="5.5" fill="#ffffff" stroke="#7a5157" stroke-width="2.2"/>
-<circle cx="36" cy="16" r="5.5" fill="#ffffff" stroke="#7a5157" stroke-width="2.2"/>
-<circle cx="12" cy="16" r="2.4" fill="#ffc2c8"/><circle cx="36" cy="16" r="2.4" fill="#ffc2c8"/>
-<rect x="11" y="35" width="26" height="9" rx="4.5" fill="#e2564f" stroke="#8d2f2b" stroke-width="2"/>
-<path d="M14 38 h20 M14 41 h20" stroke="#f5928d" stroke-width="1.4"/>
-<circle cx="24" cy="26" r="13.5" fill="#ffffff" stroke="#7a5157" stroke-width="2.2"/>
-<circle cx="18.5" cy="25" r="2.1" fill="#5c3b40"/><circle cx="29.5" cy="25" r="2.1" fill="#5c3b40"/>
-<ellipse cx="13.5" cy="30" rx="2.6" ry="1.7" fill="#ffc2c8"/><ellipse cx="34.5" cy="30" rx="2.6" ry="1.7" fill="#ffc2c8"/>
-<path d="M22 30.5 q2 1.8 4 0" fill="none" stroke="#7a5157" stroke-width="1.8" stroke-linecap="round"/></svg>`,
-
-rasher:`<svg viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
-<path d="M11 20 L10 8 L21 14 Z" fill="#8f3243" stroke="#4a1a24" stroke-width="2.2" stroke-linejoin="round"/>
-<path d="M37 20 L38 8 L27 14 Z" fill="#8f3243" stroke="#4a1a24" stroke-width="2.2" stroke-linejoin="round"/>
-<path d="M13 17 L12.5 11 L18 14 Z" fill="#a06ad0"/><path d="M35 17 L35.5 11 L30 14 Z" fill="#a06ad0"/>
-<circle cx="24" cy="27" r="14" fill="#8f3243" stroke="#4a1a24" stroke-width="2.2"/>
-<path d="M13 20 l7 4 M20 19 l-1.5 3 M17 18.5 l-1.5 3" stroke="#f0c6cf" stroke-width="1.7" stroke-linecap="round"/>
-<circle cx="19" cy="25" r="2" fill="#2b0f16"/><circle cx="30" cy="25" r="2" fill="#2b0f16"/>
-<ellipse cx="24" cy="31" rx="7.5" ry="5.5" fill="#f0a8b4" stroke="#4a1a24" stroke-width="1.8"/>
-<ellipse cx="21.6" cy="31" rx="1.3" ry="1.8" fill="#8d4a58"/><ellipse cx="26.4" cy="31" rx="1.3" ry="1.8" fill="#8d4a58"/></svg>`,
-
-marshal:`<svg viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
-<path d="M36 37 q12 -4 6 -19 q-1 11 -9 13 z" fill="#f2f5fd" stroke="#2f3b6b" stroke-width="2.2" stroke-linejoin="round"/>
-<path d="M14 17 L13 8 L20 13 Z" fill="#ffffff" stroke="#2f3b6b" stroke-width="2.2" stroke-linejoin="round"/>
-<path d="M34 17 L35 8 L28 13 Z" fill="#ffffff" stroke="#2f3b6b" stroke-width="2.2" stroke-linejoin="round"/>
-<circle cx="24" cy="27" r="13.5" fill="#ffffff" stroke="#2f3b6b" stroke-width="2.2"/>
-<path d="M18 15 q2 -8 5 -3 q2 -7 5 -1 q2 -4 3 3 z" fill="#2f3b6b"/>
-<circle cx="19" cy="26" r="2" fill="#2b3352"/><circle cx="29" cy="26" r="2" fill="#2b3352"/>
-<circle cx="14" cy="30" r="3" fill="#ffb3c7"/><circle cx="34" cy="30" r="3" fill="#ffb3c7"/>
-<path d="M21.5 31 q2.5 -2 5 0" fill="none" stroke="#2f3b6b" stroke-width="1.8" stroke-linecap="round"/></svg>`
-};
-
-/* ==================== 테마 정의 ==================== */
 const THEMES = [
-  { key:'hachiware', name:'하치와레', ip:'치이카와', quirk:'야하-!', bub:'다 됐어! 테마 7개 넣었어',
-    ph:'같이 해보자…  Enter 전송', note:'흰 몸 + 파란 가르마, 밝고 긍정적. 파란색 무기.',
-    ui:'Gowun Dodum', why:'푸른 계열 + 둥근 고딕이 캐릭터의 산뜻한 인상과 맞음' },
-  { key:'usagi', name:'우사기', ip:'치이카와', quirk:'우라-!', bub:'하하! 다 했다구!',
-    ph:'우랏!  Enter 전송', note:'노란 토끼, 긴 귀와 큰 입. 텐션 최고.',
-    ui:'Jua', why:'굵고 튀는 노랑 + 힘있는 둥근 글꼴' },
-  { key:'momonga', name:'모몽가', ip:'치이카와', quirk:'모몽가~', bub:'귀엽지? 다 해놨어',
-    ph:'모몽가가 해줄게…  Enter 전송', note:'흰 몸 + 큰 눈, 라벤더/핑크 톤.',
-    ui:'Gaegu', why:'파스텔 라벤더 + 손글씨체로 가장 말랑한 조합' },
-  { key:'rakko', name:'랏코', ip:'치이카와', quirk:'훗…', bub:'끝났다. 확인해라',
-    ph:'다음 작업은?  Enter 전송', note:'연노랑 털에 검은 귀, 얼굴 십자 흉터. 베테랑.',
-    ui:'Pretendard', why:'차분한 버터/카키 톤 — 담백한 고딕이 어울림' },
-  { key:'flurry', name:'뽀야미', ip:'동물의숲', quirk:'뽀드득', bub:'다 됐어 뽀드득!',
-    ph:'무엇을 도와줄까 뽀드득…', note:'하얀 햄스터, 빨간 니트. 친절함 성격. 생일 1/30.',
-    ui:'Gowun Dodum', why:'화이트+레드 니트 대비, 포근한 본문체' },
-  { key:'rasher', name:'글레이', ip:'동물의숲', quirk:'꾸엑', bub:'끝냈다 꾸엑',
-    ph:'용건만 말해라 꾸엑…', note:'짙은 빨강 돼지, 보라 귀/꼬리, 눈가 흉터. 무뚝뚝 성격.',
-    ui:'Pretendard', why:'어두운 와인+보라. 무뚝뚝 컨셉이라 장식 없는 고딕' },
-  { key:'marshal', name:'쭈니', ip:'동물의숲', quirk:'어차피', bub:'어차피 다 해놨어',
-    ph:'어차피 할 거지만…  Enter 전송', note:'하얀 다람쥐, 남색 머리 뿔, 분홍 볼. 느끼함 성격.',
-    ui:'Gowun Dodum', why:'화이트+네이비+로즈. 단정한 본문체가 캐릭터의 새침함과 맞음' },
+  { key:'hachiware', file:'hachiware.webp', name:'하치와레', ip:'치이카와', quirk:'야하-!',
+    bub:'다 됐어! 테마 7개 넣었어', ph:'같이 해보자…  Enter 전송', ui:'Gowun Dodum' },
+  { key:'usagi', file:'usagi.webp', name:'우사기', ip:'치이카와', quirk:'우라-!',
+    bub:'하하! 다 했다구!', ph:'우랏!  Enter 전송', ui:'Jua' },
+  { key:'momonga', file:'momonga.webp', name:'모몽가', ip:'치이카와', quirk:'모몽가~',
+    bub:'귀엽지? 다 해놨어', ph:'모몽가가 해줄게…  Enter 전송', ui:'Gaegu' },
+  { key:'rakko', file:'rakko.webp', name:'랏코', ip:'치이카와', quirk:'훗…',
+    bub:'끝났다. 확인해라', ph:'다음 작업은?  Enter 전송', ui:'Noto Sans KR' },
+  { key:'flurry', file:'flurry.png', name:'뽀야미', ip:'동물의숲', quirk:'뽀드득',
+    bub:'다 됐어 뽀드득!', ph:'무엇을 도와줄까 뽀드득…', ui:'Gowun Dodum' },
+  { key:'rasher', file:'rasher.png', name:'글레이', ip:'동물의숲', quirk:'꾸엑',
+    bub:'끝냈다 꾸엑', ph:'용건만 말해라 꾸엑…', ui:'Noto Sans KR' },
+  { key:'marshal', file:'marshal.png', name:'쭈니', ip:'동물의숲', quirk:'어차피',
+    bub:'어차피 다 해놨어', ph:'어차피 할 거지만…  Enter 전송', ui:'Gowun Dodum' },
 ];
 const TH = Object.fromEntries(THEMES.map(t=>[t.key,t]));
+const override = {};
+const srcOf = t => override[t.key] || ('/theme-assets/' + t.file);
 const app = document.getElementById('app');
+const cur = () => TH[app.dataset.ch];
 
-/* ==================== 컨트롤 ==================== */
+/* 컨트롤 */
 const chBtns = document.getElementById('chBtns');
-chBtns.innerHTML = THEMES.map(t=>
-  `<button class="chip${t.key==='hachiware'?' on':''}" data-ch="${t.key}">${M[t.key]}<span>${t.name}<br><small>${t.ip}</small></span></button>`).join('');
-
-function setActive(container, attr, val){
-  container.querySelectorAll('.chip').forEach(b=>b.classList.toggle('on', b.dataset[attr]===val));
+function paintChips(){
+  chBtns.innerHTML = THEMES.map(t=>
+    `<button class="chip${t.key===app.dataset.ch?' on':''}" data-ch="${t.key}">
+      <img src="${srcOf(t)}" alt=""><span>${t.name}<small>${t.ip}</small></span></button>`).join('');
 }
 chBtns.addEventListener('click', e=>{
-  const b = e.target.closest('.chip'); if(!b) return;
-  app.dataset.ch = b.dataset.ch; setActive(chBtns,'ch',b.dataset.ch); render();
+  const b=e.target.closest('.chip'); if(!b) return;
+  app.dataset.ch=b.dataset.ch; paintChips(); render();
 });
 document.getElementById('modeBtns').addEventListener('click', e=>{
-  const b = e.target.closest('.chip'); if(!b) return;
-  app.dataset.mode = b.dataset.mode; setActive(e.currentTarget,'mode',b.dataset.mode); render();
+  const b=e.target.closest('.chip'); if(!b) return;
+  app.dataset.mode=b.dataset.mode;
+  e.currentTarget.querySelectorAll('.chip').forEach(x=>x.classList.toggle('on',x===b)); render();
 });
 document.getElementById('lvBtns').addEventListener('click', e=>{
-  const b = e.target.closest('.chip'); if(!b) return;
-  app.dataset.level = b.dataset.lv; setActive(e.currentTarget,'lv',b.dataset.lv); render();
+  const b=e.target.closest('.chip'); if(!b) return;
+  app.dataset.level=b.dataset.lv;
+  e.currentTarget.querySelectorAll('.chip').forEach(x=>x.classList.toggle('on',x===b)); render();
 });
 
-/* ==================== 커서 생성 ==================== */
+/* 에셋 슬롯 */
+const slots = document.getElementById('slots');
+function paintSlots(){
+  slots.innerHTML = THEMES.map(t=>
+    `<div class="slot" data-key="${t.key}">
+      <img src="${srcOf(t)}" alt="">
+      <div class="sn">${t.name}</div>
+      <div class="sf">${override[t.key] ? '(내 이미지)' : t.file}</div>
+      <div class="rep">클릭 · 드래그로 교체</div></div>`).join('');
+}
+function takeImage(key, file){
+  if(!file || !file.type.startsWith('image/')) return;
+  if(override[key]) URL.revokeObjectURL(override[key]);
+  override[key] = URL.createObjectURL(file);
+  paintSlots(); paintChips(); render();
+}
+slots.addEventListener('click', e=>{
+  const s=e.target.closest('.slot'); if(!s) return;
+  const inp=document.createElement('input'); inp.type='file'; inp.accept='image/*';
+  inp.onchange=()=>takeImage(s.dataset.key, inp.files[0]); inp.click();
+});
+slots.addEventListener('dragover', e=>{ const s=e.target.closest('.slot'); if(!s) return; e.preventDefault(); s.classList.add('over'); });
+slots.addEventListener('dragleave', e=>{ const s=e.target.closest('.slot'); if(s) s.classList.remove('over'); });
+slots.addEventListener('drop', e=>{
+  const s=e.target.closest('.slot'); if(!s) return; e.preventDefault(); s.classList.remove('over');
+  takeImage(s.dataset.key, e.dataTransfer.files[0]);
+});
+
+/* 커서 */
+const CUR = { src:'theme', size:32, hot:'tl', tip:'1', scope:'both', fit:'head', customUrl:null };
 const ARROW_D = "M4 2 L4 21 L9.2 16.3 L12.4 22.6 L15.4 21.2 L12.2 15 L19 15 Z";
-function arrowSvg(fill, glow){
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="26" height="26" viewBox="0 0 24 24">
-<path d="${ARROW_D}" fill="#00000055" transform="translate(0.8 1)"/>
-<path d="${ARROW_D}" fill="${fill}" stroke="#ffffff" stroke-width="${glow?1.7:1.3}" stroke-linejoin="round"/></svg>`;
+function arrowDataUri(fill, size){
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 24 24">`
+    + `<path d="${ARROW_D}" fill="#00000055" transform="translate(0.8 1)"/>`
+    + `<path d="${ARROW_D}" fill="${fill}" stroke="#ffffff" stroke-width="1.3" stroke-linejoin="round"/></svg>`;
+  return 'data:image/svg+xml,'+encodeURIComponent(svg);
 }
-function pawSvg(fill){
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="30" height="30" viewBox="0 0 32 32">
-<ellipse cx="16" cy="21" rx="9" ry="7.5" fill="${fill}" stroke="#ffffff" stroke-width="1.8"/>
-<circle cx="7.5" cy="11" r="3.6" fill="${fill}" stroke="#ffffff" stroke-width="1.6"/>
-<circle cx="13.5" cy="7" r="3.6" fill="${fill}" stroke="#ffffff" stroke-width="1.6"/>
-<circle cx="20" cy="7" r="3.6" fill="${fill}" stroke="#ffffff" stroke-width="1.6"/>
-<circle cx="25.5" cy="11.5" r="3.6" fill="${fill}" stroke="#ffffff" stroke-width="1.6"/></svg>`;
+const loadImg = src => new Promise((res,rej)=>{ const i=new Image(); i.onload=()=>res(i); i.onerror=rej; i.src=src; });
+
+async function buildCursor(){
+  const s = CUR.size;
+  const accent = getComputedStyle(app).getPropertyValue('--accent').trim() || '#4c8bf5';
+  const c = document.createElement('canvas'); c.width=s; c.height=s;
+  const g = c.getContext('2d');
+  let used = null;
+  if(CUR.src==='theme') used = srcOf(cur());
+  else if(CUR.src==='custom' && CUR.customUrl) used = CUR.customUrl;
+  if(used){
+    try{
+      const im = await loadImg(used);
+      if(CUR.fit==='head'){
+        // 전신 렌더 대응: 상단 정사각 영역(얼굴)만 잘라서 꽉 채움
+        const side = Math.min(im.width, im.height*0.6);
+        const sx = (im.width-side)/2, sy = im.height*0.02;
+        g.drawImage(im, sx, sy, side, side, 0, 0, s, s);
+      }else{
+        const r = Math.min(s/im.width, s/im.height);
+        g.drawImage(im, (s-im.width*r)/2, 0, im.width*r, im.height*r);
+      }
+    }catch(e){ used = null; }
+  }
+  if(!used){
+    const im = await loadImg(arrowDataUri(accent, s));
+    g.drawImage(im,0,0,s,s);
+  }else if(CUR.tip==='1'){
+    const t = Math.round(s*0.45);
+    const im = await loadImg(arrowDataUri(accent, t));
+    g.drawImage(im,0,0,t,t);
+  }
+  const hot = CUR.hot==='center' ? [Math.round(s/2),Math.round(s/2)]
+            : CUR.hot==='tip'    ? [Math.max(1,Math.round(s*0.07)),Math.max(1,Math.round(s*0.04))]
+            : [1,1];
+  return { uri:c.toDataURL('image/png'), hot, size:s, used: used ? (CUR.src==='theme'?'테마 캐릭터':'내 이미지') : '기본 화살표' };
 }
-function mascotCursorSvg(key, accent){
-  // 마스코트 + 좌상단 포인팅 촉 (클릭 지점 유지)
-  const inner = M[key].replace(/^<svg[^>]*>/,'').replace(/<\/svg>$/,'');
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="34" height="34" viewBox="0 0 56 56">
-<path d="M2 1 L2 15 L6 11.5 L8.5 16 L11 15 L8.5 10.6 L13 10.6 Z" fill="${accent}" stroke="#ffffff" stroke-width="1.4" stroke-linejoin="round"/>
-<g transform="translate(10 10) scale(0.95)">${inner}</g></svg>`;
+async function applyCursorPreview(){
+  const { uri, hot, size, used } = await buildCursor();
+  const css = `url("${uri}") ${hot[0]} ${hot[1]}, auto`;
+  const ptr = `url("${uri}") ${hot[0]} ${hot[1]}, pointer`;
+  document.getElementById('pg').style.cursor  = CUR.scope==='both' ? css : 'default';
+  document.getElementById('pgA').style.cursor = CUR.scope==='both' ? css : 'default';
+  document.getElementById('pgB').style.cursor = ptr;
+  document.getElementById('curZoom').src = uri;
+  document.getElementById('curInfo').textContent = `${size}×${size} · 핫스팟 (${hot[0]}, ${hot[1]}) · ${used}`;
+  document.getElementById('cursorLabel').textContent = `🖱 커서 ${size}px`;
 }
-function cursorCss(svg, hx, hy, fallback){
-  return `url("data:image/svg+xml,${encodeURIComponent(svg)}") ${hx} ${hy}, ${fallback}`;
+function segBind(id, key){
+  document.getElementById(id).addEventListener('click', e=>{
+    const b=e.target.closest('button'); if(!b) return;
+    e.currentTarget.querySelectorAll('button').forEach(x=>x.classList.toggle('on',x===b));
+    CUR[key] = b.dataset[key];
+    applyCursorPreview();
+  });
+}
+segBind('curSrcSeg','src'); segBind('fitSeg','fit'); segBind('hotSeg','hot'); segBind('tipSeg','tip'); segBind('scopeSeg','scope');
+document.getElementById('szRange').addEventListener('input', e=>{
+  CUR.size = +e.target.value;
+  document.getElementById('szVal').textContent = CUR.size+'px';
+  applyCursorPreview();
+});
+document.getElementById('curFile').addEventListener('change', e=>{
+  const f=e.target.files[0]; if(!f) return;
+  if(CUR.customUrl) URL.revokeObjectURL(CUR.customUrl);
+  CUR.customUrl = URL.createObjectURL(f);
+  CUR.src='custom';
+  document.querySelectorAll('#curSrcSeg button').forEach(b=>b.classList.toggle('on', b.dataset.src==='custom'));
+  applyCursorPreview();
+});
+
+/* 컴포즈 */
+function paintCompose(t){
+  const av = `<img class="av l" src="${srcOf(t)}" alt="">`;
+  document.getElementById('m2').innerHTML =
+    `<div class="kterm">$ claude
+<span style="color:var(--accent)">✻</span> 테마 기능 추가 · ~/claude-terminal-hub
+<span style="color:var(--ok)">● Update(public/app.js)</span></div>
+    <div class="kmsg me"><span class="kb">캐릭터 테마 추가해줘</span><span class="kt">14:21</span></div>
+    <div class="ktool">● Update(public/index.html) · +142 lines</div>
+    <div class="kmsg">${av}<span class="kb">${t.bub}</span><span class="kt">14:23</span></div>
+    <div class="kin"><span class="kf">${t.ph}</span><span class="ks">➤</span></div>`;
+  document.getElementById('m3').innerHTML =
+    `<div class="khead">${av}<span>${t.name}<span class="muted" style="font-weight:400;font-size:10.5px"> · 작업 중</span></span>
+      <span style="margin-left:auto;font-size:10.5px;color:var(--muted)">터미널 펴기 ▾</span></div>
+    <div class="kmsg">${av}<span class="kb">어디부터 볼까?</span></div>
+    <div class="kmsg me"><span class="kb">테마 7종 추가</span><span class="kt">14:21</span></div>
+    <div class="ktool">● Update ×2 · +206 lines</div>
+    <div class="kmsg">${av}<span class="kb">${t.bub}</span><span class="kt">14:23</span></div>
+    <div class="kin"><span class="kf">${t.ph}</span><span class="ks">➤</span></div>`;
 }
 
-/* ==================== 컴포즈 3안 ==================== */
-function composeVariants(t){
-  const av = `<span class="av2">${M[t.key]}</span>`;
-  return `
-  <div class="card">
-    <h4>M1. 둥근 입력바 <span class="tag ok">최소 변경</span></h4>
-    <p class="d">현행 구조 유지. 알약형 입력창 + 캐릭터 아바타 + 말버릇 플레이스홀더.</p>
-    <div class="mini" data-v="1">
-      <div class="mrow">
-        <span class="mav">${M[t.key]}</span>
-        <span class="mfield">${t.ph}</span>
-        <span class="msend">➤</span>
-      </div>
-      <div class="mhint">Esc · 모드 · /clear · 이미지</div>
-    </div>
-  </div>
-  <div class="card">
-    <h4>M2. 메신저 로그 <span class="tag new">추천</span></h4>
-    <p class="d">터미널은 그대로 두고, 아래에 대화가 말풍선으로 쌓임.</p>
-    <div class="mini" data-v="2">
-      <div class="mbub me"><span>테마 추가해줘</span></div>
-      <div class="mbub"><span class="mav">${M[t.key]}</span><span>${t.bub}</span></div>
-      <div class="mrow">
-        <span class="mfield">${t.ph}</span>
-        <span class="msend round">➤</span>
-      </div>
-    </div>
-  </div>
-  <div class="card">
-    <h4>M3. 카톡형 전체</h4>
-    <p class="d">터미널을 접고 대화만 보는 모드. 세션 뷰어를 캐릭터 스킨으로.</p>
-    <div class="mini kakao" data-v="3">
-      <div class="mbub"><span class="mav">${M[t.key]}</span><span>어디부터 볼까?</span></div>
-      <div class="mbub me"><span>테마 7종 추가</span></div>
-      <div class="mbub"><span class="mav">${M[t.key]}</span><span>${t.bub}</span></div>
-      <div class="mrow">
-        <span class="mfield">${t.ph}</span>
-        <span class="msend round">➤</span>
-      </div>
-    </div>
-  </div>`;
-}
-
-/* ==================== 캐릭터 카드 ==================== */
-function charCards(){
-  return THEMES.map(t=>{
-    const probe = document.createElement('div');
-    probe.className='app'; probe.dataset.ch=t.key; probe.dataset.mode=app.dataset.mode;
-    probe.style.cssText='position:absolute;visibility:hidden;height:0';
-    document.body.appendChild(probe);
-    const cs = getComputedStyle(probe);
-    const cols = ['--bg','--panel','--head','--accent','--accent2','--text'].map(v=>cs.getPropertyValue(v).trim());
-    probe.remove();
-    return `<div class="card">
-      <h4><span style="width:34px;height:34px;display:inline-block">${M[t.key]}</span> ${t.name} <span class="muted" style="font-weight:400;font-size:11px">· ${t.ip}</span></h4>
-      <p class="d">${t.note}</p>
-      <div class="pal" style="height:26px">${cols.map(c=>`<i style="background:${c}"></i>`).join('')}</div>
-      <div class="palrow" style="margin-top:4px">${cols.map(c=>`<span>${c}</span>`).join('')}</div>
-      <p class="d" style="margin-top:6px">말버릇 <b style="color:${cols[3]}">${t.quirk}</b> · 추천 UI 폰트 <b style="color:${cols[3]}">${t.ui}</b></p>
-    </div>`;
-  }).join('');
-}
-
-/* ==================== 렌더 ==================== */
+/* 렌더 */
 function render(){
-  const t = TH[app.dataset.ch];
-  const cs = getComputedStyle(app);
-  const accent = cs.getPropertyValue('--accent').trim();
-  const accent2 = cs.getPropertyValue('--accent2').trim();
-
-  // 마스코트 주입
-  document.getElementById('mHead').innerHTML = M[t.key];
-  app.querySelectorAll('[data-av]').forEach(el=>{ el.innerHTML = M[t.key]; });
+  const t = cur(), src = srcOf(t), cs = getComputedStyle(app);
+  document.getElementById('headAv').src = src;
+  document.getElementById('wm').src = src;
+  app.querySelectorAll('[data-av]').forEach(el=>{ el.src = src; });
   document.getElementById('themeLabel').textContent = '🎨 ' + t.name;
   document.getElementById('quirk').textContent = t.quirk;
   document.getElementById('bubText').textContent = t.bub;
   document.getElementById('placeholder').textContent =
     app.dataset.level==='3' ? t.ph : '메시지 입력…　Enter 전송 · Shift+Enter 줄바꿈';
   document.getElementById('sendBtn').textContent = app.dataset.level==='3' ? '➤' : '보내기';
-  // 앱 목업 UI 폰트 (Lv2 이상에서 캐릭터 추천 폰트 적용)
   app.style.setProperty('--appui', app.dataset.level==='1'
     ? '"Noto Sans KR","Segoe UI",system-ui,sans-serif'
     : `"${t.ui}","Noto Sans KR","Segoe UI",sans-serif`);
+  document.getElementById('patt').style.backgroundImage = `url("${src}")`;
 
-  // 팔레트 스와치
-  const keys = ['--bg','--panel','--head','--border','--accent','--accent2','--text','--ok'];
-  const vals = keys.map(k=>cs.getPropertyValue(k).trim());
+  const keys=['--bg','--panel','--head','--border','--accent','--accent2','--text','--ok'];
+  const vals=keys.map(k=>cs.getPropertyValue(k).trim());
   document.getElementById('pal').innerHTML = vals.map(v=>`<i style="background:${v}"></i>`).join('');
   document.getElementById('palrow').innerHTML =
     keys.map((k,i)=>`<span>${k.replace('--','')} <b style="color:#d7dbe6">${vals[i]}</b></span>`).join('');
 
-  // 커서 3안
-  document.getElementById('art1').innerHTML =
-    arrowSvg(accent,false).replace('width="26" height="26"','width="54" height="54"') +
-    arrowSvg(accent2,true).replace('width="26" height="26"','width="54" height="54"');
-  document.getElementById('art2').innerHTML =
-    mascotCursorSvg(t.key,accent).replace('width="34" height="34"','width="72" height="72"');
-  document.getElementById('art3').innerHTML =
-    arrowSvg(accent,false).replace('width="26" height="26"','width="46" height="46"') +
-    pawSvg(accent).replace('width="30" height="30"','width="54" height="54"');
-
-  document.getElementById('z1').style.cursor = cursorCss(arrowSvg(accent,false),4,2,'auto');
-  document.getElementById('z2').style.cursor = cursorCss(mascotCursorSvg(t.key,accent),2,1,'auto');
-  document.getElementById('z3').style.cursor = cursorCss(pawSvg(accent),15,15,'pointer');
-
-  // 컴포즈 3안 (테마 색 상속을 위해 app 변수를 그대로 복사)
-  const cv = document.getElementById('composeVariants');
-  cv.innerHTML = composeVariants(t);
-  keys.concat(['--muted','--termbg','--termfg','--onacc']).forEach(k=>{
-    cv.style.setProperty(k, cs.getPropertyValue(k).trim());
-  });
-  cv.style.setProperty('--appui', app.style.getPropertyValue('--appui'));
-
-  // 캐릭터 카드
-  document.getElementById('charCards').innerHTML = charCards();
+  ['m2','m3'].forEach(id=>{ const el=document.getElementById(id);
+    el.dataset.ch=app.dataset.ch; el.dataset.mode=app.dataset.mode;
+    el.style.setProperty('--appui', app.style.getPropertyValue('--appui')); });
+  paintCompose(t);
+  applyCursorPreview();
 }
 
-/* ==================== 폰트 검사 ==================== */
+/* 폰트 검사 */
 const PROBE = [
-  ['Cascadia Code','윈도우 터미널/VS Code 설치 시 동봉 — 현재 기본값'],
+  ['Cascadia Code','현재 기본값 — 윈도우 터미널/VS Code 동봉'],
   ['Cascadia Mono','위와 동일 계열'],
   ['Consolas','윈도우 기본 — 최종 폴백'],
-  ['JetBrains Mono','목록에는 있지만 번들 안 됨'],
-  ['Fira Code','목록에는 있지만 번들 안 됨'],
-  ['D2Coding','한글 고정폭. 별도 설치 필요'],
+  ['JetBrains Mono','앱 목록에 있음 (번들 안 됨)'],
+  ['Fira Code','앱 목록에 있음 (번들 안 됨)'],
+  ['D2Coding','앱 목록에 있음 · 한글 고정폭'],
   ['NanumGothicCoding','한글 고정폭 대안'],
   ['Pretendard','UI 폰트 후보 (번들 권장)'],
   ['Malgun Gothic','윈도우 한글 기본'],
-  ['Segoe UI','현재 UI 전체가 이걸로 고정돼 있음'],
+  ['Segoe UI','현재 UI 전체가 이걸로 고정'],
 ];
 async function localHas(name){
-  try{
-    if(!('FontFace' in window)) return null;
-    const f = new FontFace('__probe__', `local("${name}")`);
-    await f.load();
-    return true;
+  try{ if(!('FontFace' in window)) return null;
+    await new FontFace('__probe__', `local("${name}")`).load(); return true;
   }catch(e){ return false; }
 }
 (async ()=>{
-  const tbl = document.getElementById('fontProbe');
-  const appList = ['Cascadia Code','Cascadia Mono','JetBrains Mono','Fira Code','D2Coding','Consolas'];
-  const missing = [];
+  const tbl=document.getElementById('fontProbe');
+  const appList=['Cascadia Code','Cascadia Mono','JetBrains Mono','Fira Code','D2Coding','Consolas'];
+  const missing=[];
   for(const [name,note] of PROBE){
-    const ok = await localHas(name);
-    const badge = ok===null ? '<span class="badge web">검사불가</span>'
-      : ok ? '<span class="badge has">설치됨</span>' : '<span class="badge no">미설치</span>';
-    const tr = document.createElement('tr');
-    tr.innerHTML = `<td style="font-family:'${name}',monospace">${name}</td><td>${badge}</td><td class="muted">${note}</td>`;
+    const ok=await localHas(name);
+    const badge = ok===null?'<span class="badge web">검사불가</span>'
+      : ok?'<span class="badge has">설치됨</span>':'<span class="badge no">미설치</span>';
+    const tr=document.createElement('tr');
+    tr.innerHTML=`<td style="font-family:'${name}',monospace">${name}</td><td>${badge}</td><td class="muted">${note}</td>`;
     tbl.appendChild(tr);
     if(ok===false && appList.includes(name)) missing.push(name);
   }
-  const sum = document.getElementById('probeSummary');
-  sum.innerHTML = missing.length
-    ? `<b>이 PC 검사 결과</b> — 앱 글꼴 목록 6개 중 <b>${missing.length}개(${missing.join(', ')})</b> 가 설치돼 있지 않아, 선택해도 <code>Consolas</code> 로 조용히 폴백됩니다. `
-      + `나머지는 실제로 바뀌지만 <b>바뀌는 영역이 터미널 본문뿐</b>이라 체감이 거의 없습니다.`
-    : `<b>이 PC 검사 결과</b> — 앱 글꼴 목록 6개는 모두 설치돼 있습니다. 그렇다면 체감이 없는 원인은 <b>적용 범위(터미널 본문뿐)</b> 와 <b>캔버스 글리프 캐시</b> 쪽입니다.`;
+  document.getElementById('probeSummary').innerHTML = missing.length
+    ? `<b>이 PC 검사 결과</b> — 앱 글꼴 목록 6개 중 <b>${missing.length}개(${missing.join(', ')})</b> 가 설치돼 있지 않아 선택해도 <code>Consolas</code> 로 조용히 폴백됩니다. 나머지는 실제로 바뀌지만 <b>바뀌는 영역이 터미널 본문뿐</b>이라 체감이 거의 없습니다.`
+    : `<b>이 PC 검사 결과</b> — 목록 6개 모두 설치돼 있습니다. 체감이 없는 원인은 <b>적용 범위</b>와 <b>글리프 캐시</b> 쪽입니다.`;
 })();
 
-/* ==================== 폰트 샘플 ==================== */
-const SAMPLE_KO = '한글 가나다라 세션 미리보기 · 터미널 허브';
-const SAMPLE_EN = 'Claude Terminal Hub — 0O1lI {}[]()<>=&|';
-const CODE = "const theme = 'hachiware';\nif (a !== b) => await run(x, 0x1F);";
-const MONO = [
-  ['JetBrains Mono','리거처·가독성 최상. 개발자 표준. OFL',true],
-  ['Fira Code','리거처의 원조. 둥근 인상',true],
-  ['IBM Plex Mono','약간 각진 클래식',true],
-  ['Nanum Gothic Coding','한글 폭이 정확히 2배 — 한글 섞인 출력 정렬 유리',true],
-  ['Cascadia Mono','현재 기본값 (윈도우 동봉)',false],
-  ['Consolas','최종 폴백 (윈도우 기본)',false],
-];
-const UIF = [
-  ['Noto Sans KR','무난한 표준 한글 고딕. 현재 문서에도 사용 중',true],
-  ['Gowun Dodum','부드럽고 동글한 본문체 — 캐릭터 테마와 잘 맞음',true],
-  ['Jua','굵고 통통한 손글씨풍 — 우사기처럼 텐션 높은 테마용',true],
-  ['Gaegu','손글씨체 — 모몽가처럼 말랑한 테마용',true],
-  ['Segoe UI','현재 UI 전체 고정값 (한글은 맑은 고딕으로 대체됨)',false],
-];
-function fontCard(name, note, web){
-  return `<div class="fcard">
-    <div class="fh"><span class="fname">${name}</span>
-      ${web?'<span class="badge web">미리보기 웹폰트</span>':'<span class="badge has">시스템 폰트</span>'}
-      <span class="muted" style="font-size:11px">${note}</span></div>
-    <div class="fsample" style="font-family:'${name}',monospace">${SAMPLE_KO}<br>${SAMPLE_EN}</div>
-    <div class="fcode" style="font-family:'${name}',monospace">${CODE}</div>
-  </div>`;
-}
-document.getElementById('monoSamples').innerHTML = MONO.map(f=>fontCard(...f)).join('');
-document.getElementById('uiSamples').innerHTML = UIF.map(f=>fontCard(...f)).join('');
-document.getElementById('presetTable').innerHTML +=
-  THEMES.map(t=>`<tr><td><b>${t.name}</b> <span class="muted">${t.ip}</span></td><td style="font-family:'${t.ui}',sans-serif">${t.ui}</td><td class="muted">현재 설정 유지 (기본: Cascadia Mono)</td><td class="muted">${t.why}</td></tr>`).join('');
+const SAMPLE_KO='한글 가나다라 세션 미리보기 · 터미널 허브';
+const SAMPLE_EN='Claude Terminal Hub — 0O1lI {}[]()<>=&|';
+const CODE="const theme = 'hachiware';\nif (a !== b) => await run(x, 0x1F);";
+const MONO=[['JetBrains Mono','리거처·가독성 최상. 개발자 표준',1],['Fira Code','리거처의 원조',1],
+  ['Nanum Gothic Coding','한글 폭 정확히 2배 — 한글 출력 정렬 유리',1],['Consolas','최종 폴백',0]];
+const UIF=[['Pretendard','UI 기본값 추천 (미설치 → 번들 필요)',0],
+  ['Gowun Dodum','부드럽고 동글한 본문체',1],['Jua','굵고 통통 — 우사기용',1],['Gaegu','손글씨 — 모몽가용',1]];
+const fcard=(n,note,web)=>`<div class="fcard">
+  <div class="fh"><span class="fname">${n}</span>${web?'<span class="badge web">미리보기 웹폰트</span>':'<span class="badge has">시스템/번들</span>'}
+  <span class="muted" style="font-size:11px">${note}</span></div>
+  <div class="fsample" style="font-family:'${n}',monospace">${SAMPLE_KO}<br>${SAMPLE_EN}</div>
+  <div class="fcode" style="font-family:'${n}',monospace">${CODE}</div></div>`;
+document.getElementById('monoSamples').innerHTML=MONO.map(f=>fcard(...f)).join('');
+document.getElementById('uiSamples').innerHTML=UIF.map(f=>fcard(...f)).join('');
 
-render();
+paintChips(); paintSlots(); render();
 </script>
-
-<style>
-/* 컴포즈 3안 미니 목업 — 테마 변수는 JS가 #composeVariants 에 복사해 넣음 */
-#composeVariants{font-family:var(--appui,inherit)}
-#composeVariants .mini{background:var(--head);border:1px solid var(--border);border-radius:14px;padding:10px;display:flex;flex-direction:column;gap:8px}
-#composeVariants .mini.kakao{background:var(--bg)}
-#composeVariants .mrow{display:flex;align-items:center;gap:7px}
-#composeVariants .mav{width:26px;height:26px;flex:none;border-radius:50%;overflow:hidden;display:grid;place-items:center;background:var(--panel);border:1px solid var(--border)}
-#composeVariants .mav svg{width:24px;height:24px}
-#composeVariants .mfield{flex:1;background:var(--panel);border:1px solid var(--border);border-radius:999px;padding:8px 13px;color:var(--muted);font-size:11.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-#composeVariants .msend{background:var(--accent);color:var(--onacc);font-size:12px;font-weight:700;padding:7px 12px;border-radius:9px;flex:none}
-#composeVariants .msend.round{border-radius:50%;width:34px;height:34px;display:grid;place-items:center;padding:0}
-#composeVariants .mhint{font-size:10px;color:var(--muted)}
-#composeVariants .mbub{display:flex;align-items:flex-end;gap:6px;max-width:88%}
-#composeVariants .mbub>span:last-child{background:var(--panel);border:1px solid var(--border);border-radius:13px 13px 13px 4px;padding:6px 10px;font-size:11.5px;color:var(--text)}
-#composeVariants .mbub.me{margin-left:auto;flex-direction:row-reverse}
-#composeVariants .mbub.me>span:last-child{background:var(--accent);color:var(--onacc);border-color:transparent;border-radius:13px 13px 4px 13px;font-weight:600}
-#composeVariants .card .av2{display:none}
-</style>
 </body>
 </html>
