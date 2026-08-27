@@ -721,11 +721,26 @@ function arrowDataUri(fill, size){
     + `<path d="${ARROW_D}" fill="${fill}" stroke="#ffffff" stroke-width="1.3" stroke-linejoin="round"/></svg>`;
   return 'data:image/svg+xml,'+encodeURIComponent(svg);
 }
+function downscaleHQ(im, sx, sy, sw, sh, dw, dh){
+  // 큰 비율(10~40배) 축소를 한 번에 하면 브라우저 기본 리샘플러가 모자이크처럼 뭉개짐 —
+  // 목표 크기의 2배 이내로 좁혀질 때까지 절반씩 단계적으로 축소해 선명하게 만든다.
+  let cur = im, csx=sx, csy=sy, csw=sw, csh=sh;
+  while(csw > dw*2 && csh > dh*2){
+    const nw = Math.max(dw, Math.round(csw/2)), nh = Math.max(dh, Math.round(csh/2));
+    const step = document.createElement('canvas'); step.width=nw; step.height=nh;
+    const sg = step.getContext('2d');
+    sg.imageSmoothingEnabled = true; sg.imageSmoothingQuality = 'high';
+    sg.drawImage(cur, csx, csy, csw, csh, 0, 0, nw, nh);
+    cur = step; csx=0; csy=0; csw=nw; csh=nh;
+  }
+  return { img:cur, sx:csx, sy:csy, sw:csw, sh:csh };
+}
 async function buildCursor(){
   const s = CUR.size;
   const accent = getComputedStyle(app).getPropertyValue('--accent').trim() || '#4c8bf5';
   const c = document.createElement('canvas'); c.width=s; c.height=s;
   const g = c.getContext('2d');
+  g.imageSmoothingEnabled = true; g.imageSmoothingQuality = 'high';
   let used = null;
   if(CUR.src==='theme') used = iconOf(cur());
   else if(CUR.src==='custom' && CUR.customUrl) used = CUR.customUrl;
@@ -734,10 +749,14 @@ async function buildCursor(){
       const im = await loadImg(used);
       if(CUR.fit==='head'){
         const side = Math.min(im.width, im.height*0.6);
-        g.drawImage(im, (im.width-side)/2, im.height*0.02, side, side, 0, 0, s, s);
+        const sx=(im.width-side)/2, sy=im.height*0.02;
+        const hq = downscaleHQ(im, sx, sy, side, side, s, s);
+        g.drawImage(hq.img, hq.sx, hq.sy, hq.sw, hq.sh, 0, 0, s, s);
       }else{
         const r = Math.min(s/im.width, s/im.height);
-        g.drawImage(im, (s-im.width*r)/2, (s-im.height*r)/2, im.width*r, im.height*r);
+        const dw = im.width*r, dh = im.height*r;
+        const hq = downscaleHQ(im, 0, 0, im.width, im.height, dw, dh);
+        g.drawImage(hq.img, hq.sx, hq.sy, hq.sw, hq.sh, (s-dw)/2, (s-dh)/2, dw, dh);
       }
     }catch(e){ used = null; }
   }
