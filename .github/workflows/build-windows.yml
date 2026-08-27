@@ -52,6 +52,18 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      # electron-builder 는 릴리즈를 draft 로 남긴다 → 그대로 두면 사용자에게 안 보이고
+      # auto-update 도 안 잡힌다. 업로드가 끝났으니 여기서 정식 발행으로 바꾼다.
+      # (mac 워크플로도 같은 걸 하지만 이미 발행돼 있으면 no-op 이라 안전)
+      - if: startsWith(github.ref, 'refs/tags/') || inputs.publish == true
+        name: Publish release (draft 해제)
+        shell: pwsh
+        run: |
+          $tag = "v" + (node -p "require('./package.json').version")
+          gh release edit $tag --draft=false --repo $env:GITHUB_REPOSITORY
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
       # 그 외(수동 테스트 빌드): Release 를 건드리지 않고 워크플로 아티팩트로만 남김.
       - if: "!(startsWith(github.ref, 'refs/tags/') || inputs.publish == true)"
         run: npm run dist:win
