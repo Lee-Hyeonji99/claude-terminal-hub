@@ -1,0 +1,236 @@
+- generic [ref=e1]:
+  - banner [ref=e2]:
+    - button "사이드바 접기/펼치기" [ref=e3]
+    - generic "v1.15.0" [ref=e4]:
+      - text: Claude
+      - generic [ref=e5]: Terminal Hub
+    - button "새 세션" [ref=e6]
+    - button "웹 미리보기" [ref=e7]
+    - button "파일 열기" [ref=e8]
+    - generic [ref=e9]: 세션 5
+    - button "색상 테마" [ref=e11]
+    - button "마우스 커서 바꾸기" [ref=e13]
+    - button "강조 색상" [ref=e15]
+    - combobox "화면(UI) 글꼴 — 헤더·목록·입력창" [ref=e16]:
+      - option "Pretendard (기본)"
+      - option "Segoe UI (기존)" [selected]
+      - option "고운돋움 (둥근)"
+      - option "주아 (통통)"
+      - option "맑은 고딕"
+    - combobox "터미널 글꼴" [ref=e17]:
+      - option "JetBrains Mono (번들)" [selected]
+      - option "Fira Code (번들)"
+      - option "Cascadia Code"
+      - option "Cascadia Mono"
+      - option "D2Coding"
+      - option "Consolas"
+    - generic [ref=e18]:
+      - button "A−" [ref=e19]
+      - generic [ref=e20]: "13"
+      - button "A+" [ref=e21]
+    - button "입력창(컴포즈) 켜기/끄기 — 터미널 아래 GUI 입력" [ref=e22]
+    - button "대화 보기 — 보낸 메시지와 Claude 응답을 메신저처럼 표시" [ref=e24]
+    - button "버전 · 업데이트" [ref=e26]
+    - button "단축키 · 명령어 도움말 (?)" [ref=e27]
+  - generic [ref=e28]:
+    - generic [ref=e29]:
+      - 'generic "계정: puim@syworks.com" [ref=e30]':
+        - generic [ref=e31]: 기본
+        - generic [ref=e32]: "5"
+      - 'generic "계정: padul1210@gmail.com 더블클릭 = 이름 변경" [ref=e33]':
+        - generic [ref=e34]: puim
+        - button "프로필 삭제" [ref=e35]
+    - button "프로필" [ref=e38]
+  - generic [ref=e39]:
+    - complementary [ref=e40]:
+      - generic [ref=e41]:
+        - generic [ref=e42]: 최근 세션
+        - generic [ref=e43]:
+          - button "모든 세션" [ref=e44]
+          - button "모든 계정" [ref=e45]
+          - button "새로고침" [ref=e46]
+      - textbox "모든 세션 이름/경로 검색…" [ref=e48]
+      - generic [ref=e49]:
+        - generic "[클로드터미널] 컴포즈 안보임 D:\\claude-terminal 클릭 = 열기" [ref=e50]:
+          - generic [ref=e51]: "[클로드터미널] 컴포즈 안보임"
+          - generic [ref=e55]: claude-terminal
+          - generic [ref=e59]: 방금
+        - generic "대시보드 집계 조건 .. C:\\Users\\Syworks\\IdeaProjects\\inov.lexfarm.workspace 클릭 = 열기" [ref=e60]:
+          - generic [ref=e61]: 대시보드 집계 조건 ..
+          - generic [ref=e65]: inov.lexfarm.workspace
+          - generic [ref=e69]: 9분 전
+        - generic "TOBE 운영 이관 전 작업 C:\\Users\\Syworks\\IdeaProjects\\inov.lexfarm.workspace 클릭 = 열기" [ref=e70]:
+          - generic [ref=e71]: TOBE 운영 이관 전 작업
+          - generic [ref=e75]: inov.lexfarm.workspace
+          - generic [ref=e79]: 9분 전
+        - generic "운영정보 수집 C:\\Users\\Syworks\\IdeaProjects\\inov.lexfarm.workspace 클릭 = 열기" [ref=e80]:
+          - generic [ref=e81]: 운영정보 수집
+          - generic [ref=e85]: inov.lexfarm.workspace
+          - generic [ref=e89]: 9분 전
+        - generic "CYN-868 수금날짜 변경 C:\\Users\\Syworks\\IdeaProjects\\inov.lexfarm.workspace 클릭 = 열기" [ref=e90]:
+          - generic [ref=e91]: CYN-868 수금날짜 변경
+          - generic [ref=e95]: inov.lexfarm.workspace
+          - generic [ref=e99]: 15시간 전
+        - generic "306발주서 등록시 입력한 비고를 616거래처원장에서도 조회 필요 C:\\Users\\Syworks\\IdeaProjects\\inov.lexfarm.workspace 클릭 = 열기" [ref=e100]:
+          - generic [ref=e101]: 306발주서 등록시 입력한 비고를 616거래처원장에서도 조회 필요
+          - generic [ref=e105]: inov.lexfarm.workspace
+          - generic [ref=e109]: 15시간 전
+        - generic "전송 안 되는 문제 C:\\Users\\Syworks\\IdeaProjects\\inov.lexfarm.workspace 클릭 = 열기" [ref=e110]:
+          - generic [ref=e111]: 전송 안 되는 문제
+          - generic [ref=e115]: inov.lexfarm.workspace
+          - generic [ref=e119]: 15시간 전
+        - generic "204 3열배치 C:\\Users\\Syworks\\IdeaProjects\\inov.lexfarm.workspace 클릭 = 열기" [ref=e120]:
+          - generic [ref=e121]: 204 3열배치
+          - generic [ref=e125]: inov.lexfarm.workspace
+          - generic [ref=e129]: 15시간 전
+        - generic "계약구분 YN불일치 C:\\Users\\Syworks\\IdeaProjects\\inov.lexfarm.workspace 클릭 = 열기" [ref=e130]:
+          - generic [ref=e131]: 계약구분 YN불일치
+          - generic [ref=e135]: inov.lexfarm.workspace
+          - generic [ref=e139]: 16시간 전
+        - 'generic "# 개발사요청 → JIRA 일괄 등록 `lexfarm.dev_request` 에서 `jira_key IS NULL` 인 건을 찾아 CYN 프로젝트에 QA 이슈로 등록하고, 발급된 키를 다시 `dev_request.j C:\\Users\\Syworks\\IdeaProjects\\inov.lexfarm.workspace 클릭 = 열기" [ref=e140]':
+          - generic [ref=e141]: "# 개발사요청 → JIRA 일괄 등록 `lexfarm.dev_request` 에서 `jira_key IS NULL` 인 건을 찾아 CYN 프로젝트에 QA 이슈로 등록하고, 발급된 키를 다시 `dev_request.j"
+          - generic [ref=e145]: inov.lexfarm.workspace
+          - generic [ref=e149]: 16시간 전
+        - generic "407 미트워치 체크 인식불가 C:\\Users\\Syworks\\IdeaProjects\\inov.lexfarm.workspace 클릭 = 열기" [ref=e150]:
+          - generic [ref=e151]: 407 미트워치 체크 인식불가
+          - generic [ref=e155]: inov.lexfarm.workspace
+          - generic [ref=e159]: 16시간 전
+        - generic "성공실패판정 이슈 C:\\Users\\Syworks\\IdeaProjects\\inov.lexfarm.workspace 클릭 = 열기" [ref=e160]:
+          - generic [ref=e161]: 성공실패판정 이슈
+          - generic [ref=e165]: inov.lexfarm.workspace
+          - generic [ref=e169]: 17시간 전
+        - generic "후처리 전에 파일업로드 C:\\Users\\Syworks\\IdeaProjects\\inov.lexfarm.workspace 클릭 = 열기" [ref=e170]:
+          - generic [ref=e171]: 후처리 전에 파일업로드
+          - generic [ref=e175]: inov.lexfarm.workspace
+          - generic [ref=e179]: 17시간 전
+        - generic "슬랙 빌드결과공유 C:\\Users\\Syworks\\IdeaProjects\\inov.lexfarm.workspace 클릭 = 열기" [ref=e180]:
+          - generic [ref=e181]: 슬랙 빌드결과공유
+          - generic [ref=e185]: inov.lexfarm.workspace
+          - generic [ref=e189]: 17시간 전
+        - generic "205에서 재고없는 발주서 일괄등록 C:\\Users\\Syworks\\IdeaProjects\\inov.lexfarm.workspace 클릭 = 열기" [ref=e190]:
+          - generic [ref=e191]: 205에서 재고없는 발주서 일괄등록
+          - generic [ref=e195]: inov.lexfarm.workspace
+          - generic [ref=e199]: 17시간 전
+    - generic [ref=e200]:
+      - generic [ref=e201]:
+        - generic [ref=e202]:
+          - generic [ref=e203]:
+            - generic "D:\\claude-terminal" [ref=e205]:
+              - generic [ref=e206]: 테스트 셸
+              - generic [ref=e207]: claude-terminal
+            - button "새로고침 (세션 다시 불러오기)" [ref=e211]
+            - button "아래로 분할" [ref=e214]
+            - button "최소화 (숨김 — claude 는 계속 실행)" [ref=e217]
+            - button "세션 종료" [ref=e219]
+          - generic [ref=e225]:
+            - generic:
+              - textbox "Terminal input"
+          - generic [ref=e230]:
+            - generic [ref=e231]: 이 세션의 대화 기록을 아직 못 찾았습니다.여기서 메시지를 보내면 바로 표시됩니다.
+            - textbox "메시지 입력… Enter 전송 · Shift+Enter 줄바꿈" [ref=e233]:
+              - /placeholder: 메시지 입력…   Enter 전송 · Shift+Enter 줄바꿈
+            - generic [ref=e234]:
+              - button "Esc" [ref=e235]
+              - button "모드" [ref=e236]
+              - button "/clear" [ref=e237]
+              - button "이미지" [ref=e238]
+              - button "대화만" [ref=e239]
+              - generic [ref=e240]: 터미널 단축키·붙여넣기는 그대로 사용 가능
+              - button "보내기" [ref=e241]
+        - generic [ref=e243]:
+          - generic [ref=e244]:
+            - generic "C:\\Users\\Syworks\\IdeaProjects\\inov.lexfarm.workspace" [ref=e246]:
+              - generic [ref=e247]: 306발주서 등록시 입력한 비고를 616거래처원장에서도 조회 필요
+              - generic: inov.lexfarm.workspace
+            - button "새로고침 (세션 다시 불러오기)" [ref=e250]
+            - button "아래로 분할" [ref=e253]
+            - button "최소화 (숨김 — claude 는 계속 실행)" [ref=e256]
+            - button "세션 종료" [ref=e258]
+          - generic [ref=e264]:
+            - generic:
+              - textbox "Terminal input"
+          - generic [ref=e269]:
+            - generic [ref=e270]: 이 세션의 대화 기록을 아직 못 찾았습니다.여기서 메시지를 보내면 바로 표시됩니다.
+            - textbox "메시지 입력… Enter 전송 · Shift+Enter 줄바꿈" [ref=e272]:
+              - /placeholder: 메시지 입력…   Enter 전송 · Shift+Enter 줄바꿈
+            - generic [ref=e273]:
+              - button "Esc" [ref=e274]
+              - button "모드" [ref=e275]
+              - button "/clear" [ref=e276]
+              - button "이미지" [ref=e277]
+              - button "대화만" [ref=e278]
+              - generic [ref=e279]: 터미널 단축키·붙여넣기는 그대로 사용 가능
+              - button "보내기" [ref=e280]
+      - generic [ref=e282]:
+        - generic [ref=e283]:
+          - generic [ref=e284]:
+            - generic "C:\\Users\\Syworks\\IdeaProjects\\inov.lexfarm.workspace" [ref=e286]:
+              - generic [ref=e287]: CYN-868 수금날짜 변경
+              - generic [ref=e288]: inov.lexfarm.workspace
+            - button "새로고침 (세션 다시 불러오기)" [ref=e291]
+            - button "아래로 분할" [ref=e294]
+            - button "최소화 (숨김 — claude 는 계속 실행)" [ref=e297]
+            - button "세션 종료" [ref=e299]
+          - generic [ref=e305]:
+            - generic:
+              - textbox "Terminal input"
+          - generic [ref=e310]:
+            - generic [ref=e311]: 이 세션의 대화 기록을 아직 못 찾았습니다.여기서 메시지를 보내면 바로 표시됩니다.
+            - textbox "메시지 입력… Enter 전송 · Shift+Enter 줄바꿈" [ref=e313]:
+              - /placeholder: 메시지 입력…   Enter 전송 · Shift+Enter 줄바꿈
+            - generic [ref=e314]:
+              - button "Esc" [ref=e315]
+              - button "모드" [ref=e316]
+              - button "/clear" [ref=e317]
+              - button "이미지" [ref=e318]
+              - button "대화만" [ref=e319]
+              - generic [ref=e320]: 터미널 단축키·붙여넣기는 그대로 사용 가능
+              - button "보내기" [ref=e321]
+        - generic [ref=e323]:
+          - generic [ref=e324]:
+            - generic "D:\\claude-terminal" [ref=e326]:
+              - generic [ref=e327]: GitHub SSH 클론
+              - generic [ref=e328]: claude-terminal
+            - button "새로고침 (세션 다시 불러오기)" [ref=e332]
+            - button "아래로 분할" [ref=e335]
+            - button "최소화 (숨김 — claude 는 계속 실행)" [ref=e338]
+            - button "세션 종료" [ref=e340]
+          - generic [ref=e346]:
+            - generic:
+              - textbox "Terminal input"
+          - generic [ref=e351]:
+            - generic [ref=e352]: 이 세션의 대화 기록을 아직 못 찾았습니다.여기서 메시지를 보내면 바로 표시됩니다.
+            - textbox "메시지 입력… Enter 전송 · Shift+Enter 줄바꿈" [ref=e354]:
+              - /placeholder: 메시지 입력…   Enter 전송 · Shift+Enter 줄바꿈
+            - generic [ref=e355]:
+              - button "Esc" [ref=e356]
+              - button "모드" [ref=e357]
+              - button "/clear" [ref=e358]
+              - button "이미지" [ref=e359]
+              - button "대화만" [ref=e360]
+              - generic [ref=e361]: 터미널 단축키·붙여넣기는 그대로 사용 가능
+              - button "보내기" [ref=e362]
+      - generic [ref=e365]:
+        - generic [ref=e366]:
+          - generic "D:\\claude-terminal" [ref=e368]:
+            - generic [ref=e369]: 대화 테스트
+            - generic [ref=e370]: claude-terminal
+          - button "새로고침 (세션 다시 불러오기)" [ref=e374]
+          - button "아래로 분할" [ref=e377]
+          - button "최소화 (숨김 — claude 는 계속 실행)" [ref=e380]
+          - button "세션 종료" [ref=e382]
+        - generic [ref=e388]:
+          - generic:
+            - textbox "Terminal input" [active]
+        - generic [ref=e393]:
+          - generic [ref=e394]: 이 세션의 대화 기록을 아직 못 찾았습니다.여기서 메시지를 보내면 바로 표시됩니다.
+          - textbox "메시지 입력… Enter 전송 · Shift+Enter 줄바꿈" [ref=e396]:
+            - /placeholder: 메시지 입력…   Enter 전송 · Shift+Enter 줄바꿈
+          - generic [ref=e397]:
+            - button "Esc" [ref=e398]
+            - button "모드" [ref=e399]
+            - button "/clear" [ref=e400]
+            - button "이미지" [ref=e401]
+            - button "대화만" [ref=e402]
+            - generic [ref=e403]: 터미널 단축키·붙여넣기는 그대로 사용 가능
+            - button "보내기" [ref=e404]

@@ -354,7 +354,8 @@
     .chatlog .cbub.me .ctx{background:var(--accent);color:var(--on-accent,#fff);border-color:transparent;
       border-radius:13px 13px 4px 13px;font-weight:600}
     .chatlog .ctool{font-size:10.5px;color:var(--muted);font-family:var(--mono-font);
-      background:var(--panel);border:1px solid var(--border);border-left:3px solid var(--ok);border-radius:8px;padding:4px 9px}
+      background:var(--panel);border:1px solid var(--border);border-left:3px solid var(--ok);border-radius:8px;padding:4px 9px;
+      overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 
     /* --- 디스코드 --- */
     .chatlog.discord{gap:0;padding:4px 0 8px}
@@ -372,7 +373,7 @@
     .chatlog.discord .dmsg.me .dhead b{color:var(--text)}
     .chatlog.discord .dhead span{font-size:10px;color:var(--muted)}
     .chatlog.discord .dtext{font-size:12px;color:var(--text);white-space:pre-wrap;word-break:break-word;line-height:1.5}
-    .chatlog.discord .dtool{display:flex;align-items:center;gap:6px;margin:3px 0;padding:4px 9px;
+    .chatlog.discord .dtool{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin:3px 0;padding:4px 9px;
       border-left:3px solid var(--ok);border-radius:0 6px 6px 0;background:color-mix(in srgb,var(--text) 6%,transparent);
       font-family:var(--mono-font);font-size:10.5px;color:var(--muted)}
     .chatlog.discord .dtool.task{border-left-color:var(--accent)}

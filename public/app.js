@@ -1042,10 +1042,16 @@ function newColumn(atIndex) {
   return col;
 }
 
-function setActive(pane) {
+// focusTerm=false 로 부르면 활성 표시만 하고 키보드 포커스는 건드리지 않는다.
+// (컴포즈 입력창을 눌렀는데 터미널이 포커스를 도로 가져가면 타이핑이 셸로 들어간다)
+function setActive(pane, focusTerm) {
   if (activePane && activePane.el) activePane.el.classList.remove('active');
   activePane = pane;
-  if (pane && pane.el) { pane.el.classList.add('active'); pane.el.classList.remove('done'); if (pane.term) { try { pane.term.focus(); } catch {} } }
+  if (pane && pane.el) {
+    pane.el.classList.add('active');
+    pane.el.classList.remove('done');
+    if (focusTerm !== false && pane.term) { try { pane.term.focus(); } catch {} }
+  }
 }
 
 // 새 패널이 들어갈 컬럼 결정: 'row'면 현재 활성 패널의 컬럼에, 아니면 컬럼이 잘게 늘어나지 않도록
@@ -1361,6 +1367,7 @@ function addPane(cfg, placement) {
     const box = pane.querySelector('.compose');
     if (!box) return;
     const localMsgs = [];   // 컴포즈로 방금 보낸 메시지 (transcript 반영 전 임시 표시)
+    box.addEventListener('mousedown', () => setActive(paneObj, false));
     const ta = box.querySelector('textarea');
     const sendToPty = (data) => {
       if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: 'input', data }));
@@ -1379,7 +1386,7 @@ function addPane(cfg, placement) {
       if (v.trim()) { localMsgs.push({ role: 'user', text: v, ts: Date.now(), pending: true }); renderChat(); }
       ta.value = ''; autoGrow();
     };
-    ta.addEventListener('focus', () => setActive(paneObj));
+    ta.addEventListener('focus', () => setActive(paneObj, false));
     ta.addEventListener('input', autoGrow);
     ta.addEventListener('keydown', (e) => {
       if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submit(); }
