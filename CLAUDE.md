@@ -21,9 +21,24 @@
 - **저장소는 GitHub 에서 public(전체 공개)** 이고 Release 로 설치파일을 배포한다. 공개된다는 전제로 커밋할 것.
 - 커밋 identity 는 이 저장소 로컬 설정(`Lee-Hyeonji99` / `padul1210@gmail.com`)을 사용 — **회사 메일/신원 금지**.
   - 설정: `git config user.name "Lee-Hyeonji99" && git config user.email "padul1210@gmail.com"`
-- 절차: `git add -A && git commit -m "<메시지>" && git push`
 - 커밋 메시지는 한국어 + 간결. 변경 주제별로 나눠 커밋.
-- 시크릿/토큰/회사 내부 정보가 들어가지 않는지 확인 후 push.
+
+### 커밋 전 필수 확인 (MUST — 어긴 적 있음)
+
+1. **`git add -A` 금지.** 반드시 `git status --porcelain` 으로 **파일 목록을 먼저 눈으로 확인**하고, 의도한 파일만 경로로 지정해 add 한다.
+   ```bash
+   git status --porcelain          # 무엇이 올라가는지 먼저 본다
+   git add public/app.js CHANGELOG.md   # 경로를 명시
+   git commit -m "..."
+   ```
+2. **작업 중 생성물은 절대 커밋 금지**: 스크린샷(`*.png`), Playwright 스냅샷(`.playwright-mcp/`), 로그, 임시 스크립트.
+   이런 파일에는 **열려 있던 세션 제목 · 회사 프로젝트 경로 · 업무 내용**(예: `inov.lexfarm.workspace`, JIRA 티켓, 요건 문구)이 그대로 박혀 있다.
+   저장소가 public 이므로 커밋 = 전 세계 공개다. `.gitignore` 에 막아뒀지만 그것에 의존하지 말고 목록을 직접 확인할 것.
+3. **커밋 identity 는 `Lee-Hyeonji99` / `padul1210@gmail.com` 하나만 사용한다.** 회사 계정·회사 메일로는 어떤 경우에도 커밋하지 않는다.
+   커밋 전에 `git config user.email` 로 확인한다.
+4. 시크릿/토큰이 들어가지 않는지 확인 후 push.
+5. **실수로 올렸다면**: `git reset --soft` 로 이력에서 빼고 `git push --force` 하되, **태그도 같이 force-push** 해야 한다.
+   태그가 옛 커밋을 붙잡고 있으면 커밋이 계속 공개 상태로 남는다. 릴리즈가 이미 만들어졌다면 그 릴리즈도 지워야 한다.
 
 ## 2) 검증
 
