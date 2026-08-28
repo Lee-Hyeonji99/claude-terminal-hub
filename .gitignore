@@ -11,3 +11,9 @@ build/vc_redist.x64.exe
 
 # electron-builder 산출물
 dist/
+
+# 개발 중 생성물 (Playwright 스냅샷·스크린샷) — 세션 제목/경로가 들어갈 수 있어 커밋 금지
+.playwright-mcp/
+*.png
+!electron/*.png
+!build/*.png

@@ -338,7 +338,7 @@
     /* ================= 대화 로그 (컴포즈 안) =================
      * 테마와 무관하게 동작한다. 표시 방식: 끄기 / 말풍선(카톡) / 디스코드
      * ======================================================== */
-    .chatlog{display:none;flex-direction:column;gap:7px;max-height:210px;overflow-y:auto;padding:4px 2px 8px}
+    .chatlog{display:none;flex-direction:column;gap:7px;max-height:min(46vh,320px);overflow-y:auto;padding:4px 2px 8px}
     body.chat-on .compose .chatlog{display:flex}
     .chatlog .cempty{font-size:11px;color:var(--muted);text-align:center;padding:8px;line-height:1.6}
     .chatlog .cempty b{color:var(--text)}

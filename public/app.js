@@ -513,11 +513,13 @@ function buildCharPalette(cols, mode, fallbackHex, forceHex) {
     v['--accent2'] = hsl(h2, Math.max(42, a2.s * 100), 44);
     v['--on-accent'] = '#ffffff';
   } else {
-    const bs = Math.max(26, Math.min(58, sat * 0.85));
-    v['--bg'] = hsl(h, bs, 10);
-    v['--panel'] = hsl(h, bs * 0.95, 14);
-    v['--head'] = hsl(h, bs, 18);
-    v['--border'] = hsl(h, bs * 0.9, 31);
+    // 캐릭터 색이 배경에서 실제로 보여야 한다 — 채도/명도 하한을 올려
+    // "결국 그냥 새까만 화면"이 되지 않게 한다(무채색 캐릭터도 색감이 남도록).
+    const bs = Math.max(38, Math.min(70, sat * 1.1));
+    v['--bg'] = hsl(h, bs, 13);
+    v['--panel'] = hsl(h, bs * 0.95, 17);
+    v['--head'] = hsl(h, bs, 21);
+    v['--border'] = hsl(h, bs * 0.9, 34);
     v['--text'] = hsl(h, 30, 94);
     v['--muted'] = hsl(h, 17, 64);
     const accL = Math.min(76, Math.max(60, a1.l * 100));
@@ -526,7 +528,7 @@ function buildCharPalette(cols, mode, fallbackHex, forceHex) {
     v['--ok'] = hsl(150, 52, 64);
     v['--danger'] = hsl(2, 78, 66);
     v['--sb-thumb'] = hsl(h, bs, 34);
-    v['--term-bg'] = hsl(h, bs * 0.8, 7);
+    v['--term-bg'] = hsl(h, bs * 0.8, 9);
     v['--term-fg'] = hsl(h, 26, 91);
     v['--accent2'] = hsl(h2, Math.max(52, a2.s * 100), Math.min(80, Math.max(64, a2.l * 100)));
     v['--on-accent'] = accL > 62 ? hsl(h, 60, 12) : '#ffffff';
