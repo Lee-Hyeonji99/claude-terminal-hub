@@ -381,10 +381,10 @@
     .chatlog.discord .dresult{margin:3px 0;padding:5px 9px;border-radius:6px;background:var(--panel);
       border:1px solid var(--border);font-family:var(--mono-font);font-size:10.5px;color:var(--muted);
       white-space:pre-wrap;word-break:break-word;max-height:76px;overflow:hidden}
-    /* 대화만 보기 (M3) */
-    .pane.chatonly .term{display:none}
-    .pane.chatonly .chatlog{max-height:none;flex:1}
-    .pane.chatonly .compose{flex:1;display:flex;flex-direction:column;min-height:0}
+    /* 레이아웃: 터미널+대화(기본) / 대화만(터미널 접기) — 헤더의 대화 팝오버에서 고른다 */
+    body.chat-only .pane .term{display:none}
+    body.chat-only .pane .chatlog{max-height:none;flex:1}
+    body.chat-only .pane .compose{flex:1;display:flex;flex-direction:column;min-height:0}
     .compose .cbtn.chatonly-btn.on{color:var(--accent);border-color:var(--accent)}
 
     /* 테마 팝오버 확장 */
@@ -528,6 +528,11 @@
         <div class="popover-item" data-chat="off"><span class="swatch" style="background:var(--border)"></span>끄기 (터미널만)</div>
         <div class="popover-item" data-chat="bubble"><span class="swatch" style="background:var(--accent)"></span>말풍선 (카톡)</div>
         <div class="popover-item" data-chat="discord"><span class="swatch" style="background:#5865f2"></span>디스코드</div>
+        <div class="popover-sep" id="chatLayoutSep">화면 배치</div>
+        <div class="seg-row" id="chatLayoutRow">
+          <button data-layout="split">터미널 + 대화</button>
+          <button data-layout="chat">대화만</button>
+        </div>
         <div class="popover-note" id="chatNote"></div>
       </div>
     </div>

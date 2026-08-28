@@ -176,6 +176,18 @@ function chatMode() {
   const m = localStorage.getItem('cth_chat_mode');
   return CHAT_MODES.includes(m) ? m : 'off';
 }
+// 화면 배치: split = 터미널 + 아래 대화, chat = 터미널 접고 대화만
+function chatLayout() { return localStorage.getItem('cth_chat_layout') === 'chat' ? 'chat' : 'split'; }
+function applyChatLayout(l) {
+  if (l !== 'chat') l = 'split';
+  localStorage.setItem('cth_chat_layout', l);
+  const on = l === 'chat' && chatMode() !== 'off';
+  document.body.classList.toggle('chat-only', on);
+  document.querySelectorAll('#chatLayoutRow button').forEach((b) => b.classList.toggle('on', b.dataset.layout === l));
+  document.querySelectorAll('.compose .cbtn.chatonly-btn').forEach((b) => b.classList.toggle('on', on));
+  refreshAllChats();
+  setTimeout(() => { try { fitAll(); } catch {} }, 80);
+}
 function aiName() {
   const k = document.body.dataset.char;
   const t = k && window.CHAR_THEME_MAP ? window.CHAR_THEME_MAP[k] : null;
@@ -199,16 +211,19 @@ function applyChatMode(m) {
   document.querySelectorAll('#chatPopover .popover-item').forEach((el) => el.classList.toggle('active', el.dataset.chat === m));
   const btn = document.getElementById('chatBtn');
   if (btn) btn.classList.toggle('on', m !== 'off');
+  // 표시 방식이 꺼져 있으면 배치 선택은 의미가 없으므로 숨긴다.
+  const sep = document.getElementById('chatLayoutSep'), row = document.getElementById('chatLayoutRow');
+  if (sep) sep.style.display = m === 'off' ? 'none' : 'block';
+  if (row) row.style.display = m === 'off' ? 'none' : 'flex';
   const note = document.getElementById('chatNote');
   if (note) {
     note.textContent = m === 'off'
       ? '대화 보기를 켜면 입력창 위에 주고받은 메시지가 쌓입니다.'
-      : 'Claude 세션의 대화를 읽어 표시합니다(셸 세션은 내가 보낸 것만). 패널의 “대화만” 버튼으로 터미널을 접을 수 있습니다.';
+      : '“대화만”을 고르면 터미널을 접고 메신저 화면만 씁니다. Claude 가 y/n 같은 걸 물어보면 터미널을 다시 펴야 보입니다.';
   }
   // 대화 보기를 켰는데 컴포즈가 꺼져 있으면 아무것도 안 보이므로 같이 켠다.
   if (m !== 'off') setCompose(true);
-  refreshAllChats();
-  setTimeout(() => { try { fitAll(); } catch {} }, 60);
+  applyChatLayout(chatLayout());   // 배치(터미널+대화 / 대화만)까지 반영
 }
 
 /* ---------- 계정 프로필 / 탭 ---------- */
@@ -1406,10 +1421,7 @@ function addPane(cfg, placement) {
         } else { insertAtCursor(''); ta.focus(); }
       } else if (act === 'chatonly') {
         if (chatMode() === 'off') applyChatMode('bubble');   // 대화가 꺼져 있으면 켜주고 접는다
-        pane.classList.toggle('chatonly');
-        b.classList.toggle('on', pane.classList.contains('chatonly'));
-        refreshLog();
-        setTimeout(() => { try { fitAll(); } catch {} }, 60);
+        applyChatLayout(chatLayout() === 'chat' ? 'split' : 'chat');
       }
     }));
 
@@ -1463,7 +1475,7 @@ function addPane(cfg, placement) {
       const mode = chatMode();
       if (mode === 'off') return;
       const all = mergedItems();
-      const items = all.slice(pane.classList.contains('chatonly') ? -60 : -14);
+      const items = all.slice(document.body.classList.contains('chat-only') ? -60 : -14);
       log.className = 'chatlog' + (mode === 'discord' ? ' discord' : '');
       const html = items.length ? (mode === 'discord' ? discordHtml(items) : bubbleHtml(items))
         : `<div class="cempty">${transcriptReady ? '아직 주고받은 메시지가 없습니다.' : '이 세션의 대화 기록을 아직 못 찾았습니다.<br><b>여기서 메시지를 보내면 바로 표시됩니다.</b>'}</div>`;
@@ -2221,7 +2233,12 @@ function setCompose(on) {
 (function initChatMode() {
   setupPopover('chatBtn', 'chatPopover');
   document.querySelectorAll('#chatPopover .popover-item').forEach((el) => {
-    el.addEventListener('click', () => { applyChatMode(el.dataset.chat); closePopovers(); });
+    el.addEventListener('click', () => { applyChatMode(el.dataset.chat); });
+  });
+  const row = document.getElementById('chatLayoutRow');
+  if (row) row.addEventListener('click', (e) => {
+    const b = e.target.closest('button');
+    if (b) applyChatLayout(b.dataset.layout);
   });
   applyChatMode(chatMode());
 })();
