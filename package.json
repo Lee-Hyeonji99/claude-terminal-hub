@@ -1,6 +1,6 @@
 {
   "name": "claude-terminal-hub",
-  "version": "1.15.0",
+  "version": "1.15.1",
   "private": true,
   "description": "여러 Claude Code / 셸 세션을 한 브라우저 화면에서 보는 통합 터미널",
   "author": "Lee-Hyeonji99",
