@@ -520,6 +520,24 @@
       <span id="fontSizeLabel">13</span>
       <button id="fontUp" title="터미널 글자 크기 크게 (Ctrl++)">A+</button>
     </div>
+    <div class="popover-wrap">
+      <button id="shellBtn" class="ghost icon-btn" title="터미널 셸 — 세션을 어떤 셸로 열지"><span data-icon="tool"></span></button>
+      <div id="shellPopover" class="popover" style="min-width:250px">
+        <div class="popover-sep">세션을 열 셸</div>
+        <div class="popover-item" data-shell="powershell"><span class="swatch" style="background:#012456"></span><span id="shellLabelDefault">PowerShell</span></div>
+        <div class="popover-item" data-shell="tmux"><span class="swatch" style="background:#1bb91f"></span>tmux</div>
+        <div class="popover-sep" id="msysRootSep">MSYS2 경로 <span style="font-weight:400">— Windows 의 tmux 위치</span></div>
+        <div class="knob-row" id="msysRootRow">
+          <input type="text" id="msysRoot" placeholder="C:\msys64" style="width:100%;font-size:11px">
+        </div>
+        <div class="popover-sep">안내</div>
+        <div style="padding:4px 8px 8px;font-size:11px;color:var(--muted);line-height:1.5">
+          바꾸면 <b>다음에 여는 세션부터</b> 적용됩니다.<br>
+          tmux 는 허브를 껐다 켜도 세션이 살아 있고, 같은 패널로 다시 붙습니다.<br>
+          떼어내기 <b>Ctrl+B</b> 후 <b>D</b>.
+        </div>
+      </div>
+    </div>
     <button id="composeBtn" class="ghost icon-btn" title="입력창(컴포즈) 켜기/끄기 — 터미널 아래 GUI 입력"><span data-icon="keyboard"></span></button>
     <div class="popover-wrap">
       <button id="chatBtn" class="ghost icon-btn" title="대화 보기 — 보낸 메시지와 Claude 응답을 메신저처럼 표시"><span data-icon="chat"></span></button>

@@ -400,6 +400,59 @@ function setupPopover(btnId, popId) {
 }
 document.addEventListener('click', closePopovers);
 
+/* ================= 터미널 셸 선택 (PowerShell / tmux) =================
+ * 세션을 어떤 셸로 열지. 서버 state.json 의 settings 에 저장되고
+ * spawnShell() 이 읽는다 — 다음에 여는 세션부터 적용된다.
+ * ==================================================================== */
+let shellSettings = { shell: 'powershell', msysRoot: '', platform: '', defaultMsysRoot: '' };
+
+function renderShellPopover() {
+  const isWin = shellSettings.platform === 'win32';
+  const lbl = document.getElementById('shellLabelDefault');
+  if (lbl) lbl.textContent = isWin ? 'PowerShell' : '기본 셸 ($SHELL)';
+  document.querySelectorAll('#shellPopover .popover-item[data-shell]').forEach((el) => {
+    el.classList.toggle('active', el.dataset.shell === shellSettings.shell);
+  });
+  // MSYS2 경로는 Windows + tmux 일 때만 의미가 있다(그 외에는 감춘다).
+  const show = isWin && shellSettings.shell === 'tmux';
+  const sep = document.getElementById('msysRootSep');
+  const row = document.getElementById('msysRootRow');
+  if (sep) sep.style.display = show ? '' : 'none';
+  if (row) row.style.display = show ? '' : 'none';
+  const inp = document.getElementById('msysRoot');
+  if (inp) {
+    if (shellSettings.defaultMsysRoot) inp.placeholder = shellSettings.defaultMsysRoot;
+    if (document.activeElement !== inp) inp.value = shellSettings.msysRoot || '';
+  }
+  const btn = document.getElementById('shellBtn');
+  if (btn) {
+    btn.classList.toggle('on', shellSettings.shell === 'tmux');
+    btn.title = '터미널 셸 — 현재: ' + (shellSettings.shell === 'tmux' ? 'tmux' : (isWin ? 'PowerShell' : '기본 셸'));
+  }
+}
+
+async function saveShellSettings(patch) {
+  try {
+    const r = await fetch('/api/settings', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(patch),
+    }).then((x) => x.json());
+    if (r && r.settings) shellSettings = { ...shellSettings, ...r.settings };
+  } catch {}
+  renderShellPopover();
+}
+
+setupPopover('shellBtn', 'shellPopover');
+document.getElementById('shellPopover').addEventListener('click', (e) => {
+  const item = e.target.closest('.popover-item[data-shell]');
+  if (!item) return;
+  saveShellSettings({ shell: item.dataset.shell });
+});
+document.getElementById('msysRoot').addEventListener('change', (e) => {
+  saveShellSettings({ msysRoot: e.target.value });
+});
+
 /* ================= 캐릭터 테마 =================
  * 색은 하드코딩하지 않고 캐릭터 이미지에서 뽑아 팔레트를 만든다.
  * 이미지는 ~/.claude-terminal-hub/theme-assets/ (저장소·설치파일에 없음).
@@ -2339,6 +2392,7 @@ async function initState() {
   try {
     const s = await fetch('/api/state').then((r) => r.json());
     if (Array.isArray(s.profiles) && s.profiles.length) profiles = s.profiles;
+    if (s.settings) { shellSettings = { ...shellSettings, ...s.settings }; renderShellPopover(); }
   } catch {}
   if (!profiles.find((p) => p.id === 'default')) profiles.unshift({ id: 'default', name: '기본' });
   if (!profiles.find((p) => p.id === activeProfileId)) activeProfileId = 'default';

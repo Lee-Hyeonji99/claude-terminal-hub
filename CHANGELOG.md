@@ -1,5 +1,21 @@
 # Changelog
 
+## [1.16.0] - 2026-09-30
+
+### Added
+- **세션을 열 셸을 고를 수 있게 함 (PowerShell / tmux)**: 지금까지 Windows 는 `powershell.exe` 가 소스에 하드코딩돼 있어 바꿀 방법이 없었다. 헤더에 셸 팝오버(`>` 아이콘)를 추가하고 서버 `state.json` 의 `settings.shell` 에 저장한다. 바꾸면 **다음에 여는 세션부터** 적용된다(이미 떠 있는 세션은 그대로).
+  - **tmux 를 고르면 허브를 껐다 켜도 세션이 살아남는다.** 기존 `ptyStore` 는 서버 프로세스가 죽으면 같이 사라졌는데, tmux 세션은 데몬에 남아 같은 패널(key)로 다시 붙는다. 패널 key 당 `hub-<key>` 세션을 쓰고 `new-session -A` 로 있으면 붙고 없으면 만든다.
+  - Windows 에는 tmux 가 없어 **MSYS2**(`C:\msys64`) 의 것을 쓴다. 설치 경로는 팝오버에서 바꿀 수 있고, 없으면 세션 생성 시 경로를 알려주는 에러를 낸다.
+  - macOS/Linux 는 시스템 tmux 를 그대로 쓴다.
+  - 패널을 X 로 닫으면 tmux 세션도 함께 정리한다(떼어놓은 세션이 계속 쌓이지 않도록).
+- `GET /api/state` 응답에 `settings`(shell·msysRoot·platform) 추가, `POST /api/settings` 신설.
+
+### Fixed
+- **tmux 셸에서 작업 경로가 `C:\msys64\home\<user>` 로 튀던 것**: MSYS2 로그인 셸이 시작 디렉터리를 무시하고 `$HOME` 으로 `cd` 한다. `CHERE_INVOKING=1` 로 막았다. 이게 없으면 Claude 가 엉뚱한 폴더를 작업 경로로 잡아 **대화 기록(jsonl)도 다른 곳에 쌓인다**.
+- **tmux 안에서 `claude` 를 못 찾던 것(exit 127)**: MSYS2 로그인 셸이 PATH 를 새로 잡아 `AppData/Roaming/npm` 이 빠진다. `MSYS2_PATH_TYPE=inherit` 으로 Windows PATH 를 물려받게 했다.
+- **재부착 시 `claude` 가 한 번 더 타이핑되던 것**: 허브를 재시작하면 `ptyStore` 가 비어 있어 새 세션으로 보이지만 tmux 세션은 살아 있다. `has-session` 으로 먼저 확인해, 붙는 경우에는 자동 명령을 보내지 않는다.
+- tmux 는 내부 로그인 셸이 뜨는 시간이 더 필요해 자동 명령 지연을 400ms → 1200ms 로 늘림(PowerShell 은 그대로 400ms).
+
 ## [1.15.4] - 2026-08-28
 
 ### Changed
