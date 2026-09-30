@@ -404,7 +404,7 @@ document.addEventListener('click', closePopovers);
  * 세션을 어떤 셸로 열지. 서버 state.json 의 settings 에 저장되고
  * spawnShell() 이 읽는다 — 다음에 여는 세션부터 적용된다.
  * ==================================================================== */
-let shellSettings = { shell: 'powershell', msysRoot: '', platform: '', defaultMsysRoot: '' };
+let shellSettings = { shell: 'powershell', platform: '' };
 
 function renderShellPopover() {
   const isWin = shellSettings.platform === 'win32';
@@ -412,27 +412,20 @@ function renderShellPopover() {
   if (lbl) lbl.textContent = isWin ? 'PowerShell' : '기본 셸 ($SHELL)';
   document.querySelectorAll('#shellPopover .popover-item[data-shell]').forEach((el) => {
     el.classList.toggle('active', el.dataset.shell === shellSettings.shell);
-    // WSL 은 Windows 전용 개념이라 그 외 플랫폼에서는 숨긴다.
+    // Windows 는 WSL tmux 만, macOS/Linux 는 시스템 tmux 만 보인다.
     if (el.dataset.shell === 'wsl-tmux') el.style.display = isWin ? '' : 'none';
+    if (el.dataset.shell === 'tmux') el.style.display = isWin ? 'none' : '';
   });
-  // 각 경로 설정은 해당 셸을 골랐을 때만 보여준다.
-  const showMsys = isWin && shellSettings.shell === 'tmux';
+  // 배포판 선택은 WSL tmux 를 골랐을 때만 보여준다.
   const showWsl = isWin && shellSettings.shell === 'wsl-tmux';
   const vis = (id, on) => { const e = document.getElementById(id); if (e) e.style.display = on ? '' : 'none'; };
-  vis('msysRootSep', showMsys); vis('msysRootRow', showMsys);
   vis('wslDistroSep', showWsl); vis('wslDistroRow', showWsl);
-
-  const inp = document.getElementById('msysRoot');
-  if (inp) {
-    if (shellSettings.defaultMsysRoot) inp.placeholder = shellSettings.defaultMsysRoot;
-    if (document.activeElement !== inp) inp.value = shellSettings.msysRoot || '';
-  }
   if (showWsl) loadWslDistros();
 
   const btn = document.getElementById('shellBtn');
   if (btn) {
     btn.classList.toggle('on', shellSettings.shell !== 'powershell');
-    const label = { 'wsl-tmux': 'WSL tmux', tmux: 'tmux (MSYS2)' }[shellSettings.shell]
+    const label = { 'wsl-tmux': 'WSL tmux', tmux: 'tmux' }[shellSettings.shell]
       || (isWin ? 'PowerShell' : '기본 셸');
     btn.title = '터미널 셸 — 현재: ' + label;
   }
@@ -470,9 +463,6 @@ document.getElementById('shellPopover').addEventListener('click', (e) => {
   const item = e.target.closest('.popover-item[data-shell]');
   if (!item) return;
   saveShellSettings({ shell: item.dataset.shell });
-});
-document.getElementById('msysRoot').addEventListener('change', (e) => {
-  saveShellSettings({ msysRoot: e.target.value });
 });
 document.getElementById('wslDistro').addEventListener('change', (e) => {
   saveShellSettings({ wslDistro: e.target.value });

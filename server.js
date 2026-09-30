@@ -89,26 +89,20 @@ function writeState(s) {
   } catch (e) { console.error('state 저장 실패:', e.message); }
 }
 
-// ---- 터미널 셸 설정: 'powershell'(기본) | 'tmux' ----
-// Windows 에는 tmux 가 없어 MSYS2 의 것을 쓴다. msysRoot 로 설치 경로를 바꿀 수 있다.
+// ---- 터미널 셸 설정 ----
+// Windows: 'powershell'(기본) | 'wsl-tmux'   macOS/Linux: 'powershell'(=$SHELL, 기본) | 'tmux'
+// Windows 의 tmux 는 WSL 것만 쓴다(MSYS2 tmux 는 v1.18.0 에서 제거 — 외부 도구에 안 보여 쓸모가 없었다).
 const BSLASH = String.fromCharCode(92); // '\' — 소스에 직접 쓰지 않고 상수로 둔다
-const DEFAULT_MSYS_ROOT = 'C:' + BSLASH + 'msys64';
-const SHELL_KINDS = ['powershell', 'tmux', 'wsl-tmux'];
+const SHELL_KINDS = IS_WIN ? ['powershell', 'wsl-tmux'] : ['powershell', 'tmux'];
 function readShellSettings() {
   const st = readState().settings || {};
-  const root = (typeof st.msysRoot === 'string' && st.msysRoot.trim()) ? st.msysRoot.trim() : DEFAULT_MSYS_ROOT;
+  // 예전에 MSYS2 tmux('tmux')를 골라뒀던 Windows 설정은 WSL tmux 로 넘긴다.
+  const saved = (IS_WIN && st.shell === 'tmux') ? 'wsl-tmux' : st.shell;
   return {
-    shell: SHELL_KINDS.includes(st.shell) ? st.shell : 'powershell',
-    msysRoot: root,
+    shell: SHELL_KINDS.includes(saved) ? saved : 'powershell',
     // 빈 값이면 WSL 기본 배포판을 쓴다(-d 를 붙이지 않음).
     wslDistro: (typeof st.wslDistro === 'string' && st.wslDistro.trim()) ? st.wslDistro.trim() : '',
   };
-}
-// Windows 경로 -> MSYS2 POSIX 경로. 예: C:\Users\me -> /c/Users/me (cygpath 실행 없이 변환)
-function toMsysPath(p) {
-  const s = String(p || '').split(BSLASH).join('/');
-  const m = /^([A-Za-z]):\/(.*)$/.exec(s);
-  return m ? '/' + m[1].toLowerCase() + '/' + m[2] : s;
 }
 // Windows 경로 -> WSL 경로. 예: C:\Users\me -> /mnt/c/Users/me
 function toWslPath(p) {
@@ -125,20 +119,15 @@ function listWslDistros(cb) {
     cb(text.split(/\r?\n/).map((s) => s.trim()).filter((s) => s && s.length <= 256));
   });
 }
-// 작은따옴표 셸 인용: ' -> '\''
-function shQuote(s) { return "'" + String(s).split("'").join("'" + BSLASH + "''") + "'"; }
 // 패널 key -> tmux 세션 이름. 같은 key 로 다시 열면 -A 가 그 세션에 재부착한다.
 function tmuxSessionName(key) {
   return 'hub-' + String(key || 'main').replace(/[^A-Za-z0-9_-]/g, '-').slice(0, 48);
 }
-function tmuxBin(msysRoot) {
-  return IS_WIN ? path.join(msysRoot, 'usr', 'bin', 'tmux.exe') : 'tmux';
-}
 // 이미 살아 있는 tmux 세션인가. 허브를 재시작하면 ptyStore 는 비어 있어도
 // tmux 세션은 남아 있다 — 그 경우 claude 를 다시 타이핑하면 안 되므로 미리 확인한다.
-function tmuxHasSession(name, msysRoot) {
+function tmuxHasSession(name) {
   try {
-    execFileSync(tmuxBin(msysRoot), ['has-session', '-t', name], { timeout: 4000, stdio: 'ignore' });
+    execFileSync('tmux', ['has-session', '-t', name], { timeout: 4000, stdio: 'ignore' });
     return true;
   } catch { return false; }
 }
@@ -208,18 +197,17 @@ app.get('/api/state', (_req, res) => {
   res.json({
     names: s.names || {},
     profiles: (s.profiles && s.profiles.length) ? s.profiles : [{ id: 'default', name: '기본' }],
-    settings: { ...readShellSettings(), platform: process.platform, defaultMsysRoot: DEFAULT_MSYS_ROOT },
+    settings: { ...readShellSettings(), platform: process.platform },
   });
 });
 // 터미널 셸 설정 저장 — 다음에 여는 세션부터 적용된다(이미 떠 있는 세션은 그대로).
 app.post('/api/settings', (req, res) => {
-  const { shell, msysRoot, wslDistro } = req.body || {};
+  const { shell, wslDistro } = req.body || {};
   if (shell && !SHELL_KINDS.includes(shell)) {
     return res.status(400).json({ error: 'shell 은 ' + SHELL_KINDS.join(' / ') + ' 중 하나여야 합니다' });
   }
   const s = readState(); s.settings = s.settings || {};
   if (shell) s.settings.shell = shell;
-  if (typeof msysRoot === 'string') s.settings.msysRoot = msysRoot.trim();
   if (typeof wslDistro === 'string') s.settings.wslDistro = wslDistro.trim();
   writeState(s);
   res.json({ ok: true, settings: readShellSettings() });
@@ -734,13 +722,12 @@ function cleanEnv(profileId) {
 function spawnShell(cwd, cols, rows, profileId, key) {
   const env = cleanEnv(profileId);
   const workdir = cwd && cwd.trim() ? cwd : os.homedir();
-  const { shell: pref, msysRoot, wslDistro } = readShellSettings();
+  const { shell: pref, wslDistro } = readShellSettings();
   let shell, args, reattachedTmux = false;
 
   if (pref === 'wsl-tmux') {
     // WSL 안의 tmux. claude-widget 계열 도구가 `wsl.exe -e tmux list-panes` 로
-    // 화면을 읽으므로, 그 도구와 붙이려면 반드시 이 경로여야 한다
-    // (MSYS2 tmux 는 WSL 밖의 별개 서버라 보이지 않는다).
+    // 화면을 읽으므로, 그 도구와 붙이려면 반드시 이 경로여야 한다.
     const name = tmuxSessionName(key);
     reattachedTmux = wslTmuxHasSession(name, wslDistro);
     const distroArgs = wslDistro ? ['-d', wslDistro] : [];
@@ -748,36 +735,12 @@ function spawnShell(cwd, cols, rows, profileId, key) {
     args = [...distroArgs, '-e', 'tmux', '-u', 'new-session', '-A', '-s', name,
       '-c', toWslPath(workdir), '-e', 'LANG=C.UTF-8', '-e', 'LC_ALL=C.UTF-8'];
   } else if (pref === 'tmux') {
-    // -A: 같은 이름의 tmux 세션이 있으면 새로 만들지 않고 붙는다(허브 재시작 후에도 세션 생존).
+    // macOS/Linux 의 시스템 tmux. -A: 같은 이름의 세션이 있으면 붙는다(허브 재시작 후에도 세션 생존).
+    // -u: LANG 에서 UTF-8 을 못 보면 한글이 '_' 로 바뀌는 것을 막는다.
     const name = tmuxSessionName(key);
-    reattachedTmux = tmuxHasSession(name, msysRoot); // 붙는 것인지 새로 만드는 것인지
-    if (IS_WIN) {
-      const bash = path.join(msysRoot, 'usr', 'bin', 'bash.exe');
-      if (!fs.existsSync(bash)) {
-        throw new Error('MSYS2 를 찾을 수 없습니다: ' + bash + '\n설정에서 MSYS2 경로를 고치거나 셸을 PowerShell 로 되돌리세요.');
-      }
-      // MSYS2 로그인 셸의 기본 동작 2가지를 꺼야 한다 — pty env 와 tmux 세션 env 양쪽에 준다.
-      //  1) PATH 를 새로 잡아 claude 를 못 찾는다(exit 127)  -> MSYS2_PATH_TYPE=inherit
-      //  2) 시작 디렉터리를 무시하고 $HOME 으로 cd 한다       -> CHERE_INVOKING=1
-      //     (2 를 빠뜨리면 작업 경로가 C:\msys64\home\<user> 로 튀어 대화 기록도 엉뚱한 곳에 쌓인다)
-      env.MSYS2_PATH_TYPE = 'inherit';
-      env.CHERE_INVOKING = '1';
-      // 3) tmux 클라이언트는 LANG/LC_* 에서 UTF-8 을 못 보면 비-UTF8 모드로 돌면서
-      //    한글 같은 멀티바이트 문자를 전부 '_' 로 바꿔 버린다. Windows 환경에는 LANG 이
-      //    없으므로 여기서 직접 준다. -u 플래그로 한 번 더 강제한다.
-      env.LANG = env.LANG || 'C.UTF-8';
-      env.LC_ALL = env.LC_ALL || 'C.UTF-8';
-      shell = bash;
-      args = ['-c', 'exec /usr/bin/tmux -u new-session -A -s ' + shQuote(name)
-        + ' -c ' + shQuote(toMsysPath(workdir))
-        + ' -e MSYS2_PATH_TYPE=inherit'
-        + ' -e CHERE_INVOKING=1'
-        + ' -e LANG=C.UTF-8'
-        + ' -e LC_ALL=C.UTF-8'];
-    } else {
-      shell = 'tmux';
-      args = ['-u', 'new-session', '-A', '-s', name, '-c', workdir];
-    }
+    reattachedTmux = tmuxHasSession(name); // 붙는 것인지 새로 만드는 것인지
+    shell = 'tmux';
+    args = ['-u', 'new-session', '-A', '-s', name, '-c', workdir];
   } else {
     shell = IS_WIN ? 'powershell.exe' : (process.env.SHELL || '/bin/bash');
     args = IS_WIN ? ['-NoLogo', '-NoExit'] : [];
@@ -869,12 +832,12 @@ function killSession(key) {
   // pty 를 죽여도 tmux 세션은 데몬에 남는다. 패널을 명시적으로 닫은 것이므로 세션도 정리한다.
   if (tmuxName) {
     try {
-      const { msysRoot, wslDistro } = readShellSettings();
+      const { wslDistro } = readShellSettings();
       if (s.term.tmuxKind === 'wsl-tmux') {
         const d = wslDistro ? ['-d', wslDistro] : [];
         execFile('wsl.exe', [...d, '-e', 'tmux', 'kill-session', '-t', tmuxName], { timeout: 6000 }, () => {});
       } else {
-        execFile(tmuxBin(msysRoot), ['kill-session', '-t', tmuxName], { timeout: 5000 }, () => {});
+        execFile('tmux', ['kill-session', '-t', tmuxName], { timeout: 5000 }, () => {});
       }
     } catch {}
   }

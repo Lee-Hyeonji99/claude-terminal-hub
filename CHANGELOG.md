@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.18.0] - 2026-09-30
+
+### Removed
+- **Windows 의 `tmux (MSYS2)` 셸 제거** — 셸 선택지가 `PowerShell` / `WSL tmux` 두 가지가 됐다.
+  - MSYS2 tmux 는 WSL 밖의 별개 서버라 외부 도구(`wsl.exe -e tmux`)에 보이지 않아, WSL tmux 가 생긴 뒤로는 쓸 이유가 없었다.
+  - MSYS2 경로 설정(`msysRoot`)과 관련 처리(경로 변환·bash 래핑·환경변수 보정)도 함께 걷어냈다.
+  - 예전에 `tmux (MSYS2)` 를 골라둔 설정은 자동으로 `WSL tmux` 로 넘어간다.
+  - macOS/Linux 의 시스템 `tmux` 는 그대로 남는다.
+
 ## [1.17.0] - 2026-09-30
 
 ### Added
