@@ -719,14 +719,21 @@ function spawnShell(cwd, cols, rows, profileId, key) {
       //     (2 를 빠뜨리면 작업 경로가 C:\msys64\home\<user> 로 튀어 대화 기록도 엉뚱한 곳에 쌓인다)
       env.MSYS2_PATH_TYPE = 'inherit';
       env.CHERE_INVOKING = '1';
+      // 3) tmux 클라이언트는 LANG/LC_* 에서 UTF-8 을 못 보면 비-UTF8 모드로 돌면서
+      //    한글 같은 멀티바이트 문자를 전부 '_' 로 바꿔 버린다. Windows 환경에는 LANG 이
+      //    없으므로 여기서 직접 준다. -u 플래그로 한 번 더 강제한다.
+      env.LANG = env.LANG || 'C.UTF-8';
+      env.LC_ALL = env.LC_ALL || 'C.UTF-8';
       shell = bash;
-      args = ['-c', 'exec /usr/bin/tmux new-session -A -s ' + shQuote(name)
+      args = ['-c', 'exec /usr/bin/tmux -u new-session -A -s ' + shQuote(name)
         + ' -c ' + shQuote(toMsysPath(workdir))
         + ' -e MSYS2_PATH_TYPE=inherit'
-        + ' -e CHERE_INVOKING=1'];
+        + ' -e CHERE_INVOKING=1'
+        + ' -e LANG=C.UTF-8'
+        + ' -e LC_ALL=C.UTF-8'];
     } else {
       shell = 'tmux';
-      args = ['new-session', '-A', '-s', name, '-c', workdir];
+      args = ['-u', 'new-session', '-A', '-s', name, '-c', workdir];
     }
   } else {
     shell = IS_WIN ? 'powershell.exe' : (process.env.SHELL || '/bin/bash');
