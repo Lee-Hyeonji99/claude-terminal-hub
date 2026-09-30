@@ -93,16 +93,37 @@ function writeState(s) {
 // Windows 에는 tmux 가 없어 MSYS2 의 것을 쓴다. msysRoot 로 설치 경로를 바꿀 수 있다.
 const BSLASH = String.fromCharCode(92); // '\' — 소스에 직접 쓰지 않고 상수로 둔다
 const DEFAULT_MSYS_ROOT = 'C:' + BSLASH + 'msys64';
+const SHELL_KINDS = ['powershell', 'tmux', 'wsl-tmux'];
 function readShellSettings() {
   const st = readState().settings || {};
   const root = (typeof st.msysRoot === 'string' && st.msysRoot.trim()) ? st.msysRoot.trim() : DEFAULT_MSYS_ROOT;
-  return { shell: st.shell === 'tmux' ? 'tmux' : 'powershell', msysRoot: root };
+  return {
+    shell: SHELL_KINDS.includes(st.shell) ? st.shell : 'powershell',
+    msysRoot: root,
+    // 빈 값이면 WSL 기본 배포판을 쓴다(-d 를 붙이지 않음).
+    wslDistro: (typeof st.wslDistro === 'string' && st.wslDistro.trim()) ? st.wslDistro.trim() : '',
+  };
 }
 // Windows 경로 -> MSYS2 POSIX 경로. 예: C:\Users\me -> /c/Users/me (cygpath 실행 없이 변환)
 function toMsysPath(p) {
   const s = String(p || '').split(BSLASH).join('/');
   const m = /^([A-Za-z]):\/(.*)$/.exec(s);
   return m ? '/' + m[1].toLowerCase() + '/' + m[2] : s;
+}
+// Windows 경로 -> WSL 경로. 예: C:\Users\me -> /mnt/c/Users/me
+function toWslPath(p) {
+  const s = String(p || '').split(BSLASH).join('/');
+  const m = /^([A-Za-z]):\/(.*)$/.exec(s);
+  return m ? '/mnt/' + m[1].toLowerCase() + '/' + m[2] : s;
+}
+// 설치된 WSL 배포판 목록. wsl.exe 출력은 UTF-16LE 라 그대로 읽으면 깨진다.
+function listWslDistros(cb) {
+  if (!IS_WIN) return cb([]);
+  execFile('wsl.exe', ['--list', '--quiet'], { timeout: 5000, encoding: 'buffer' }, (err, stdout) => {
+    if (err) return cb([]);
+    const text = Buffer.from(stdout).toString('utf16le');
+    cb(text.split(/\r?\n/).map((s) => s.trim()).filter((s) => s && s.length <= 256));
+  });
 }
 // 작은따옴표 셸 인용: ' -> '\''
 function shQuote(s) { return "'" + String(s).split("'").join("'" + BSLASH + "''") + "'"; }
@@ -118,6 +139,13 @@ function tmuxBin(msysRoot) {
 function tmuxHasSession(name, msysRoot) {
   try {
     execFileSync(tmuxBin(msysRoot), ['has-session', '-t', name], { timeout: 4000, stdio: 'ignore' });
+    return true;
+  } catch { return false; }
+}
+function wslTmuxHasSession(name, distro) {
+  try {
+    const d = distro ? ['-d', distro] : [];
+    execFileSync('wsl.exe', [...d, '-e', 'tmux', 'has-session', '-t', name], { timeout: 6000, stdio: 'ignore' });
     return true;
   } catch { return false; }
 }
@@ -185,15 +213,20 @@ app.get('/api/state', (_req, res) => {
 });
 // 터미널 셸 설정 저장 — 다음에 여는 세션부터 적용된다(이미 떠 있는 세션은 그대로).
 app.post('/api/settings', (req, res) => {
-  const { shell, msysRoot } = req.body || {};
-  if (shell && shell !== 'powershell' && shell !== 'tmux') {
-    return res.status(400).json({ error: "shell 은 'powershell' 또는 'tmux' 여야 합니다" });
+  const { shell, msysRoot, wslDistro } = req.body || {};
+  if (shell && !SHELL_KINDS.includes(shell)) {
+    return res.status(400).json({ error: 'shell 은 ' + SHELL_KINDS.join(' / ') + ' 중 하나여야 합니다' });
   }
   const s = readState(); s.settings = s.settings || {};
   if (shell) s.settings.shell = shell;
   if (typeof msysRoot === 'string') s.settings.msysRoot = msysRoot.trim();
+  if (typeof wslDistro === 'string') s.settings.wslDistro = wslDistro.trim();
   writeState(s);
   res.json({ ok: true, settings: readShellSettings() });
+});
+// 설치된 WSL 배포판 — 셸 팝오버의 배포판 선택에 쓴다.
+app.get('/api/wsl-distros', (_req, res) => {
+  listWslDistros((names) => res.json({ distros: names }));
 });
 
 app.post('/api/name', (req, res) => {
@@ -701,10 +734,20 @@ function cleanEnv(profileId) {
 function spawnShell(cwd, cols, rows, profileId, key) {
   const env = cleanEnv(profileId);
   const workdir = cwd && cwd.trim() ? cwd : os.homedir();
-  const { shell: pref, msysRoot } = readShellSettings();
+  const { shell: pref, msysRoot, wslDistro } = readShellSettings();
   let shell, args, reattachedTmux = false;
 
-  if (pref === 'tmux') {
+  if (pref === 'wsl-tmux') {
+    // WSL 안의 tmux. claude-widget 계열 도구가 `wsl.exe -e tmux list-panes` 로
+    // 화면을 읽으므로, 그 도구와 붙이려면 반드시 이 경로여야 한다
+    // (MSYS2 tmux 는 WSL 밖의 별개 서버라 보이지 않는다).
+    const name = tmuxSessionName(key);
+    reattachedTmux = wslTmuxHasSession(name, wslDistro);
+    const distroArgs = wslDistro ? ['-d', wslDistro] : [];
+    shell = 'wsl.exe';
+    args = [...distroArgs, '-e', 'tmux', '-u', 'new-session', '-A', '-s', name,
+      '-c', toWslPath(workdir), '-e', 'LANG=C.UTF-8', '-e', 'LC_ALL=C.UTF-8'];
+  } else if (pref === 'tmux') {
     // -A: 같은 이름의 tmux 세션이 있으면 새로 만들지 않고 붙는다(허브 재시작 후에도 세션 생존).
     const name = tmuxSessionName(key);
     reattachedTmux = tmuxHasSession(name, msysRoot); // 붙는 것인지 새로 만드는 것인지
@@ -751,8 +794,9 @@ function spawnShell(cwd, cols, rows, profileId, key) {
     useConpty: IS_WIN ? true : undefined,
   });
   // 패널을 X 로 닫을 때 tmux 세션까지 정리하기 위해 이름을 들고 있는다(§killSession).
-  if (pref === 'tmux') {
+  if (pref === 'tmux' || pref === 'wsl-tmux') {
     term.tmuxName = tmuxSessionName(key);
+    term.tmuxKind = pref;
     // 살아 있던 tmux 세션에 붙은 것이면 claude 가 이미 그 안에서 돌고 있다.
     // 여기서 또 'claude' 를 타이핑하면 실행 중인 TUI 에 글자가 박힌다.
     term.tmuxReattached = reattachedTmux;
@@ -825,9 +869,13 @@ function killSession(key) {
   // pty 를 죽여도 tmux 세션은 데몬에 남는다. 패널을 명시적으로 닫은 것이므로 세션도 정리한다.
   if (tmuxName) {
     try {
-      const { msysRoot } = readShellSettings();
-      const bin = IS_WIN ? path.join(msysRoot, 'usr', 'bin', 'tmux.exe') : 'tmux';
-      execFile(bin, ['kill-session', '-t', tmuxName], { timeout: 5000 }, () => {});
+      const { msysRoot, wslDistro } = readShellSettings();
+      if (s.term.tmuxKind === 'wsl-tmux') {
+        const d = wslDistro ? ['-d', wslDistro] : [];
+        execFile('wsl.exe', [...d, '-e', 'tmux', 'kill-session', '-t', tmuxName], { timeout: 6000 }, () => {});
+      } else {
+        execFile(tmuxBin(msysRoot), ['kill-session', '-t', tmuxName], { timeout: 5000 }, () => {});
+      }
     } catch {}
   }
   ptyStore.delete(key);
@@ -882,8 +930,10 @@ wss.on('connection', (ws) => {
       else if (msg.runClaude) cmd = (msg.command && msg.command.trim()) || 'claude';
       // 살아 있던 tmux 세션에 붙은 것이면 claude 가 이미 그 안에서 돌고 있다 — 다시 치지 않는다.
       if (term.tmuxReattached) cmd = null;
-      // tmux 는 내부 로그인 셸이 뜨는 시간이 더 필요하다(400ms 면 입력이 삼켜짐)
-      const bootDelay = readShellSettings().shell === 'tmux' ? 1200 : 400;
+      // tmux 는 내부 로그인 셸이 뜨는 시간이 더 필요하다(400ms 면 입력이 삼켜짐).
+      // WSL 은 배포판 기동까지 겹쳐 더 느리다.
+      const shellKind = readShellSettings().shell;
+      const bootDelay = shellKind === 'wsl-tmux' ? 2500 : (shellKind === 'tmux' ? 1200 : 400);
       if (cmd) setTimeout(() => { try { term.write(`${cmd}\r`); } catch {} }, bootDelay);
       startWatch(session);
       return;

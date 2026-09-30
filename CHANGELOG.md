@@ -1,5 +1,20 @@
 # Changelog
 
+## [1.17.0] - 2026-09-30
+
+### Added
+- **WSL tmux 셸 추가** — 셸 선택지가 `PowerShell` / `tmux (MSYS2)` / `WSL tmux` 세 가지가 됐다.
+  - **외부 도구 연동이 목적이다.** `wsl.exe -e tmux list-panes` 로 화면을 읽는 위젯류 도구는 **WSL 안의 tmux 만** 볼 수 있다. MSYS2 tmux 는 WSL 밖의 별개 서버라 그 도구들에 보이지 않고, PowerShell(ConPTY)은 애초에 외부에서 화면을 읽을 방법이 없다.
+  - 배포판은 팝오버에서 고른다(`wsl.exe --list` 조회, 비워두면 기본 배포판). 출력이 UTF-16LE 라 디코딩해서 읽는다.
+  - 작업 경로는 `C:\...` → `/mnt/c/...` 로 변환해 넘기고, Claude 는 interop 덕에 다시 `C:\...` 로 인식한다 — **대화 기록이 PowerShell 로 열었을 때와 같은 폴더에 쌓인다**.
+  - 패널을 X 로 닫으면 WSL 쪽 tmux 세션도 함께 정리한다.
+  - 자동 명령 지연은 배포판 기동까지 감안해 2500ms (MSYS2 tmux 1200ms / PowerShell 400ms).
+- `GET /api/wsl-distros` 신설.
+
+### Notes
+- WSL 안에 Node 를 따로 깔지 않아도 된다 — `claude` 가 interop 으로 Windows 설치본을 그대로 실행한다(실측 확인).
+- `list-panes` 의 `pane_current_command` 는 `claude` 가 아니라 `init` 으로 보인다(Windows interop 프로세스라서). 명령 이름으로 필터하는 도구라면 참고가 필요하다.
+
 ## [1.16.1] - 2026-09-30
 
 ### Fixed

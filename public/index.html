@@ -522,18 +522,25 @@
     </div>
     <div class="popover-wrap">
       <button id="shellBtn" class="ghost icon-btn" title="터미널 셸 — 세션을 어떤 셸로 열지"><span data-icon="tool"></span></button>
-      <div id="shellPopover" class="popover" style="min-width:250px">
+      <div id="shellPopover" class="popover" style="min-width:270px">
         <div class="popover-sep">세션을 열 셸</div>
         <div class="popover-item" data-shell="powershell"><span class="swatch" style="background:#012456"></span><span id="shellLabelDefault">PowerShell</span></div>
-        <div class="popover-item" data-shell="tmux"><span class="swatch" style="background:#1bb91f"></span>tmux</div>
+        <div class="popover-item" data-shell="tmux"><span class="swatch" style="background:#1bb91f"></span>tmux <span style="opacity:.6;font-size:11px">(MSYS2)</span></div>
+        <div class="popover-item" data-shell="wsl-tmux"><span class="swatch" style="background:#e95420"></span>WSL tmux <span style="opacity:.6;font-size:11px">— 외부 도구 연동</span></div>
         <div class="popover-sep" id="msysRootSep">MSYS2 경로 <span style="font-weight:400">— Windows 의 tmux 위치</span></div>
         <div class="knob-row" id="msysRootRow">
           <input type="text" id="msysRoot" placeholder="C:\msys64" style="width:100%;font-size:11px">
+        </div>
+        <div class="popover-sep" id="wslDistroSep">WSL 배포판</div>
+        <div class="knob-row" id="wslDistroRow">
+          <select id="wslDistro" style="width:100%;font-size:11px"></select>
         </div>
         <div class="popover-sep">안내</div>
         <div style="padding:4px 8px 8px;font-size:11px;color:var(--muted);line-height:1.5">
           바꾸면 <b>다음에 여는 세션부터</b> 적용됩니다.<br>
           tmux 는 허브를 껐다 켜도 세션이 살아 있고, 같은 패널로 다시 붙습니다.<br>
+          <b>WSL tmux</b> 는 <code>wsl.exe -e tmux</code> 로 화면을 읽는 외부 위젯·도구가 세션을 볼 수 있습니다.
+          MSYS2 tmux 는 WSL 밖의 별개 서버라 그 도구들에 보이지 않습니다.<br>
           떼어내기 <b>Ctrl+B</b> 후 <b>D</b>.
         </div>
       </div>

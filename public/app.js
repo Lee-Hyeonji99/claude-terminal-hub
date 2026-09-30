@@ -412,23 +412,45 @@ function renderShellPopover() {
   if (lbl) lbl.textContent = isWin ? 'PowerShell' : '기본 셸 ($SHELL)';
   document.querySelectorAll('#shellPopover .popover-item[data-shell]').forEach((el) => {
     el.classList.toggle('active', el.dataset.shell === shellSettings.shell);
+    // WSL 은 Windows 전용 개념이라 그 외 플랫폼에서는 숨긴다.
+    if (el.dataset.shell === 'wsl-tmux') el.style.display = isWin ? '' : 'none';
   });
-  // MSYS2 경로는 Windows + tmux 일 때만 의미가 있다(그 외에는 감춘다).
-  const show = isWin && shellSettings.shell === 'tmux';
-  const sep = document.getElementById('msysRootSep');
-  const row = document.getElementById('msysRootRow');
-  if (sep) sep.style.display = show ? '' : 'none';
-  if (row) row.style.display = show ? '' : 'none';
+  // 각 경로 설정은 해당 셸을 골랐을 때만 보여준다.
+  const showMsys = isWin && shellSettings.shell === 'tmux';
+  const showWsl = isWin && shellSettings.shell === 'wsl-tmux';
+  const vis = (id, on) => { const e = document.getElementById(id); if (e) e.style.display = on ? '' : 'none'; };
+  vis('msysRootSep', showMsys); vis('msysRootRow', showMsys);
+  vis('wslDistroSep', showWsl); vis('wslDistroRow', showWsl);
+
   const inp = document.getElementById('msysRoot');
   if (inp) {
     if (shellSettings.defaultMsysRoot) inp.placeholder = shellSettings.defaultMsysRoot;
     if (document.activeElement !== inp) inp.value = shellSettings.msysRoot || '';
   }
+  if (showWsl) loadWslDistros();
+
   const btn = document.getElementById('shellBtn');
   if (btn) {
-    btn.classList.toggle('on', shellSettings.shell === 'tmux');
-    btn.title = '터미널 셸 — 현재: ' + (shellSettings.shell === 'tmux' ? 'tmux' : (isWin ? 'PowerShell' : '기본 셸'));
+    btn.classList.toggle('on', shellSettings.shell !== 'powershell');
+    const label = { 'wsl-tmux': 'WSL tmux', tmux: 'tmux (MSYS2)' }[shellSettings.shell]
+      || (isWin ? 'PowerShell' : '기본 셸');
+    btn.title = '터미널 셸 — 현재: ' + label;
   }
+}
+
+// 설치된 WSL 배포판 목록 (서버가 wsl.exe --list 로 조회). 한 번만 받아 캐시한다.
+let wslDistrosLoaded = false;
+async function loadWslDistros() {
+  const sel = document.getElementById('wslDistro');
+  if (!sel || wslDistrosLoaded) { if (sel) sel.value = shellSettings.wslDistro || ''; return; }
+  try {
+    const r = await fetch('/api/wsl-distros').then((x) => x.json());
+    const list = Array.isArray(r.distros) ? r.distros : [];
+    sel.innerHTML = '<option value="">기본 배포판</option>'
+      + list.map((n) => `<option value="${n.replace(/"/g, '&quot;')}">${n}</option>`).join('');
+    wslDistrosLoaded = true;
+    sel.value = shellSettings.wslDistro || '';
+  } catch {}
 }
 
 async function saveShellSettings(patch) {
@@ -451,6 +473,9 @@ document.getElementById('shellPopover').addEventListener('click', (e) => {
 });
 document.getElementById('msysRoot').addEventListener('change', (e) => {
   saveShellSettings({ msysRoot: e.target.value });
+});
+document.getElementById('wslDistro').addEventListener('change', (e) => {
+  saveShellSettings({ wslDistro: e.target.value });
 });
 
 /* ================= 캐릭터 테마 =================
