@@ -14,6 +14,7 @@ const fs = require('fs');
 const path = require('path');
 const http = require('http');
 const readline = require('readline');
+const crypto = require('crypto');
 const { execFile, execFileSync } = require('child_process');
 const express = require('express');
 const { WebSocketServer } = require('ws');
@@ -509,6 +510,26 @@ app.get('/api/sessions', async (req, res) => {
   res.json({ path: target, encoded: encodeProjectPath(target), total: withStat.length, sessions });
 });
 
+// Claude 세션 ID 는 UUID 다. 셸에 그대로 치는 값이라 형식이 맞는 것만 받는다.
+const SESSION_ID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+function sessionFile(profile, cwd, id) {
+  return path.join(projectsDirFor(profile), encodeProjectPath(cwd || os.homedir()), id + '.jsonl');
+}
+
+// ---- 패널 제목 갱신용: 세션 하나의 지금 제목 ----
+// 허브에서 붙인 이름 > /rename(custom-title) > ai-title > 첫 메시지. 대화가 아직 없으면 title=null.
+app.get('/api/session-title', async (req, res) => {
+  const id = (req.query.id || '').toString();
+  const cwd = (req.query.cwd || '').toString().trim();
+  if (!SESSION_ID_RE.test(id) || !cwd) return res.status(400).json({ error: 'id(UUID), cwd 필요' });
+  const named = (readState().names || {})[id];
+  if (named) return res.json({ id, title: named, exists: true });
+  const file = sessionFile(req.query.profile, cwd, id);
+  if (!fs.existsSync(file)) return res.json({ id, title: null, exists: false });
+  const meta = await readSessionMeta(file);
+  res.json({ id, title: meta.customTitle || meta.aiTitle || meta.summary || meta.title || null, exists: true });
+});
+
 // ---- 세션 트랜스크립트를 다른 프로필로 복사 (계정 간 이어가기) ----
 // 대화 .jsonl 은 재생 파일이라 대상 프로필로 복사만 하면 해당 계정으로 resume 가능.
 // 원본 유지 정책: 원본은 남기고, 대상에 이미 같은 id 가 있으면 덮어쓰지 않는다.
@@ -804,7 +825,9 @@ function startWatch(session) {
   const dir = path.join(projectsDirFor(session.profile), encodeProjectPath(session.cwd || os.homedir()));
   if (session.resumeId) {
     const jf = path.join(dir, session.resumeId + '.jsonl');
-    if (fs.existsSync(jf)) beginWatch(session, jf, true);
+    // --session-id 로 연 세션은 첫 메시지 전엔 파일이 없다. watchFile 은 없는 파일도 생기면 잡는다.
+    if (session.freshId) beginWatch(session, jf, false);
+    else if (fs.existsSync(jf)) beginWatch(session, jf, true);
     return;
   }
   const startT = Date.now();
@@ -823,6 +846,27 @@ function startWatch(session) {
     else if (tries > 15) { clearInterval(session.watch.discoverIv); session.watch.discoverIv = null; }
   }, 800);
 }
+// 세션에서 칠 claude 명령. 새 대화도 ID 를 미리 정해(--session-id) 나중에 --resume 으로 이어갈 수 있게 한다.
+// session.resumeId / session.freshId 를 채운다(감시 대상 파일을 정하는 데 쓴다).
+const CLAUDE_SESSION_FLAG_RE = /\s(-r|--resume|-c|--continue|--session-id|-p|--print)(\s|=|$)/;
+function buildClaudeCommand(msg, session) {
+  const id = msg.resumeId ? String(msg.resumeId) : '';
+  if (id && SESSION_ID_RE.test(id)) {
+    // 대화가 한 번도 오가지 않은 세션은 기록 파일이 없어 --resume 이 실패한다 — 같은 ID 로 새로 연다.
+    if (fs.existsSync(sessionFile(session.profile, session.cwd, id))) return `claude --resume ${id}`;
+    session.freshId = true;
+    return `claude --session-id ${id}`;
+  }
+  if (id) return `claude --resume ${id}`;
+  if (!msg.runClaude) return null;
+  const custom = (msg.command && msg.command.trim()) || 'claude';
+  // 직접 입력한 명령이라도 claude 로 시작하고 세션을 직접 고르지 않았으면 ID 를 붙인다.
+  if (!/^claude(\s|$)/.test(custom) || CLAUDE_SESSION_FLAG_RE.test(' ' + custom.slice(6))) return custom;
+  session.resumeId = crypto.randomUUID();
+  session.freshId = true;
+  return `claude --session-id ${session.resumeId}` + custom.slice(6);
+}
+
 function killSession(key) {
   const s = ptyStore.get(key);
   if (!s) return;
@@ -888,11 +932,10 @@ wss.on('connection', (ws) => {
       });
       term.onExit(({ exitCode }) => { session.exited = true; broadcastJson(session, { type: 'exit', code: exitCode }); stopWatch(session); ptyStore.delete(key); });
       safeSend({ type: 'ready', pid: term.pid, cwd: session.cwd });
-      let cmd = null;
-      if (msg.resumeId) cmd = `claude --resume ${msg.resumeId}`;
-      else if (msg.runClaude) cmd = (msg.command && msg.command.trim()) || 'claude';
       // 살아 있던 tmux 세션에 붙은 것이면 claude 가 이미 그 안에서 돌고 있다 — 다시 치지 않는다.
-      if (term.tmuxReattached) cmd = null;
+      const cmd = term.tmuxReattached ? null : buildClaudeCommand(msg, session);
+      // 새 대화에 미리 정한 ID 를 클라이언트에 알려 레이아웃에 남긴다 → 허브를 다시 켜면 이 대화로 이어진다.
+      if (session.freshId && !msg.resumeId) safeSend({ type: 'session', id: session.resumeId });
       // tmux 는 내부 로그인 셸이 뜨는 시간이 더 필요하다(400ms 면 입력이 삼켜짐).
       // WSL 은 배포판 기동까지 겹쳐 더 느리다.
       const shellKind = readShellSettings().shell;

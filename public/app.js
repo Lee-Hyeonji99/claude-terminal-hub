@@ -1117,6 +1117,31 @@ function restoreMinimized() {
   }
 }
 
+/* ---------- 패널 제목 따라가기 — Claude 에서 /rename 하면 패널 제목도 바뀐다 ---------- */
+const TITLE_POLL_MS = 5000;
+async function syncPaneTitle(p) {
+  const cfg = p && p.cfg;
+  if (!cfg || cfg.viewer || cfg.preview || !cfg.resumeId || !cfg.cwd) return false;
+  try {
+    const q = new URLSearchParams({ id: cfg.resumeId, cwd: cfg.cwd, profile: cfg.profile || '' });
+    const r = await fetch('/api/session-title?' + q);
+    if (!r.ok) return false;
+    const { title } = await r.json();
+    if (!title || title === cfg.title) return false;
+    cfg.title = title;
+    const ttl = p.el && p.el.querySelector('.bar .ttl');
+    if (ttl) ttl.textContent = title;
+    return true;
+  } catch { return false; } // 다음 주기에 다시
+}
+async function syncPaneTitles() {
+  if (document.visibilityState !== 'visible') return;
+  const panes = [...columns.flatMap((c) => c.panes), ...minimized];
+  const results = await Promise.all(panes.map(syncPaneTitle));
+  if (results.some(Boolean)) { saveLayoutDebounced(); renderTray(); }
+}
+setInterval(syncPaneTitles, TITLE_POLL_MS);
+
 function newColumn(atIndex) {
   const el = document.createElement('div');
   el.className = 'column';
@@ -1360,6 +1385,8 @@ function addPane(cfg, placement) {
           if (m.type === 'error') { term.write(`\r\n\x1b[31m${m.message}\x1b[0m\r\n`); return; }
           if (m.type === 'pong') { missedPongs = 0; return; } // 하트비트 응답 → 살아있음
           if (m.type === 'changed') { onExternalChange(); return; }
+          // 새 대화의 Claude 세션 ID — 레이아웃에 남겨 허브를 다시 켜면 이 대화로 이어간다.
+          if (m.type === 'session') { cfg.resumeId = m.id; saveLayoutDebounced(); return; }
           if (m.type === 'artifact') { onArtifact(m.path); return; }
         } catch { /* 실제 출력 → write */ }
       }
