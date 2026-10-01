@@ -114,6 +114,19 @@ function applyFontSize(px) {
   setTimeout(() => { try { fitAll(); } catch {} }, 30);
 }
 
+/* ---------- 터미널 줄간격 — 1.0 이면 한글이 위아래로 꽉 끼어 보인다 ---------- */
+const LINE_HEIGHTS = [1.0, 1.1, 1.2, 1.3, 1.4];
+let termLineHeight = (() => {
+  const v = parseFloat(localStorage.getItem('cth_line_height'));
+  return LINE_HEIGHTS.includes(v) ? v : 1.2;
+})();
+function applyLineHeight(v) {
+  termLineHeight = LINE_HEIGHTS.includes(v) ? v : 1.2;
+  localStorage.setItem('cth_line_height', String(termLineHeight));
+  columns.forEach((c) => c.panes.forEach((p) => { if (p.term) { try { p.term.options.lineHeight = termLineHeight; } catch {} } }));
+  setTimeout(() => { try { fitAll(); } catch {} }, 30);
+}
+
 /* ---------- 터미널 글꼴(폰트) 선택 ---------- */
 const FONT_FAMILIES = [
   { label: 'JetBrains Mono (번들)', css: "'JetBrains Mono',Consolas,monospace" },
@@ -124,13 +137,20 @@ const FONT_FAMILIES = [
   { label: 'Consolas', css: "Consolas,'Courier New',monospace" },
 ];
 let termFontFamily = localStorage.getItem('cth_font_family') || FONT_FAMILIES[0].css;
+// 번들 영문 글꼴에는 한글이 없다. 비워두면 브라우저가 아무 글꼴이나 골라 높이가 들쭉날쭉해지므로
+// 한글 대체 글꼴을 generic 앞에 명시한다(D2Coding 이 있으면 그것, 없으면 OS 기본 한글 글꼴).
+const HANGUL_FALLBACK = "'D2Coding','Malgun Gothic','Apple SD Gothic Neo'";
+function withHangul(css) {
+  if (/Malgun Gothic/.test(css)) return css;
+  return /,\s*monospace\s*$/.test(css) ? css.replace(/,\s*monospace\s*$/, `,${HANGUL_FALLBACK},monospace`) : `${css},${HANGUL_FALLBACK}`;
+}
 function applyFontFamily(css) {
   termFontFamily = css;
   localStorage.setItem('cth_font_family', css);
   columns.forEach((c) => c.panes.forEach((p) => {
     if (!p.term) return;
     try {
-      p.term.options.fontFamily = css;
+      p.term.options.fontFamily = withHangul(css);
       // 캔버스 렌더러는 글리프를 캐시하므로 아틀라스를 비우고 다시 그려야 실제로 바뀐다.
       if (typeof p.term.clearTextureAtlas === 'function') p.term.clearTextureAtlas();
       p.term.refresh(0, Math.max(0, (p.term.rows || 1) - 1));
@@ -1242,8 +1262,9 @@ function addPane(cfg, placement) {
   termEl.style.position = 'relative';
   const term = new Terminal({
     cursorBlink: true,
-    fontFamily: termFontFamily,
+    fontFamily: withHangul(termFontFamily),
     fontSize: termFontSize,
+    lineHeight: termLineHeight,
     theme: currentTermTheme(),
     scrollback: 8000,
     allowProposedApi: true,
@@ -2418,6 +2439,14 @@ function setCompose(on) {
   });
   if (btnCheck) btnCheck.addEventListener('click', () => { set('확인 중…', ''); hub.checkUpdate(); });
   if (btnInstall) btnInstall.addEventListener('click', () => hub.installUpdate());
+})();
+
+(function initLineHeightSelect() {
+  const sel = document.getElementById('lineHeight');
+  if (!sel) return;
+  sel.innerHTML = LINE_HEIGHTS.map((v) => `<option value="${v}">줄간격 ${v.toFixed(1)}</option>`).join('');
+  sel.value = String(termLineHeight);
+  sel.addEventListener('change', () => applyLineHeight(parseFloat(sel.value)));
 })();
 
 document.getElementById('fontDown').addEventListener('click', () => applyFontSize(termFontSize - 1));
