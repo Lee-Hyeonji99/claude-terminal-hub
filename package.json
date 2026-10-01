@@ -42,6 +42,7 @@
       "public/**/*",
       "bin/**/*",
       "package.json",
+      "CHANGELOG.md",
       "node_modules/**/*",
       "!node_modules/electron-builder/**",
       "!node_modules/electron/**",

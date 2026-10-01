@@ -480,6 +480,45 @@ app.get('/api/search', async (req, res) => {
   res.json({ sessions: out, total: out.length, scanned: all.length });
 });
 
+// ---- 업데이트 팝오버용: 버전별 주요 변경 2~3줄 ----
+// 릴리즈 본문은 CI 가 "Automated build" 로만 채우므로 CHANGELOG.md 가 원천이다.
+// 새 버전의 내용은 아직 설치본에 없으니 공개 저장소의 main 을 먼저 보고, 안 되면 설치본에 든 것을 쓴다.
+const CHANGELOG_URL = 'https://raw.githubusercontent.com/Lee-Hyeonji99/claude-terminal-hub/main/CHANGELOG.md';
+const CHANGELOG_KIND = { Added: '추가', Fixed: '수정', Changed: '변경', Removed: '제거', Notes: '참고' };
+let changelogCache = { at: 0, text: null };
+async function loadChangelog() {
+  if (changelogCache.text && Date.now() - changelogCache.at < 10 * 60 * 1000) return changelogCache.text;
+  try {
+    const r = await fetch(CHANGELOG_URL, { signal: AbortSignal.timeout(4000) });
+    if (r.ok) { changelogCache = { at: Date.now(), text: await r.text() }; return changelogCache.text; }
+  } catch { /* 오프라인 → 설치본 */ }
+  try { return fs.readFileSync(path.join(__dirname, 'CHANGELOG.md'), 'utf8'); } catch { return ''; }
+}
+function changelogHighlights(md, version, limit) {
+  const lines = md.split(/\r?\n/);
+  const start = lines.findIndex((l) => l.startsWith(`## [${version}]`));
+  if (start < 0) return [];
+  const out = [];
+  let kind = '';
+  for (let i = start + 1; i < lines.length && !lines[i].startsWith('## ') && out.length < limit; i++) {
+    const h = /^### (\w+)/.exec(lines[i]);
+    if (h) { kind = CHANGELOG_KIND[h[1]] || h[1]; continue; }
+    const m = /^- (.+)$/.exec(lines[i]); // 들여쓴 하위 항목은 건너뛴다 — 맨 위 줄만 요약으로 쓴다
+    if (!m) continue;
+    const bold = /\*\*(.+?)\*\*/.exec(m[1]);
+    let text = (bold ? bold[1] : m[1]).replace(/`/g, '').replace(/\[(.+?)\]\(.+?\)/g, '$1').replace(/[:：]\s*$/, '').trim();
+    if (text.length > 80) text = text.slice(0, 79) + '…';
+    out.push({ kind, text });
+  }
+  return out;
+}
+app.get('/api/changelog', async (req, res) => {
+  const version = (req.query.version || '').toString().replace(/^v/, '');
+  if (!/^\d+\.\d+\.\d+$/.test(version)) return res.status(400).json({ error: 'version(x.y.z) 필요' });
+  const items = changelogHighlights(await loadChangelog(), version, 3);
+  res.json({ version, items });
+});
+
 app.get('/api/sessions', async (req, res) => {
   const target = (req.query.path || '').toString().trim();
   if (!target) return res.status(400).json({ error: 'path 필요' });

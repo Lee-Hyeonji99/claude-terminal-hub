@@ -2370,7 +2370,25 @@ function setCompose(on) {
   const hub = window.claudeHub;
   const isApp = !!(hub && hub.isApp && hub.checkUpdate);
 
-  fetch('/health').then((r) => r.json()).then((d) => { if ($('updCur')) $('updCur').textContent = 'v' + d.version; }).catch(() => {});
+  // 주요 변경 2~3줄 — 새 버전이 있으면 그 버전, 없으면 지금 쓰는 버전의 것을 보여준다.
+  const notesEl = $('updNotes');
+  let shownNotes = null;
+  async function showNotes(version, heading) {
+    if (!notesEl || !version || shownNotes === version) return;
+    shownNotes = version;
+    try {
+      const { items } = await fetch('/api/changelog?version=' + encodeURIComponent(version)).then((r) => r.json());
+      if (!Array.isArray(items) || !items.length) { notesEl.style.display = 'none'; return; }
+      notesEl.innerHTML = `<div class="h">${escapeHtml(heading)}</div><ul>`
+        + items.map((it) => `<li>${it.kind ? `<span class="k">${escapeHtml(it.kind)}</span>` : ''}${escapeHtml(it.text)}</li>`).join('')
+        + '</ul>';
+      notesEl.style.display = 'block';
+    } catch { notesEl.style.display = 'none'; shownNotes = null; }
+  }
+  fetch('/health').then((r) => r.json()).then((d) => {
+    if ($('updCur')) $('updCur').textContent = 'v' + d.version;
+    showNotes(d.version, `v${d.version} 주요 변경`);
+  }).catch(() => {});
 
   if (!isApp) {
     if (state) state.textContent = '브라우저 모드';
@@ -2382,12 +2400,16 @@ function setCompose(on) {
   hub.onUpdateStatus((p) => {
     if (!p || !p.state) return;
     if (p.state === 'checking') { set('확인 중…', ''); }
-    else if (p.state === 'available') { set(`새 버전 v${p.version} 내려받는 중`, ''); if (prog) prog.style.display = 'block'; }
+    else if (p.state === 'available') {
+      set(`새 버전 v${p.version} 내려받는 중`, ''); if (prog) prog.style.display = 'block';
+      showNotes(p.version, `v${p.version} 에서 달라지는 점`);
+    }
     else if (p.state === 'progress') {
       if (prog) { prog.style.display = 'block'; const bar = prog.querySelector('i'); if (bar) bar.style.width = Math.round(p.percent || 0) + '%'; }
       set(`다운로드 ${Math.round(p.percent || 0)}%`, '');
     } else if (p.state === 'downloaded') {
       set(`v${p.version} 설치 준비 완료`, '지금 재시작하거나, 앱을 종료하면 자동으로 설치됩니다.');
+      showNotes(p.version, `v${p.version} 에서 달라지는 점`);
       if (prog) prog.style.display = 'none';
       if (btnInstall) btnInstall.style.display = 'block';
     } else if (p.state === 'none') { set('최신 버전입니다', ''); }
