@@ -32,6 +32,7 @@ const ICON = {
   keyboard: ic('<rect x="2" y="6" width="20" height="12" rx="2"/><path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M6 14h12"/>'),
   task: ic('<path d="M12 2 2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5M2 12l10 5 10-5"/>'),
   tool: ic('<path d="M4 17l6-6-6-6"/><path d="M12 19h8"/>'),
+  more: ic('<circle cx="5" cy="12" r="1.3"/><circle cx="12" cy="12" r="1.3"/><circle cx="19" cy="12" r="1.3"/>'),
 };
 function hydrateIcons(root) {
   (root || document).querySelectorAll('[data-icon]').forEach((el) => {
@@ -2439,12 +2440,32 @@ applyFontSize(termFontSize);
 
 ensureNotifyPermission();
 
+/* ---------- 상단 도구 막대 간소화 — 넘치지 않는 가장 낮은 단계를 고른다 ---------- */
+const headerEl = document.querySelector('header');
+function fitHeader() {
+  for (const lv of ['0', '1', '2']) {
+    headerEl.dataset.compact = lv;
+    if (headerEl.scrollWidth <= headerEl.clientWidth) break;
+  }
+  if (headerEl.dataset.compact !== '2') headerEl.classList.remove('tools-open');
+}
+document.getElementById('hdrMore').addEventListener('click', (e) => {
+  e.stopPropagation();
+  closePopovers();
+  headerEl.classList.toggle('tools-open');
+});
+// 메뉴 안의 셀렉트·버튼을 눌러도 닫히지 않게 하고, 바깥을 누르면 닫는다.
+document.getElementById('hdrTools').addEventListener('click', (e) => e.stopPropagation());
+document.addEventListener('click', () => headerEl.classList.remove('tools-open'));
+
 let rt;
-window.addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(fitAll, 120); });
+window.addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(() => { fitAll(); fitHeader(); }, 120); });
 
 hydrateIcons();
 setLnb(localStorage.getItem('cth_lnb_collapsed') === '1');
 updateStatus();
+fitHeader(); // 아이콘이 채워진 뒤에 재야 실제 폭이 나온다
+if (document.fonts && document.fonts.ready) document.fonts.ready.then(fitHeader);
 
 fetch('/health').then((r) => r.json()).then((d) => {
   const brand = document.querySelector('.brand');

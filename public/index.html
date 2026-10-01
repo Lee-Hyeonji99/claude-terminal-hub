@@ -82,6 +82,18 @@
     header .brand span{color:var(--accent)}
     header .spacer{flex:1}
     header .status{color:var(--muted);font-size:12px}
+    /* 좁은 창 간소화 — app.js fitHeader 가 넘치지 않을 때까지 단계를 올린다.
+       1: 버튼 글자·상태·브랜드 부제 숨김  2: 도구 묶음을 ⋯ 메뉴로 접기 */
+    header{position:relative}
+    header>*:not(.spacer){flex-shrink:0;white-space:nowrap}
+    header .hdr-tools{display:flex;align-items:center;gap:10px}
+    #hdrMore{display:none}
+    header[data-compact="1"] .lbl,header[data-compact="2"] .lbl,
+    header[data-compact="1"] .status,header[data-compact="2"] .status,
+    header[data-compact="1"] .brand span,header[data-compact="2"] .brand span{display:none}
+    header[data-compact="2"] #hdrMore{display:inline-flex}
+    header[data-compact="2"] .hdr-tools{display:none;position:absolute;top:calc(100% + 4px);right:8px;z-index:45;flex-wrap:wrap;max-width:min(92vw,460px);padding:8px;background:var(--panel);border:1px solid var(--border);border-radius:8px;box-shadow:0 12px 32px rgba(0,0,0,.35)}
+    header[data-compact="2"].tools-open .hdr-tools{display:flex}
     select,button,input{background:var(--panel);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:6px 10px;font:inherit}
     button{cursor:pointer}
     button:hover{border-color:var(--accent)}
@@ -437,11 +449,14 @@
   <header>
     <button id="lnbToggle" class="ghost icon-btn" title="사이드바 접기/펼치기"><span data-icon="menu"></span></button>
     <div class="brand">Claude <span>Terminal Hub</span></div>
-    <button id="add" class="primary"><span data-icon="plus"></span> 새 세션</button>
-    <button id="addWeb" class="ghost" title="웹 미리보기 패널 추가"><span data-icon="globe"></span> 웹 미리보기</button>
-    <button id="addFile" class="ghost" title="로컬 파일 미리보기 (HTML/이미지/MD)"><span data-icon="file"></span> 파일 열기</button>
+    <button id="add" class="primary" title="새 세션"><span data-icon="plus"></span><span class="lbl">새 세션</span></button>
+    <button id="addWeb" class="ghost" title="웹 미리보기 패널 추가"><span data-icon="globe"></span><span class="lbl">웹 미리보기</span></button>
+    <button id="addFile" class="ghost" title="로컬 파일 미리보기 (HTML/이미지/MD)"><span data-icon="file"></span><span class="lbl">파일 열기</span></button>
     <div class="spacer"></div>
     <span class="status" id="status">세션 0</span>
+    <!-- 창이 좁아지면 이 묶음이 ⋯ 메뉴로 들어간다 (app.js fitHeader) -->
+    <button id="hdrMore" class="ghost icon-btn" title="도구 더보기"><span data-icon="more"></span></button>
+    <div class="hdr-tools" id="hdrTools">
     <div class="popover-wrap">
       <button id="themeBtn" class="ghost icon-btn" title="색상 테마"><span data-icon="palette"></span></button>
       <div id="themePopover" class="popover">
@@ -569,6 +584,7 @@
         </div>
         <div class="popover-note" id="updNote"></div>
       </div>
+    </div>
     </div>
     <button id="helpBtn" class="ghost icon-btn" title="단축키 · 명령어 도움말 (?)"><span data-icon="help"></span></button>
   </header>
