@@ -1,0 +1,20 @@
+name: 건의
+description: 있으면 좋겠는 기능이나 바뀌었으면 하는 점
+title: "[건의] "
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: 무엇이 있으면 좋을까요
+    validations:
+      required: true
+  - type: textarea
+    id: why
+    attributes:
+      label: 왜 필요한가요
+      description: 지금 어떤 점이 불편한지
+  - type: input
+    id: version
+    attributes:
+      label: 앱 버전

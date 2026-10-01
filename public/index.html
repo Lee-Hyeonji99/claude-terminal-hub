@@ -582,7 +582,7 @@
       </div>
     </div>
     <div class="popover-wrap">
-      <button id="updateBtn" class="ghost icon-btn" title="버전 · 업데이트"><span data-icon="download"></span></button>
+      <button id="updateBtn" class="ghost icon-btn" title="버전 · 업데이트 · 문의/제보"><span data-icon="download"></span></button>
       <div id="updatePopover" class="popover" style="min-width:250px">
         <div class="popover-sep">버전</div>
         <div class="upd-row"><span>현재</span><b id="updCur">…</b></div>
@@ -594,6 +594,13 @@
           <button id="updInstall" style="display:none">재시작해서 설치</button>
         </div>
         <div class="popover-note" id="updNote"></div>
+        <div class="popover-sep">문의 · 제보</div>
+        <div class="seg-row" id="feedbackRow">
+          <button data-fb="question" title="사용법 질문">질문</button>
+          <button data-fb="feature" title="기능 건의">건의</button>
+          <button data-fb="bug" title="오류 제보">오류 제보</button>
+        </div>
+        <div class="popover-note">GitHub 이슈 작성 화면이 브라우저로 열려요(로그인 필요). 버전·환경은 미리 채워져요. 저장소가 공개라 세션 제목·업무 내용이 보이는 화면은 올리지 마세요.</div>
       </div>
     </div>
     </div>
@@ -745,5 +752,6 @@
   <script src="/prompt-scan.js"></script>
   <script src="/pet-bridge.js"></script>
   <script src="/file-drop.js"></script>
+  <script src="/feedback.js"></script>
 </body>
 </html>

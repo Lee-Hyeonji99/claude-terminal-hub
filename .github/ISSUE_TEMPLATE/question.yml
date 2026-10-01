@@ -1,0 +1,19 @@
+name: 질문
+description: 사용법이 궁금하거나 확인하고 싶은 것
+title: "[질문] "
+labels: ["question"]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: 궁금한 점
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: 앱 버전
+  - type: input
+    id: env
+    attributes:
+      label: 환경 (OS · 셸)
