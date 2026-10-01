@@ -58,6 +58,7 @@ const statusEl = document.getElementById('status');
  * 재배치(드래그 도킹)는 살아있는 pane.el(터미널 포함)을 DOM 이동만 하여 세션을 보존한다. */
 let columns = [];
 let columnSplit = null;
+let columnSplitEls = null;            // columnSplit 을 만들 때 넘긴 컬럼 요소들 (비율 기억용)
 const minimized = [];              // 최소화된 패널 목록 (claude 는 계속 실행, DOM 만 숨김 보관)
 const viewerByKey = new Map();     // 세션 key -> 열려있는 뷰어 패널 (중복 방지)
 const minStash = document.createElement('div'); // 최소화 패널 DOM 을 살려두는 숨김 보관소 (term/ws 유지)
@@ -279,7 +280,7 @@ function switchProfile(id) {
   // 현재 워크스페이스 저장 + DOM 을 스태시로 분리 (패널/세션 유지)
   profileWorkspaces[activeProfileId] = { columns, activePane };
   columns.forEach((c) => wsStash.appendChild(c.el));
-  if (columnSplit) { try { columnSplit.destroy(); } catch {} columnSplit = null; }
+  if (columnSplit) { rememberShares(columnSplit, columnSplitEls); try { columnSplit.destroy(); } catch {} columnSplit = null; }
   // 대상 워크스페이스 로드
   activeProfileId = id;
   localStorage.setItem('cth_active_profile', id);
@@ -979,17 +980,36 @@ function addViewerPane(src) {
   timer = setInterval(refresh, 2000);
 }
 
+// 분할 비율 기억 — 요소 → 마지막 비율(%). 패널을 더하거나 빼도 남은 패널끼리는 비율을 유지한다.
+const lastShare = new WeakMap();
+function rememberShares(split, els) {
+  if (!split || !els) return;
+  try { split.getSizes().forEach((s, i) => { if (els[i]) lastShare.set(els[i], s); }); } catch { /* ignore */ }
+}
+// 기억한 비율을 새 요소 목록에 맞춘다. 처음 보는 요소는 균등 몫(100/n)을 받고, 아는 요소들은 남은 몫을 원래 비율대로 나눈다.
+function preservedSizes(els) {
+  const known = els.map((el) => lastShare.get(el));
+  const knownSum = known.reduce((a, v) => a + (v || 0), 0);
+  if (!knownSum) return undefined; // 아는 게 없으면 split.js 기본(균등)
+  const freshShare = 100 / els.length;
+  const freshCount = known.filter((v) => v == null).length;
+  const scale = (100 - freshShare * freshCount) / knownSum;
+  return known.map((v) => (v == null ? freshShare : v * scale));
+}
+
 // 모델 순서 기준으로 DOM 순서를 맞추고 split.js 를 재생성한다.
 function rebuildAll() {
-  columns.forEach((c) => { if (c.split) { try { c.split.destroy(); } catch {} c.split = null; } });
-  if (columnSplit) { try { columnSplit.destroy(); } catch {} columnSplit = null; }
+  columns.forEach((c) => { if (c.split) { rememberShares(c.split, c.splitEls); try { c.split.destroy(); } catch {} c.split = null; } });
+  if (columnSplit) { rememberShares(columnSplit, columnSplitEls); try { columnSplit.destroy(); } catch {} columnSplit = null; }
   columns.forEach((col) => {
     stage.appendChild(col.el);
     col.panes.forEach((p) => col.el.appendChild(p.el));
   });
   if (columns.length >= 2) {
-    columnSplit = Split(columns.map((c) => c.el), {
+    columnSplitEls = columns.map((c) => c.el);
+    columnSplit = Split(columnSplitEls, {
       direction: 'horizontal', gutterSize: 3, minSize: 220, snapOffset: 0, onDrag: fitAll,
+      sizes: preservedSizes(columnSplitEls),
       onDragEnd: () => { fitAll(); saveLayoutDebounced(); },
     });
   } else if (columns.length === 1) {
@@ -997,8 +1017,10 @@ function rebuildAll() {
   }
   columns.forEach((col) => {
     if (col.panes.length >= 2) {
-      col.split = Split(col.panes.map((p) => p.el), {
+      col.splitEls = col.panes.map((p) => p.el);
+      col.split = Split(col.splitEls, {
         direction: 'vertical', gutterSize: 3, minSize: 120, snapOffset: 0, onDrag: fitAll,
+        sizes: preservedSizes(col.splitEls),
         onDragEnd: () => { fitAll(); saveLayoutDebounced(); },
       });
     } else if (col.panes.length === 1) {
