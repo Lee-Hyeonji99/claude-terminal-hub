@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>Claude Pet</title>
+<style>
+  :root{
+    --card:#161a23; --line:#2a3040; --text:#e7e9ee; --muted:#9097a8; --accent:#e8875b; --accent-ink:#1a0f08;
+    --opt:#1e2330; --opt-hover:#272d3d; --ok:#5fbf7a; --err:#e86b6b;
+  }
+  @media (prefers-color-scheme: light){
+    :root{ --card:#ffffff; --line:#e1e4ea; --text:#1d2129; --muted:#68707f; --accent:#d9673a; --accent-ink:#fff;
+      --opt:#f3f4f7; --opt-hover:#e8eaf0; }
+  }
+  html,body{margin:0;background:transparent;overflow:hidden;font:13px/1.45 'Pretendard','Segoe UI',system-ui,sans-serif;color:var(--text);user-select:none}
+  /* 창은 내용 크기에 맞춰 줄어든다 — 오른쪽 아래 정렬이라 캐릭터가 늘 같은 자리에 있다 */
+  #root{position:fixed;right:0;bottom:0;display:flex;flex-direction:column;align-items:flex-end;gap:6px;padding:8px}
+  .card{width:340px;max-height:500px;display:flex;flex-direction:column;background:var(--card);border:1px solid var(--line);border-radius:14px;box-shadow:0 10px 28px rgba(0,0,0,.35);overflow:hidden}
+  .card[hidden]{display:none}
+  .head{display:flex;align-items:center;gap:6px;padding:9px 10px 7px 12px;border-bottom:1px solid var(--line)}
+  .who{flex:1;min-width:0}
+  .who b{display:block;font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .who span{display:block;font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .ib{border:0;background:transparent;color:var(--muted);border-radius:7px;padding:3px 7px;font:inherit;font-size:12px;cursor:pointer}
+  .ib:hover{background:var(--opt-hover);color:var(--text)}
+  .ib:disabled{opacity:.35;cursor:default;background:transparent}
+  .pager{font-size:11px;color:var(--muted);min-width:28px;text-align:center}
+  .scroll{overflow-y:auto;padding:10px 12px 4px}
+  .tag{display:inline-block;font-size:11px;color:var(--muted);margin-bottom:4px}
+  .q{font-weight:600;margin:0 0 8px;white-space:pre-wrap;word-break:keep-all;overflow-wrap:anywhere}
+  .opts{display:flex;flex-direction:column;gap:5px;padding-bottom:6px}
+  .opt{display:flex;gap:8px;text-align:left;border:1px solid transparent;background:var(--opt);color:var(--text);border-radius:9px;padding:7px 9px;font:inherit;cursor:pointer}
+  .opt:hover{background:var(--opt-hover)}
+  .opt.cur{border-color:var(--line)}
+  .opt .n{color:var(--accent);font-weight:700;min-width:14px}
+  .opt .l{display:block}
+  .opt .d{display:block;font-size:11.5px;color:var(--muted);margin-top:1px}
+  .typing{display:flex;flex-direction:column;gap:6px;background:var(--opt);border-radius:9px;padding:8px}
+  textarea{resize:none;border:1px solid var(--line);border-radius:7px;background:var(--card);color:var(--text);font:inherit;padding:6px 8px;min-height:44px;user-select:text}
+  textarea:focus{outline:2px solid var(--accent);outline-offset:-1px}
+  .row{display:flex;gap:6px;justify-content:flex-end}
+  .btn{border:0;border-radius:7px;padding:5px 11px;font:inherit;font-size:12px;cursor:pointer;background:var(--opt-hover);color:var(--text)}
+  .btn.primary{background:var(--accent);color:var(--accent-ink);font-weight:600}
+  .foot{display:flex;align-items:center;gap:6px;padding:6px 10px 9px 12px}
+  .msg{flex:1;font-size:11.5px;color:var(--muted);min-height:16px}
+  .msg.err{color:var(--err)} .msg.ok{color:var(--ok)}
+  .empty{padding:14px 12px;color:var(--muted)}
+
+  /* 캐릭터 — 기다리면 살랑, 질문이 오면 통통 */
+  .pet{position:relative;width:84px;height:84px;cursor:grab;touch-action:none}
+  .pet:active{cursor:grabbing}
+  .pet svg{width:100%;height:100%;filter:drop-shadow(0 6px 10px rgba(0,0,0,.35));animation:bob 3.2s ease-in-out infinite}
+  .pet.asking svg{animation:hop .9s ease-in-out infinite}
+  .badge{position:absolute;top:2px;right:2px;min-width:20px;height:20px;padding:0 5px;box-sizing:border-box;border-radius:10px;background:var(--err);color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;border:2px solid var(--card)}
+  .badge[hidden]{display:none}
+  @keyframes bob{0%,100%{transform:translateY(0)}50%{transform:translateY(-3px)}}
+  @keyframes hop{0%,100%{transform:translateY(0) scale(1,1)}30%{transform:translateY(-9px) scale(.96,1.04)}60%{transform:translateY(0) scale(1.05,.95)}}
+  @media (prefers-reduced-motion: reduce){ .pet svg,.pet.asking svg{animation:none} }
+</style>
+</head>
+<body>
+<div id="root">
+  <div class="card" id="card" hidden></div>
+  <div class="pet" id="pet" title="끌어서 옮기기 · 눌러서 열기/접기">
+    <svg viewBox="0 0 100 100" aria-hidden="true">
+      <defs>
+        <radialGradient id="g" cx="40%" cy="35%" r="70%">
+          <stop offset="0" stop-color="#f6b08c"/><stop offset="1" stop-color="#d9673a"/>
+        </radialGradient>
+      </defs>
+      <path d="M50 12c22 0 38 17 38 40 0 21-15 36-38 36S12 73 12 52c0-23 16-40 38-40z" fill="url(#g)"/>
+      <ellipse id="eyeL" cx="38" cy="50" rx="5" ry="7" fill="#2a160c"/>
+      <ellipse id="eyeR" cx="62" cy="50" rx="5" ry="7" fill="#2a160c"/>
+      <circle cx="40" cy="47" r="1.8" fill="#fff"/><circle cx="64" cy="47" r="1.8" fill="#fff"/>
+      <ellipse cx="29" cy="62" rx="6" ry="3.5" fill="#ff9a8a" opacity=".55"/>
+      <ellipse cx="71" cy="62" rx="6" ry="3.5" fill="#ff9a8a" opacity=".55"/>
+      <path id="mouth" d="M44 64q6 5 12 0" stroke="#2a160c" stroke-width="3" fill="none" stroke-linecap="round"/>
+    </svg>
+    <div class="badge" id="badge" hidden>0</div>
+  </div>
+</div>
+<script src="/pet.js"></script>
+</body>
+</html>

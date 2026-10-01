@@ -32,6 +32,7 @@ const ICON = {
   keyboard: ic('<rect x="2" y="6" width="20" height="12" rx="2"/><path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M6 14h12"/>'),
   task: ic('<path d="M12 2 2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5M2 12l10 5 10-5"/>'),
   tool: ic('<path d="M4 17l6-6-6-6"/><path d="M12 19h8"/>'),
+  paw: ic('<circle cx="7" cy="9" r="1.8"/><circle cx="12" cy="6.5" r="1.8"/><circle cx="17" cy="9" r="1.8"/><path d="M8 17.5c0-2.5 1.8-5 4-5s4 2.5 4 5c0 1.6-1.6 2-4 2s-4-.4-4-2z"/>'),
   more: ic('<circle cx="5" cy="12" r="1.3"/><circle cx="12" cy="12" r="1.3"/><circle cx="19" cy="12" r="1.3"/>'),
 };
 function hydrateIcons(root) {

@@ -11,6 +11,7 @@ const http = require('http');
 const path = require('path');
 const { spawn } = require('child_process');
 const { autoUpdater } = require('electron-updater');
+const { initPet } = require('./pet');
 
 // 작업표시줄(Windows)/Dock(macOS)/Alt-Tab이 패키징 안 된 electron 자체 정체성("Electron")으로
 // 뜨는 걸 막기 위해 앱 고유 이름/AppUserModelID를 지정
@@ -227,6 +228,7 @@ app.whenReady().then(async () => {
   const ok = await ensureServer();
   const win = createWindow(ok);
   initAutoUpdate(win);
+  if (ok) initPet({ url: URL, mainWin: win }); // 바탕화면 펫 (질문 카드)
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow(true);

@@ -11,4 +11,11 @@ contextBridge.exposeInMainWorld('claudeHub', {
   checkUpdate: () => ipcRenderer.invoke('update-check'),
   installUpdate: () => ipcRenderer.invoke('update-install'),
   onUpdateStatus: (cb) => ipcRenderer.on('cth-update-status', (_e, payload) => cb(payload)),
+  // 펫: 패널에서 찾은 질문을 넘기고, 펫이 고른 답을 받는다 (public/pet-bridge.js)
+  petState: (list) => ipcRenderer.send('pet:state', list),
+  petResult: (r) => ipcRenderer.send('pet:result', r),
+  onPetAnswer: (cb) => ipcRenderer.on('pet:answer', (_e, payload) => cb(payload)),
+  petToggle: () => ipcRenderer.send('pet:toggle'),
+  petVisible: () => ipcRenderer.invoke('pet:visible'),
+  onPetVisible: (cb) => ipcRenderer.on('pet:visible', (_e, v) => cb(v)),
 });
