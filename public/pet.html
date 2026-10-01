@@ -49,8 +49,21 @@
   /* 캐릭터 — 기다리면 살랑, 질문이 오면 통통 */
   .pet{position:relative;width:84px;height:84px;cursor:grab;touch-action:none}
   .pet:active{cursor:grabbing}
-  .pet svg{width:100%;height:100%;filter:drop-shadow(0 6px 10px rgba(0,0,0,.35));animation:bob 3.2s ease-in-out infinite}
-  .pet.asking svg{animation:hop .9s ease-in-out infinite}
+  .pet svg,.pet img{width:100%;height:100%;filter:drop-shadow(0 6px 10px rgba(0,0,0,.35));animation:bob 3.2s ease-in-out infinite}
+  .pet img{object-fit:contain;-webkit-user-drag:none;pointer-events:none}
+  .pet svg[hidden],.pet img[hidden]{display:none}
+  .pet.asking svg,.pet.asking img{animation:hop .9s ease-in-out infinite}
+  .pet.drop-over{outline:2px dashed var(--accent);outline-offset:2px;border-radius:50%}
+  textarea.drop-over{outline:2px dashed var(--accent)}
+  .set{padding:10px 12px;display:flex;flex-direction:column;gap:6px}
+  .set .t{font-weight:600;margin-bottom:2px}
+  .set .hint{font-size:11.5px;color:var(--muted)}
+  .choice{display:flex;align-items:center;gap:8px;text-align:left;border:1px solid transparent;background:var(--opt);color:var(--text);border-radius:9px;padding:7px 9px;font:inherit;cursor:pointer}
+  .choice:hover{background:var(--opt-hover)}
+  .choice.on{border-color:var(--accent)}
+  .choice .dot{width:9px;height:9px;border-radius:50%;border:2px solid var(--muted);flex:none}
+  .choice.on .dot{border-color:var(--accent);background:var(--accent)}
+  .choice small{display:block;color:var(--muted);font-size:11px}
   .badge{position:absolute;top:2px;right:2px;min-width:20px;height:20px;padding:0 5px;box-sizing:border-box;border-radius:10px;background:var(--err);color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;border:2px solid var(--card)}
   .badge[hidden]{display:none}
   @keyframes bob{0%,100%{transform:translateY(0)}50%{transform:translateY(-3px)}}
@@ -61,8 +74,9 @@
 <body>
 <div id="root">
   <div class="card" id="card" hidden></div>
-  <div class="pet" id="pet" title="끌어서 옮기기 · 눌러서 열기/접기">
-    <svg viewBox="0 0 100 100" aria-hidden="true">
+  <div class="pet" id="pet" title="끌어서 옮기기 · 눌러서 열기/접기 · 오른쪽 클릭: 캐릭터 바꾸기">
+    <img id="petImg" alt="" hidden>
+    <svg id="petSvg" viewBox="0 0 100 100" aria-hidden="true">
       <defs>
         <radialGradient id="g" cx="40%" cy="35%" r="70%">
           <stop offset="0" stop-color="#f6b08c"/><stop offset="1" stop-color="#d9673a"/>
@@ -79,6 +93,8 @@
     <div class="badge" id="badge" hidden>0</div>
   </div>
 </div>
+<script src="/themes.js"></script>
+<script src="/pet-avatar.js"></script>
 <script src="/pet.js"></script>
 </body>
 </html>

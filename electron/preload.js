@@ -1,9 +1,11 @@
 'use strict';
 // Electron 앱에서만 노출: 네이티브 폴더 선택 (절대경로 반환)
-const { contextBridge, ipcRenderer } = require('electron');
+const { contextBridge, ipcRenderer, webUtils } = require('electron');
 
 contextBridge.exposeInMainWorld('claudeHub', {
   isApp: true,
+  // 끌어다 놓은 파일의 절대경로. Electron 32+ 는 File.path 가 없어 이것뿐이다.
+  filePath: (file) => { try { return webUtils.getPathForFile(file) || ''; } catch { return ''; } },
   pickFolder: (initial) => ipcRenderer.invoke('pick-folder', initial),
   pickFile: () => ipcRenderer.invoke('pick-file'),
   notify: (payload) => ipcRenderer.send('cth-notify', payload),

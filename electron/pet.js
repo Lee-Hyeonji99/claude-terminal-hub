@@ -63,6 +63,7 @@ function initPet({ url, mainWin }) {
     win.setAlwaysOnTop(true, 'screen-saver');
     try { win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true }); } catch {}
     win.loadURL(`${url}/pet.html`);
+    win.webContents.on('will-navigate', (e, to) => { if (!to.startsWith(url)) e.preventDefault(); });
     // 펫이 뜰 때 하던 작업의 포커스를 뺏지 않는다.
     win.once('ready-to-show', () => { if (st.visible) win.showInactive(); });
     win.webContents.on('did-finish-load', () => win.webContents.send('pet:state', lastList));

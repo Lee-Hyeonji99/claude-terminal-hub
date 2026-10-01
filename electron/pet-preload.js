@@ -1,8 +1,9 @@
 'use strict';
 // 펫 창 전용 브리지. 허브 창과는 main 프로세스를 거쳐서만 이야기한다.
-const { contextBridge, ipcRenderer } = require('electron');
+const { contextBridge, ipcRenderer, webUtils } = require('electron');
 
 contextBridge.exposeInMainWorld('pet', {
+  filePath: (file) => { try { return webUtils.getPathForFile(file) || ''; } catch { return ''; } },
   onState: (cb) => ipcRenderer.on('pet:state', (_e, list) => cb(list)),
   onResult: (cb) => ipcRenderer.on('pet:result', (_e, r) => cb(r)),
   answer: (payload) => ipcRenderer.send('pet:answer', payload),

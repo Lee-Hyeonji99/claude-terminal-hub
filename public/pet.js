@@ -7,10 +7,13 @@
   const api = window.pet;
   const $ = (id) => document.getElementById(id);
   const root = $('root'), card = $('card'), petEl = $('pet'), badge = $('badge');
+  const petImg = $('petImg'), petSvg = $('petSvg');
+  const Avatar = window.PetAvatar;
 
   let list = [];
   let idx = 0;
   let open = false;
+  let view = 'questions';         // 'questions' | 'settings'(캐릭터 바꾸기)
   let typingFor = null;           // 글 입력 중인 선택지 번호 (sig 별)
   let draft = '';
   let msg = { text: '', kind: '' };
@@ -37,9 +40,10 @@
       if (o.isText && typingFor === `${r.sig}#${o.number}`) {
         const wrap = el('div', 'typing');
         const ta = el('textarea');
-        ta.placeholder = '답을 입력하세요 — Enter 보내기';
+        ta.placeholder = '답을 입력하세요 — Enter 보내기 · 파일을 끌어다 놓으면 경로가 붙어요';
         ta.value = draft;
         ta.addEventListener('input', () => { draft = ta.value; });
+        wireTextareaDrop(ta);
         ta.addEventListener('keydown', (e) => {
           // 한글 조합 중 Enter 는 글자 확정이다 — 그때 보내면 마지막 글자가 빠진다.
           if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); submitText(o.number); }
@@ -77,16 +81,118 @@
     send({ type: 'text', number, text });
   }
 
+  /* ---------- 캐릭터 ---------- */
+  function applyAvatar() {
+    const a = Avatar ? Avatar.resolve() : { url: null };
+    if (a.url) {
+      if (petImg.getAttribute('src') !== a.url) petImg.src = a.url;
+      petImg.hidden = false; petSvg.hidden = true;
+    } else {
+      petImg.hidden = true; petSvg.hidden = false;
+    }
+  }
+  petImg.addEventListener('error', () => { petImg.hidden = true; petSvg.hidden = false; });
+
+  function pickImageFile() {
+    const inp = document.createElement('input');
+    inp.type = 'file'; inp.accept = 'image/png,image/gif,image/webp,image/jpeg,image/svg+xml';
+    inp.onchange = () => takeImage(inp.files && inp.files[0]);
+    inp.click();
+  }
+  async function takeImage(file) {
+    if (!file || !Avatar) return;
+    try {
+      await Avatar.uploadCustom(file);
+      msg = { text: '캐릭터를 바꿨어요', kind: 'ok' };
+    } catch (e) {
+      msg = { text: (e && e.message) || '바꾸지 못했어요', kind: 'err' };
+    }
+    applyAvatar();
+    render();
+  }
+
+  function renderSettings() {
+    const box = el('div', 'set');
+    box.append(el('div', 't', '캐릭터 바꾸기'));
+    const m = Avatar ? Avatar.mode() : 'default';
+    const { theme, file } = Avatar ? Avatar.themeInfo() : { theme: null, file: null };
+    const themeSub = !theme ? '허브에서 캐릭터 테마를 고르면 그 캐릭터가 나와요'
+      : file ? `지금 테마: ${theme.name}` : `${theme.name} 이미지가 없어요 — 허브 팔레트에서 넣을 수 있어요`;
+    const choice = (key, label, sub, onPick) => {
+      const b = el('button', 'choice' + (m === key ? ' on' : ''));
+      b.append(el('span', 'dot'));
+      const t = el('span'); t.append(el('span', null, label)); t.append(el('small', null, sub));
+      b.append(t);
+      b.onclick = onPick;
+      return b;
+    };
+    box.append(choice('theme', '캐릭터 테마 따라가기', themeSub, () => { Avatar.setMode('theme'); applyAvatar(); render(); }));
+    box.append(choice('custom', '내 이미지', Avatar && Avatar.hasCustom() ? '골라 둔 이미지 · 눌러서 다시 고르기' : '이미지를 골라요 (gif 면 움직여요)', () => {
+      if (Avatar.hasCustom() && m !== 'custom') { Avatar.setMode('custom'); applyAvatar(); render(); } else pickImageFile();
+    }));
+    box.append(choice('default', '기본 캐릭터', '주황 동그라미', () => { Avatar.setMode('default'); applyAvatar(); render(); }));
+    box.append(el('div', 'hint', '팁: 이미지 파일을 캐릭터 위에 끌어다 놓아도 바뀌어요.'));
+    const foot = el('div', 'foot');
+    foot.append(el('span', 'msg' + (msg.kind ? ' ' + msg.kind : ''), msg.text));
+    const back = el('button', 'ib', list.length ? '질문으로' : '닫기');
+    back.onclick = () => { view = 'questions'; msg = { text: '', kind: '' }; if (!list.length) open = false; render(); };
+    const hide = el('button', 'ib', '펫 숨기기');
+    hide.onclick = () => api && api.hide();
+    foot.append(back, hide);
+    card.append(box, foot);
+  }
+
+  /* ---------- 파일 끌어다 놓기 ---------- */
+  const hasFiles = (e) => !!(e.dataTransfer && Array.from(e.dataTransfer.types || []).includes('Files'));
+  const quote = (p) => (/\s/.test(p) ? `"${p}"` : p);
+  function wireTextareaDrop(ta) {
+    ta.addEventListener('dragover', (e) => { if (!hasFiles(e)) return; e.preventDefault(); ta.classList.add('drop-over'); });
+    ta.addEventListener('dragleave', () => ta.classList.remove('drop-over'));
+    ta.addEventListener('drop', (e) => {
+      if (!hasFiles(e)) return;
+      e.preventDefault(); e.stopPropagation();
+      ta.classList.remove('drop-over');
+      const files = Array.from(e.dataTransfer.files || []);
+      const paths = api && api.filePath ? files.map((f) => api.filePath(f)).filter(Boolean) : [];
+      if (!paths.length) return;
+      const s = ta.selectionStart || 0, en = ta.selectionEnd || 0;
+      const before = ta.value.slice(0, s);
+      const add = (before && !/\s$/.test(before) ? ' ' : '') + paths.map(quote).join(' ');
+      ta.value = before + add + ta.value.slice(en);
+      ta.selectionStart = ta.selectionEnd = s + add.length;
+      draft = ta.value;
+      ta.focus();
+    });
+  }
+  // 캐릭터 위에 이미지를 놓으면 캐릭터가 바뀐다.
+  petEl.addEventListener('dragover', (e) => { if (!hasFiles(e)) return; e.preventDefault(); petEl.classList.add('drop-over'); });
+  petEl.addEventListener('dragleave', () => petEl.classList.remove('drop-over'));
+  petEl.addEventListener('drop', (e) => {
+    if (!hasFiles(e)) return;
+    e.preventDefault(); e.stopPropagation();
+    petEl.classList.remove('drop-over');
+    const f = (e.dataTransfer.files || [])[0];
+    if (Avatar && !Avatar.isImage(f)) { msg = { text: '캐릭터에는 이미지 파일만 놓을 수 있어요', kind: 'err' }; open = true; view = 'settings'; render(); return; }
+    open = true; view = 'settings';
+    takeImage(f);
+  });
+  // 받는 칸 밖에 떨어뜨려도 창이 그 파일로 이동하지 않게.
+  document.addEventListener('dragover', (e) => { if (hasFiles(e)) e.preventDefault(); });
+  document.addEventListener('drop', (e) => { if (hasFiles(e)) e.preventDefault(); });
+
   function renderCard() {
     card.textContent = '';
+    if (view === 'settings') { renderSettings(); return; }
     const r = current();
     if (!r) {
       card.append(el('div', 'empty', '기다리는 질문이 없어요. 질문이 오면 여기 뜹니다.'));
       const foot = el('div', 'foot');
       foot.append(el('span', 'msg', 'Ctrl+Alt+P 로 꺼내기/숨기기'));
+      const change = el('button', 'ib', '캐릭터 바꾸기');
+      change.onclick = () => { view = 'settings'; render(); };
       const hide = el('button', 'ib', '숨기기');
       hide.onclick = () => api && api.hide();
-      foot.append(hide);
+      foot.append(change, hide);
       card.append(foot);
       return;
     }
@@ -112,12 +218,12 @@
 
     const foot = el('div', 'foot');
     foot.append(el('span', 'msg' + (msg.kind ? ' ' + msg.kind : ''), msg.text));
-    const view = el('button', 'ib', '터미널에서 보기');
-    view.onclick = () => send({ type: 'focus' });
+    const toTerminal = el('button', 'ib', '터미널에서 보기');
+    toTerminal.onclick = () => send({ type: 'focus' });
     const esc = el('button', 'ib', 'Esc 취소');
     esc.title = '이 질문을 취소합니다 (터미널에서 Esc)';
     esc.onclick = () => send({ type: 'cancel' });
-    foot.append(view, esc);
+    foot.append(toTerminal, esc);
 
     card.append(head, scroll, foot);
   }
@@ -159,9 +265,25 @@
     const clicked = !press.moved;
     press = null;
     api && api.dragEnd();
-    if (clicked) { open = !open; render(); }
+    if (clicked) { open = !open; if (open) view = 'questions'; render(); }
   });
   petEl.addEventListener('dblclick', (e) => e.preventDefault());
+  // 오른쪽 클릭 → 캐릭터 바꾸기
+  petEl.addEventListener('contextmenu', (e) => {
+    e.preventDefault();
+    const same = open && view === 'settings';
+    view = same ? 'questions' : 'settings';
+    open = !same || list.length > 0;
+    msg = { text: '', kind: '' };
+    render();
+  });
+  // 허브에서 캐릭터 테마를 바꾸면(같은 주소라 localStorage 공유) 펫도 따라 바꾼다.
+  window.addEventListener('storage', (e) => {
+    if (!e.key || /^cth_(theme|pet_)/.test(e.key)) {
+      (Avatar ? Avatar.loadFiles() : Promise.resolve()).then(() => { applyAvatar(); if (view === 'settings') render(); });
+    }
+  });
+  if (Avatar) Avatar.loadFiles().then(applyAvatar);
 
   if (api) {
     api.onState((next) => {
@@ -175,6 +297,7 @@
       if (fresh.length) {
         if (!open || keep < 0) idx = list.indexOf(fresh[0]);
         open = true;
+        view = 'questions'; // 캐릭터 설정을 보고 있었어도 새 질문이 우선
         msg = { text: '', kind: '' };
       }
       if (!list.length) { msg = { text: '', kind: '' }; typingFor = null; }

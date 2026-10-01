@@ -115,6 +115,8 @@ function createWindow(ready) {
 
   // 외부 링크는 시스템 기본 브라우저로
   win.webContents.setWindowOpenHandler(({ url }) => { shell.openExternal(url); return { action: 'deny' }; });
+  // 파일을 받는 칸 밖에 떨어뜨리면 창이 그 파일로 이동해 모든 세션 화면이 날아간다 — 앱 주소 밖으로는 못 가게 막는다.
+  win.webContents.on('will-navigate', (e, url) => { if (!url.startsWith(URL)) e.preventDefault(); });
 
   // 새로고침 정책: Ctrl+Shift+R = 명시적 앱 새로고침(업데이트 반영). F5/Ctrl+R = 차단(세션 보존, Ctrl+R은 터미널로).
   win.webContents.on('before-input-event', (e, input) => {
