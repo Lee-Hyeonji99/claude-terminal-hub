@@ -1,5 +1,12 @@
 # Changelog
 
+## [Unreleased]
+
+### Fixed
+- **패널을 닫아도 프로세스·핸들이 남던 문제** — 며칠 켜 두면 새 패널이 `PTY 생성 실패: EMFILE: too many open files` 로 안 열렸다.
+  - Windows 에서 패널을 닫으면 셸만 죽고 그 안의 claude·npx·MCP 서버가 고아로 남아 ConPTY 파이프를 계속 쥐고 있었다. 이제 `taskkill /T` 로 프로세스 트리째 정리한 뒤 pty 를 닫는다.
+  - 세션이 끝나면(패널 X / 프로세스 종료) 구독 소켓 목록·화면 버퍼·파일 감시를 함께 놓는다. 같은 key 로 새로 열린 세션은 건드리지 않는다.
+
 ## [1.20.0] - 2026-10-01
 
 ### Added

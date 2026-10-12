@@ -906,12 +906,29 @@ function buildClaudeCommand(msg, session) {
   return `claude --session-id ${session.resumeId}` + custom.slice(6);
 }
 
+// 세션이 끝났을 때(패널 X / 프로세스 exit) 붙잡고 있던 자원을 놓는다.
+// 같은 key 로 새 세션이 이미 들어와 있으면 그건 건드리지 않는다.
+function releaseSession(session) {
+  stopWatch(session);
+  session.subs.clear();
+  session.buf = '';
+  if (ptyStore.get(session.key) === session) ptyStore.delete(session.key);
+}
+
+// Windows 에서 term.kill() 은 셸만 죽여 그 아래 claude·npx·MCP 서버가 고아로 남고,
+// 그들이 ConPTY 파이프를 계속 쥐어 핸들이 쌓인다(EMFILE). 트리째 죽인 뒤 pty 를 닫는다.
+function killPtyTree(term) {
+  if (!IS_WIN || !term.pid) { try { term.kill(); } catch {} return; }
+  execFile('taskkill', ['/T', '/F', '/PID', String(term.pid)], { timeout: 5000, windowsHide: true }, () => {
+    try { term.kill(); } catch {}
+  });
+}
+
 function killSession(key) {
   const s = ptyStore.get(key);
   if (!s) return;
-  stopWatch(s);
   const tmuxName = s.term && s.term.tmuxName;
-  try { s.term.kill(); } catch {}
+  killPtyTree(s.term);
   // pty 를 죽여도 tmux 세션은 데몬에 남는다. 패널을 명시적으로 닫은 것이므로 세션도 정리한다.
   if (tmuxName) {
     try {
@@ -924,7 +941,7 @@ function killSession(key) {
       }
     } catch {}
   }
-  ptyStore.delete(key);
+  releaseSession(s);
 }
 
 wss.on('connection', (ws) => {
@@ -969,7 +986,7 @@ wss.on('connection', (ws) => {
         if (session.buf.length > MAX_BUF) session.buf = session.buf.slice(-MAX_BUF);
         broadcast(session, data);
       });
-      term.onExit(({ exitCode }) => { session.exited = true; broadcastJson(session, { type: 'exit', code: exitCode }); stopWatch(session); ptyStore.delete(key); });
+      term.onExit(({ exitCode }) => { session.exited = true; broadcastJson(session, { type: 'exit', code: exitCode }); releaseSession(session); });
       safeSend({ type: 'ready', pid: term.pid, cwd: session.cwd });
       // 살아 있던 tmux 세션에 붙은 것이면 claude 가 이미 그 안에서 돌고 있다 — 다시 치지 않는다.
       const cmd = term.tmuxReattached ? null : buildClaudeCommand(msg, session);
