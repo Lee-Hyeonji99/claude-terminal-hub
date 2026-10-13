@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [1.20.1] - 2026-10-13
 
 ### Fixed
 - **몇 시간 켜 두면 새 패널이 `EMFILE: too many open files` 로 안 열리던 문제의 실제 원인** — 대화 기록(.jsonl)을 읽을 때마다 파일 핸들이 하나씩 남았다.
