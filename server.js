@@ -383,8 +383,12 @@ function readSessionMeta(file) {
       if (meta.cwd && meta.firstInputAt && (meta.title || meta.summary) && lines > 3) rl.close();
       if (lines > 200) rl.close();
     });
-    rl.on('close', () => resolve(meta));
-    rl.on('error', () => resolve(meta));
+    // rl.close() 는 readline 만 닫고 아래 파일 스트림은 열린 채 둔다 — 직접 닫지 않으면
+    // 호출마다 파일 핸들이 하나씩 남아 결국 EMFILE 로 새 PTY 조차 못 연다.
+    const done = () => { stream.destroy(); resolve(meta); };
+    rl.on('close', done);
+    rl.on('error', done);
+    stream.on('error', done);
   });
 }
 
@@ -538,7 +542,7 @@ app.get('/api/sessions', async (req, res) => {
 
   const top = withStat.slice(0, 40); // 최신 40개만 메타 파싱
   const sessions = await Promise.all(top.map(async (s) => {
-    const meta = await readSessionMeta(s.full);
+    const meta = await getMeta(s.full, s.mtime);
     return {
       id: s.id,
       title: bestTitle(meta),
@@ -564,8 +568,9 @@ app.get('/api/session-title', async (req, res) => {
   const named = (readState().names || {})[id];
   if (named) return res.json({ id, title: named, exists: true });
   const file = sessionFile(req.query.profile, cwd, id);
-  if (!fs.existsSync(file)) return res.json({ id, title: null, exists: false });
-  const meta = await readSessionMeta(file);
+  let st; try { st = fs.statSync(file); } catch { return res.json({ id, title: null, exists: false }); }
+  // 패널마다 5초 간격으로 불린다 — 파일이 그대로면 캐시로 답해 큰 대화 파일을 매번 다시 읽지 않는다.
+  const meta = await getMeta(file, st.mtimeMs);
   res.json({ id, title: meta.customTitle || meta.aiTitle || meta.summary || meta.title || null, exists: true });
 });
 
