@@ -34,6 +34,7 @@ const ICON = {
   tool: ic('<path d="M4 17l6-6-6-6"/><path d="M12 19h8"/>'),
   paw: ic('<circle cx="7" cy="9" r="1.8"/><circle cx="12" cy="6.5" r="1.8"/><circle cx="17" cy="9" r="1.8"/><path d="M8 17.5c0-2.5 1.8-5 4-5s4 2.5 4 5c0 1.6-1.6 2-4 2s-4-.4-4-2z"/>'),
   more: ic('<circle cx="5" cy="12" r="1.3"/><circle cx="12" cy="12" r="1.3"/><circle cx="19" cy="12" r="1.3"/>'),
+  layout: ic('<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16M13 9h5M13 13h5"/>'),
 };
 function hydrateIcons(root) {
   (root || document).querySelectorAll('[data-icon]').forEach((el) => {
@@ -111,7 +112,7 @@ function applyFontSize(px) {
   localStorage.setItem('cth_font_size', String(termFontSize));
   const label = document.getElementById('fontSizeLabel');
   if (label) label.textContent = termFontSize;
-  columns.forEach((c) => c.panes.forEach((p) => { if (p.term) { try { p.term.options.fontSize = termFontSize; } catch {} } }));
+  forEachTermPane((p) => { p.term.options.fontSize = termFontSize; });
   setTimeout(() => { try { fitAll(); } catch {} }, 30);
 }
 
@@ -124,7 +125,7 @@ let termLineHeight = (() => {
 function applyLineHeight(v) {
   termLineHeight = LINE_HEIGHTS.includes(v) ? v : 1.2;
   localStorage.setItem('cth_line_height', String(termLineHeight));
-  columns.forEach((c) => c.panes.forEach((p) => { if (p.term) { try { p.term.options.lineHeight = termLineHeight; } catch {} } }));
+  forEachTermPane((p) => { p.term.options.lineHeight = termLineHeight; });
   setTimeout(() => { try { fitAll(); } catch {} }, 30);
 }
 
@@ -148,15 +149,12 @@ function withHangul(css) {
 function applyFontFamily(css) {
   termFontFamily = css;
   localStorage.setItem('cth_font_family', css);
-  columns.forEach((c) => c.panes.forEach((p) => {
-    if (!p.term) return;
-    try {
-      p.term.options.fontFamily = withHangul(css);
-      // 캔버스 렌더러는 글리프를 캐시하므로 아틀라스를 비우고 다시 그려야 실제로 바뀐다.
-      if (typeof p.term.clearTextureAtlas === 'function') p.term.clearTextureAtlas();
-      p.term.refresh(0, Math.max(0, (p.term.rows || 1) - 1));
-    } catch {}
-  }));
+  forEachTermPane((p) => {
+    p.term.options.fontFamily = withHangul(css);
+    // 캔버스 렌더러는 글리프를 캐시하므로 아틀라스를 비우고 다시 그려야 실제로 바뀐다.
+    if (typeof p.term.clearTextureAtlas === 'function') p.term.clearTextureAtlas();
+    p.term.refresh(0, Math.max(0, (p.term.rows || 1) - 1));
+  });
   setTimeout(() => { try { fitAll(); } catch {} }, 30);
 }
 
@@ -223,6 +221,8 @@ function fmtTime(ts) {
   const h = d.getHours(), m = String(d.getMinutes()).padStart(2, '0');
   return `${h < 12 ? '오전' : '오후'} ${((h + 11) % 12) + 1}:${m}`;
 }
+// 데스크톱 뷰(desk-view.js) — 켜져 있으면 표시 방식·컴포즈 설정과 무관하게 대화를 그린다.
+function deskViewOn() { return document.body.classList.contains('desk-view'); }
 function refreshAllChats() {
   columns.forEach((c) => c.panes.forEach((p) => { if (p._refreshLog) p._refreshLog(); }));
   minimized.forEach((p) => { if (p._refreshLog) p._refreshLog(); });
@@ -255,7 +255,17 @@ function saveProfiles() {
   fetch('/api/profiles', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ profiles }) }).catch(() => {});
 }
 let activeProfileId = localStorage.getItem('cth_active_profile') || 'default';
-const profileWorkspaces = {}; // id -> { columns, activePane }
+/* ---------- 워크스페이스 = 계정(프로필) › 프로젝트(작업 경로) ----------
+ * 키는 `<프로필>::<프로젝트 id>` (public/project-key.js). 지금 보이는 워크스페이스의 columns 는
+ * 전역 `columns` 와 같은 배열이다(splice/push 로만 바꾸므로 참조가 유지된다).
+ * 숨겨진 워크스페이스의 DOM 은 wsStash 에 붙여 두어 term/ws 가 살아 있다. */
+const PK = window.ProjectKey;
+let activeProject = '';
+const workspaces = {};   // key -> { columns, activePane, columnSizes }
+const projectCwd = {};   // key -> 원래 표기의 작업 경로 (탭 이름·툴팁)
+const lastProjectOf = (() => { try { return JSON.parse(localStorage.getItem('cth_last_project') || '{}') || {}; } catch { return {}; } })();
+const currentWsKey = () => PK.workspaceKey(activeProfileId, activeProject);
+workspaces[currentWsKey()] = { columns, activePane: null, columnSizes: null };
 const accountCache = {}; // id -> 계정 라벨 (탭 호버 툴팁)
 function fetchAccount(id) {
   accountCache[id] = '계정 확인 중…';
@@ -277,8 +287,8 @@ function profileName(id) { const p = profiles.find((x) => x.id === id); return p
 
 // 세션 열기: 다른 계정 소속이면 그 계정 탭으로 전환 후 열기(원 계정으로 이어가기 = 방식 A)
 function openSession(s, placement) {
-  if (s.profile && s.profile !== activeProfileId && profiles.find((p) => p.id === s.profile)) switchProfile(s.profile);
-  addPane({ cwd: s.cwd, resumeId: s.id, title: s.title, profile: s.profile || activeProfileId }, placement || 'column');
+  const known = s.profile && profiles.find((p) => p.id === s.profile);
+  addPane({ cwd: s.cwd, resumeId: s.id, title: s.title, profile: known ? s.profile : activeProfileId }, placement || 'column');
 }
 
 // 다른 계정 대화를 현재 활성 계정으로 복사해서 이어가기(방식 B). 원본은 그대로 유지.
@@ -292,35 +302,168 @@ async function continueHere(s) {
   addPane({ cwd: s.cwd, resumeId: s.id, title: s.title, profile: target }, 'column');
 }
 
+const wsPaneCount = (w) => (w ? w.columns.reduce((a, c) => a + c.panes.length, 0) : 0);
+function workspaceEntriesOf(profileId) {
+  return Object.entries(workspaces).filter(([k]) => { const p = PK.parseWorkspaceKey(k); return p && p.profile === profileId; });
+}
+// 최소화(트레이) 패널도 센다 — 안 세면 최소화 세션만 남은 계정을 지울 수 있다
 function paneCountOf(id) {
-  const cols = id === activeProfileId ? columns : ((profileWorkspaces[id] && profileWorkspaces[id].columns) || []);
-  return cols.reduce((a, c) => a + c.panes.length, 0);
+  const minCount = minimized.filter((p) => p.cfg && (p.cfg.profile || 'default') === id).length;
+  return workspaceEntriesOf(id).reduce((a, [, w]) => a + wsPaneCount(w), 0) + minCount;
+}
+// 모든 워크스페이스(숨겨진 프로젝트·계정 포함) + 최소화 트레이의 패널
+function allWorkspacePanes() {
+  const set = new Set();
+  Object.values(workspaces).forEach((w) => w.columns.forEach((c) => c.panes.forEach((p) => set.add(p))));
+  minimized.forEach((p) => set.add(p));
+  return [...set];
+}
+function forEachTermPane(fn) { allWorkspacePanes().forEach((p) => { if (p.term) { try { fn(p); } catch {} } }); }
+function workspaceKeyOfPane(p) {
+  for (const [k, w] of Object.entries(workspaces)) if (w.columns.some((c) => c.panes.includes(p))) return k;
+  return null;
+}
+function saveLastProject() {
+  lastProjectOf[activeProfileId] = activeProject;
+  try { localStorage.setItem('cth_last_project', JSON.stringify(lastProjectOf)); } catch {}
+}
+
+// 지금 워크스페이스를 숨겨 두고(DOM 은 wsStash 로) 대상 워크스페이스를 무대에 올린다. UI 갱신은 호출부 몫.
+function enterWorkspace(profile, project) {
+  if (profile === activeProfileId && project === activeProject) return;
+  const cur = workspaces[currentWsKey()] || (workspaces[currentWsKey()] = { columns, activePane: null, columnSizes: null });
+  cur.activePane = activePane;
+  if (columnSplit) {
+    rememberShares(columnSplit, columnSplitEls);
+    try { cur.columnSizes = columnSplit.getSizes(); } catch { /* ignore */ }
+    try { columnSplit.destroy(); } catch { /* ignore */ }
+    columnSplit = null;
+  }
+  columns.forEach((c) => wsStash.appendChild(c.el));
+  activeProfileId = profile;
+  activeProject = project;
+  localStorage.setItem('cth_active_profile', profile);
+  const w = workspaces[currentWsKey()] || (workspaces[currentWsKey()] = { columns: [], activePane: null, columnSizes: null });
+  columns = w.columns;
+  activePane = w.activePane || null;
+  if (activePane && !columns.some((c) => c.panes.includes(activePane))) activePane = null;
+  columns.forEach((c) => stage.appendChild(c.el));
+  rebuildAll();
+  if (activePane && activePane.el) activePane.el.classList.add('active');
+}
+
+// 사용자가 보는 전환 — 탭·상태·최근 목록까지 갱신
+function switchWorkspace(profile, project) {
+  const profileChanged = profile !== activeProfileId;
+  if (!profileChanged && project === activeProject) { renderTabs(); return; }
+  enterWorkspace(profile, project);
+  if (profileChanged && !layoutRestoreAttempted.has(profile)) restoreLayoutForProfile(profile);
+  if (!restoringLayout) saveLastProject();
+  if (profileChanged) {
+    delete accountCache[profile]; // 전환 시 계정 정보 재조회 (로그인 변경 반영)
+    const si = document.getElementById('lnbSearch');
+    if (si) { si.value = ''; document.getElementById('lnbSearchClear').style.display = 'none'; }
+    loadRecent();
+  }
+  updateStatus();
+  if (activePane) setActive(activePane);
+}
+
+// 패널 cfg 의 (계정, 작업 경로)에 맞는 워크스페이스로 옮겨 간다. 경로가 없는 패널(미리보기)은 지금 자리.
+function routeToWorkspaceFor(cfg) {
+  if (!cfg || !cfg.cwd) return;
+  // 지워진 계정 소속이면 지금 계정으로 — 아니면 어느 탭에서도 안 보이는 세션이 된다
+  const profile = profiles.some((x) => x.id === cfg.profile) ? cfg.profile : activeProfileId;
+  cfg.profile = profile;
+  const project = PK.projectId(cfg.cwd);
+  const key = PK.workspaceKey(profile, project);
+  if (!projectCwd[key]) projectCwd[key] = cfg.cwd;
+  if (profile !== activeProfileId || project !== activeProject) switchWorkspace(profile, project);
+}
+
+// 계정의 어떤 프로젝트를 보여줄지 — 마지막으로 본 것 → 패널이 있는 첫 프로젝트 → 빈 화면
+function preferredProjectOf(profileId) {
+  const entries = workspaceEntriesOf(profileId).filter(([, w]) => wsPaneCount(w) > 0);
+  const last = lastProjectOf[profileId];
+  if (last != null && entries.some(([k]) => PK.parseWorkspaceKey(k).project === last)) return last;
+  return entries.length ? PK.parseWorkspaceKey(entries[0][0]).project : (last || '');
 }
 
 function switchProfile(id) {
   if (id === activeProfileId) { renderTabs(); return; }
-  // 현재 워크스페이스 저장 + DOM 을 스태시로 분리 (패널/세션 유지)
-  profileWorkspaces[activeProfileId] = { columns, activePane };
-  columns.forEach((c) => wsStash.appendChild(c.el));
-  if (columnSplit) { rememberShares(columnSplit, columnSplitEls); try { columnSplit.destroy(); } catch {} columnSplit = null; }
-  // 대상 워크스페이스 로드
-  activeProfileId = id;
-  localStorage.setItem('cth_active_profile', id);
-  delete accountCache[id]; // 전환 시 계정 정보 재조회 (로그인 변경 반영)
-  const w = profileWorkspaces[id] || { columns: [], activePane: null };
-  columns = w.columns;
-  activePane = w.activePane || null;
-  columns.forEach((c) => stage.appendChild(c.el));
-  if (columns.length === 0 && !layoutRestoreAttempted.has(id)) restoreLayoutForProfile(id);
-  rebuildAll();
+  if (!layoutRestoreAttempted.has(id)) restoreLayoutForProfile(id); // 그 계정의 프로젝트 탭을 먼저 만든다
+  switchWorkspace(id, preferredProjectOf(id));
+}
+
+// 다른 프로젝트 패널을 보여줄 때 — 펫·데스크톱 뷰에서 «보기» 를 누르면 여기로 온다.
+function revealPane(p) {
+  if (!p) return;
+  if (minimized.includes(p)) { restorePane(p); return; }
+  const k = workspaceKeyOfPane(p);
+  const parsed = k && PK.parseWorkspaceKey(k);
+  if (parsed) switchWorkspace(parsed.profile, parsed.project);
+  setActive(p);
+}
+
+// 작업 완료 표시 — 터미널 벨, 또는 "일하는 중 → 멈춤" 전환(pet-bridge.js)에서 부른다.
+// 지금 보고 있는 패널(활성 + 창 포커스)이면 표시하지 않는다.
+const DONE_NOTIFY_GAP_MS = 5000; // 벨과 전환 감지가 같은 완료를 두 번 알리지 않게
+function markPaneDone(p) {
+  if (!p || !p.el) return;
+  const watching = p === activePane && document.hasFocus() && !p.minimized && workspaceKeyOfPane(p) === currentWsKey();
+  if (watching) return;
+  p._doneAt = Date.now();
+  if (p !== activePane) p.el.classList.add('done');
+  if (p.minimized) renderTray();
   renderTabs();
-  updateStatus();
-  const si = document.getElementById('lnbSearch');
-  if (si) { si.value = ''; document.getElementById('lnbSearchClear').style.display = 'none'; }
-  loadRecent();
+  const now = Date.now();
+  if (now - (p._notifiedAt || 0) >= DONE_NOTIFY_GAP_MS) { p._notifiedAt = now; notifyDone(p.cfg); }
+}
+function clearPaneDone(p) {
+  if (!p) return;
+  const had = !!p._doneAt || (p.el && p.el.classList.contains('done'));
+  p._doneAt = 0;
+  if (p.el) p.el.classList.remove('done');
+  if (had) renderTabs();
+}
+window.addEventListener('focus', () => { if (activePane) clearPaneDone(activePane); });
+
+function renderProjectTabs() {
+  const bar = document.getElementById('projTabs');
+  if (!bar) return;
+  const cur = currentWsKey();
+  const entries = workspaceEntriesOf(activeProfileId).filter(([k, w]) => wsPaneCount(w) > 0 || k === cur);
+  const onlyEmpty = entries.length <= 1 && !activeProject && wsPaneCount(workspaces[cur]) === 0;
+  bar.style.display = onlyEmpty ? 'none' : 'flex';
+  bar.innerHTML = '';
+  if (onlyEmpty) return;
+  entries.forEach(([k, w]) => {
+    const { project } = PK.parseWorkspaceKey(k);
+    const cwd = projectCwd[k] || project;
+    const n = wsPaneCount(w);
+    const done = w.columns.some((c) => c.panes.some((p) => p._doneAt || (p.el && p.el.classList.contains('done'))));
+    const t = document.createElement('div');
+    t.className = 'ptab' + (k === cur ? ' active' : '') + (done ? ' done' : '');
+    t.title = (cwd || '작업 경로 없는 패널') + (done ? '\n작업 완료된 세션이 있습니다' : '');
+    t.innerHTML = `<span class="pdot" style="--hue:${PK.projectHue(project)}"></span>${ICON.folder}`
+      + `<span class="pname">${escapeHtml(project ? PK.projectName(cwd) : '기타')}</span>`
+      + (n ? `<span class="cnt">${n}</span>` : '');
+    t.addEventListener('click', () => switchWorkspace(activeProfileId, project));
+    bar.appendChild(t);
+  });
+  const add = document.createElement('button');
+  add.className = 'ghost padd';
+  add.title = activeProject ? '이 프로젝트에서 새 세션' : '새 프로젝트 세션';
+  add.innerHTML = ICON.plus;
+  add.addEventListener('click', () => {
+    const cwd = projectCwd[cur];
+    if (activeProject && cwd) openSessionPicker(cwd); else startNewSession();
+  });
+  bar.appendChild(add);
 }
 
 function renderTabs() {
+  renderProjectTabs();
   const list = document.getElementById('tabList');
   if (!list) return;
   list.innerHTML = '';
@@ -367,11 +510,11 @@ async function renameProfile(id) {
 async function deleteProfile(id) {
   if (paneCountOf(id) > 0) { await uiConfirm('이 프로필에 열린 세션이 있습니다. 먼저 닫아주세요.', '삭제 불가'); return; }
   if (!(await uiConfirm('계정 로그인 폴더(~/.claude-hub-profiles)는 남습니다.', '이 프로필 탭을 삭제할까요?'))) return;
+  if (activeProfileId === id) switchProfile('default');
   profiles = profiles.filter((p) => p.id !== id);
-  delete profileWorkspaces[id];
+  workspaceEntriesOf(id).forEach(([k]) => delete workspaces[k]);
   saveProfiles();
-  if (activeProfileId === id) { activeProfileId = 'default'; switchProfile('default'); }
-  else renderTabs();
+  renderTabs();
 }
 
 /* ---------- 인페이지 프롬프트/확인 모달 (네이티브 prompt/confirm 대체) ---------- */
@@ -679,7 +822,7 @@ async function applyCharTheme(key) {
   else applyUiFont(localStorage.getItem('cth_ui_font') || DEFAULT_UI_FONT, false);
   activeTermTheme = ansiFromVars(v, mode);
   const termTheme = currentTermTheme();
-  columns.forEach((c) => c.panes.forEach((p) => { if (p.term) { try { p.term.options.theme = termTheme; } catch {} } }));
+  forEachTermPane((p) => { p.term.options.theme = termTheme; });
   updateComposePlaceholders(t);
   renderCharColors(key, cols);
   applyCursors();
@@ -730,7 +873,7 @@ function applyTheme(t) {
   applyUiFont(localStorage.getItem('cth_ui_font') || DEFAULT_UI_FONT, false);
   updateComposePlaceholders(null);
   const termTheme = currentTermTheme();
-  columns.forEach((c) => c.panes.forEach((p) => { if (p.term) { try { p.term.options.theme = termTheme; } catch {} } }));
+  forEachTermPane((p) => { p.term.options.theme = termTheme; });
   applyCursors();
   setTimeout(() => { try { fitAll(); } catch {} }, 60);
 }
@@ -865,6 +1008,16 @@ function buildAccentPicker() {
   el.querySelectorAll('.popover-item').forEach((b) => b.addEventListener('click', () => { applyAccent(b.dataset.accent); closePopovers(); }));
 }
 
+// 프로젝트의 마지막 패널을 닫거나 내렸으면, 같은 계정의 다른 프로젝트 탭으로 넘어간다.
+// (패널을 뺀 쪽에서만 부른다 — updateStatus 에 두면 새 프로젝트에 첫 패널을 넣는 순간에도 넘어가 버린다)
+function leaveIfProjectEmpty() {
+  if (restoringLayout || !activeProject || columns.some((c) => c.panes.length)) return;
+  const next = preferredProjectOf(activeProfileId);
+  if (next !== activeProject && wsPaneCount(workspaces[PK.workspaceKey(activeProfileId, next)]) > 0) {
+    switchWorkspace(activeProfileId, next);
+  }
+}
+
 function updateStatus() {
   const n = columns.reduce((a, c) => a + c.panes.length, 0);
   statusEl.textContent = `세션 ${n}`;
@@ -889,12 +1042,13 @@ function minimizePane(paneObj) {
   minStash.appendChild(paneObj.el); // DOM 유지 → term/ws 살아있음
   minimized.push(paneObj);
   if (activePane === paneObj) setActive(columns[0] ? columns[0].panes[0] : null);
-  rebuildAll(); renderTray(); updateStatus();
+  rebuildAll(); renderTray(); updateStatus(); leaveIfProjectEmpty();
 }
 // 복원: 활성 컬럼(없으면 새 컬럼)으로 되돌리고 크기 재조정.
 function restorePane(paneObj) {
   const mi = minimized.indexOf(paneObj);
   if (mi < 0) return;
+  routeToWorkspaceFor(paneObj.cfg); // 그 세션의 프로젝트 탭으로 돌아간다
   minimized.splice(mi, 1);
   paneObj.minimized = false;
   emptyMsg.style.display = 'none';
@@ -949,7 +1103,8 @@ function renderViewer(body, items) {
 function addViewerPane(src) {
   if (!src || !src.cfg || !src.cfg.key) return;
   const key = src.cfg.key;
-  if (viewerByKey.has(key)) { setActive(viewerByKey.get(key)); return; }
+  if (viewerByKey.has(key)) { revealPane(viewerByKey.get(key)); return; }
+  routeToWorkspaceFor(src.cfg); // 뷰어는 원본 세션과 같은 프로젝트 탭에
   emptyMsg.style.display = 'none';
   const col = newColumn();
   const pane = document.createElement('div');
@@ -988,7 +1143,7 @@ function addViewerPane(src) {
       }
       pane.remove(); rebuildAll();
       if (activePane === paneObj) setActive(columns[0] ? columns[0].panes[0] : null);
-      updateStatus();
+      updateStatus(); leaveIfProjectEmpty();
     },
   };
   col.panes.push(paneObj);
@@ -1080,13 +1235,27 @@ function collectWorkspaceSnapshot(cols) {
     })
     .filter((c) => c.panes.length);
 }
+function readSavedLayout() {
+  try { return JSON.parse(localStorage.getItem('cth_layout') || '{}') || {}; } catch { return {}; }
+}
+const savedProfileOf = (k) => { const p = PK.parseWorkspaceKey(k); return p ? p.profile : k; };
+// 키: `<프로필>::<프로젝트>` 마다 { columns, columnSizes, cwd }. 옛 형식은 프로필 id 를 키로 썼다.
 function saveLayout() {
+  if (restoringLayout) return;
   try {
-    const all = { ...profileWorkspaces, [activeProfileId]: { columns } };
+    const prev = readSavedLayout();
     const out = {};
-    for (const pid of Object.keys(all)) {
-      const snap = collectWorkspaceSnapshot(all[pid].columns);
-      if (snap.length) out[pid] = { columns: snap, columnSizes: (pid === activeProfileId && columnSplit) ? columnSplit.getSizes() : null };
+    // 이번 실행에서 아직 열어 보지 않은 계정의 레이아웃은 그대로 둔다(덮어쓰면 사라진다).
+    for (const [k, v] of Object.entries(prev)) {
+      if (k !== '__minimized' && !layoutRestoreAttempted.has(savedProfileOf(k))) out[k] = v;
+    }
+    const cur = currentWsKey();
+    for (const [k, w] of Object.entries(workspaces)) {
+      const snap = collectWorkspaceSnapshot(w.columns);
+      if (!snap.length) continue;
+      let sizes = w.columnSizes || null;
+      if (k === cur) { try { sizes = columnSplit ? columnSplit.getSizes() : null; } catch { sizes = null; } }
+      out[k] = { columns: snap, columnSizes: sizes, cwd: projectCwd[k] || null };
     }
     // 최소화된 패널(트레이)은 프로필 소속과 무관하게 하나의 전역 목록 — 별도 키로 저장
     out.__minimized = minimized.map(paneSnapshot).filter((s) => s && s.type === 'term');
@@ -1096,13 +1265,32 @@ function saveLayout() {
 const saveLayoutDebounced = debounce(saveLayout, 400);
 
 const layoutRestoreAttempted = new Set();
-// 저장된 레이아웃을 현재(활성) columns 로 복원. 뷰어 패널은 대상 터미널 패널을 먼저 만든 뒤 마지막에 연결.
+let restoringLayout = false;
+// 계정의 저장된 워크스페이스(프로젝트 탭)를 모두 되살린다. 끝나면 원래 보던 워크스페이스로 돌아온다.
 function restoreLayoutForProfile(pid) {
   layoutRestoreAttempted.add(pid);
-  let saved;
-  try { saved = JSON.parse(localStorage.getItem('cth_layout') || '{}')[pid]; } catch { saved = null; }
-  if (!saved || !Array.isArray(saved.columns) || !saved.columns.length) return;
+  const saved = readSavedLayout();
+  const back = { profile: activeProfileId, project: activeProject };
+  const wasRestoring = restoringLayout;
+  restoringLayout = true;
+  try {
+    for (const [k, ws] of Object.entries(saved)) {
+      if (k === '__minimized' || savedProfileOf(k) !== pid || !ws || !Array.isArray(ws.columns)) continue;
+      const parsed = PK.parseWorkspaceKey(k);
+      if (parsed && ws.cwd) projectCwd[k] = ws.cwd;
+      // 옛 형식은 빈 프로젝트로 들어가 패널마다 제 프로젝트 탭으로 갈라진다(addPane 의 경로 라우팅).
+      enterWorkspace(pid, parsed ? parsed.project : '');
+      restoreWorkspaceSnapshot(ws, !!parsed); // 옛 형식은 패널이 여러 탭으로 갈라져 비율이 안 맞는다
+    }
+  } finally {
+    restoringLayout = wasRestoring;
+  }
+  enterWorkspace(back.profile, back.project);
+}
 
+// 저장된 워크스페이스 하나를 지금 columns 로 복원. 뷰어 패널은 대상 터미널 패널을 먼저 만든 뒤 마지막에 연결.
+function restoreWorkspaceSnapshot(saved, applySizes) {
+  if (!saved.columns.length) return;
   const keyToPane = new Map();
   const pendingViewers = [];
   const colSizesList = [];
@@ -1110,12 +1298,11 @@ function restoreLayoutForProfile(pid) {
     let first = true;
     for (const ps of colSnap.panes) {
       if (ps.type === 'term') {
-        addPane({
+        const made = addPane({
           key: ps.key, cwd: ps.cwd, profile: ps.profile, resumeId: ps.resumeId || undefined,
           command: ps.command || undefined, runClaude: !!ps.runClaude, title: ps.title || undefined,
         }, first ? 'newcol' : 'row');
-        const col = columns[columns.length - 1];
-        keyToPane.set(ps.key, col.panes[col.panes.length - 1]);
+        keyToPane.set(ps.key, made); // 옛 형식은 다른 프로젝트 탭으로 갈 수 있어 «마지막 컬럼» 으로 찾으면 틀린다
         first = false;
       } else if (ps.type === 'preview') {
         const fm = ps.url.match(/^\/api\/file\?path=(.+)$/);
@@ -1132,12 +1319,13 @@ function restoreLayoutForProfile(pid) {
     const src = keyToPane.get(ps.watchKey);
     if (src) addViewerPane(src);
   }
-  requestAnimationFrame(() => {
-    try { if (saved.columnSizes && columnSplit) columnSplit.setSizes(saved.columnSizes); } catch { /* ignore */ }
-    columns.forEach((col, i) => {
-      const sizes = colSizesList[i];
-      try { if (sizes && col.split) col.split.setSizes(sizes); } catch { /* ignore */ }
-    });
+  if (!applySizes) return;
+  // 바로 적용한다 — 다음 프레임이면 이미 다른 워크스페이스로 넘어가 있다.
+  // (숨길 때 rememberShares 가 이 비율을 기억해 두었다가 다시 보일 때 쓴다)
+  try { if (saved.columnSizes && columnSplit) columnSplit.setSizes(saved.columnSizes); } catch { /* ignore */ }
+  columns.forEach((col, i) => {
+    const sizes = colSizesList[i];
+    try { if (sizes && col.split) col.split.setSizes(sizes); } catch { /* ignore */ }
   });
 }
 
@@ -1149,16 +1337,20 @@ function restoreMinimized() {
   let list;
   try { list = JSON.parse(localStorage.getItem('cth_layout') || '{}').__minimized; } catch { list = null; }
   if (!Array.isArray(list) || !list.length) return;
-  for (const ps of list) {
-    if (ps.type !== 'term') continue;
-    addPane({
-      key: ps.key, cwd: ps.cwd, profile: ps.profile, resumeId: ps.resumeId || undefined,
-      command: ps.command || undefined, runClaude: !!ps.runClaude, title: ps.title || undefined,
-    }, 'newcol');
-    const col = columns[columns.length - 1];
-    const paneObj = col.panes[col.panes.length - 1];
-    minimizePane(paneObj);
+  const back = { profile: activeProfileId, project: activeProject };
+  restoringLayout = true;
+  try {
+    for (const ps of list) {
+      if (ps.type !== 'term') continue;
+      minimizePane(addPane({
+        key: ps.key, cwd: ps.cwd, profile: ps.profile, resumeId: ps.resumeId || undefined,
+        command: ps.command || undefined, runClaude: !!ps.runClaude, title: ps.title || undefined,
+      }, 'newcol'));
+    }
+  } finally {
+    restoringLayout = false;
   }
+  enterWorkspace(back.profile, back.project);
 }
 
 /* ---------- 패널 제목 따라가기 — Claude 에서 /rename 하면 패널 제목도 바뀐다 ---------- */
@@ -1180,8 +1372,7 @@ async function syncPaneTitle(p) {
 }
 async function syncPaneTitles() {
   if (document.visibilityState !== 'visible') return;
-  const panes = [...columns.flatMap((c) => c.panes), ...minimized];
-  const results = await Promise.all(panes.map(syncPaneTitle));
+  const results = await Promise.all(allWorkspacePanes().map(syncPaneTitle));
   if (results.some(Boolean)) { saveLayoutDebounced(); renderTray(); }
 }
 setInterval(syncPaneTitles, TITLE_POLL_MS);
@@ -1203,7 +1394,7 @@ function setActive(pane, focusTerm) {
   activePane = pane;
   if (pane && pane.el) {
     pane.el.classList.add('active');
-    pane.el.classList.remove('done');
+    clearPaneDone(pane);
     if (focusTerm !== false && pane.term) { try { pane.term.focus(); } catch {} }
   }
 }
@@ -1224,6 +1415,7 @@ function addPane(cfg, placement) {
   emptyMsg.style.display = 'none';
   if (!cfg.profile) cfg.profile = activeProfileId; // 현재 계정 프로필에 소속
   if (!cfg.key) cfg.key = 'k_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8); // 재부착용 안정 키
+  routeToWorkspaceFor(cfg); // 계정 › 프로젝트(작업 경로) 탭으로
 
   const col = pickColumnForPlacement(placement);
 
@@ -1253,6 +1445,7 @@ function addPane(cfg, placement) {
         <button class="cbtn" data-act="clear" title="/clear 전송">/clear</button>
         <button class="cbtn" data-act="image" title="이미지 파일 경로 추가">이미지</button>
         <button class="cbtn chatonly-btn" data-act="chatonly" title="터미널 접고 대화만 보기 / 되돌리기">대화만</button>
+        <button class="cbtn deskonly" data-act="term" title="이 세션의 터미널 화면 펴기 / 접기">터미널</button>
         <span class="chint">터미널 단축키·붙여넣기는 그대로 사용 가능</span>
         <button class="cbtn send" data-act="send">보내기</button>
       </div>
@@ -1274,16 +1467,9 @@ function addPane(cfg, placement) {
   term.loadAddon(fit);
   term.open(termEl);
   if (CanvasAddon) { try { term.loadAddon(new CanvasAddon()); } catch {} }
-  // 작업 완료 알림: Claude 가 턴 완료 시 울리는 터미널 벨에서만 (세션별 1.5s 디바운스)
-  // + 앱을 보고 있어도 어느 세션이 끝났는지 보이도록 패널에 완료 표시(활성 패널 제외)
-  let lastBellAt = 0;
-  try {
-    term.onBell(() => {
-      if (!pane.classList.contains('active')) pane.classList.add('done');
-      if (pane.parentElement === minStash) renderTray(); // 최소화 상태면 트레이 칩에 완료 표시
-      const now = Date.now(); if (now - lastBellAt < 1500) return; lastBellAt = now; notifyDone(cfg);
-    });
-  } catch {}
+  // 작업 완료: Claude 가 턴 완료 시 울리는 터미널 벨 → 패널·프로젝트 탭·트레이에 완료 표시 + 알림(세션별 디바운스).
+  // 벨을 안 울리는 환경은 pet-bridge.js 가 "일하는 중 → 멈춤" 전환으로 같은 함수를 부른다.
+  try { term.onBell(() => markPaneDone(paneObj)); } catch {}
 
   // 복사/붙여넣기 + 제어키 처리
   const pasteFromClipboard = () => {
@@ -1505,14 +1691,15 @@ function addPane(cfg, placement) {
       rebuildAll();
       if (mi >= 0) renderTray();
       if (activePane === paneObj) setActive(columns[0] ? columns[0].panes[0] : null);
-      updateStatus();
+      updateStatus(); leaveIfProjectEmpty();
     },
   };
   col.panes.push(paneObj);
 
   term.onData((d) => {
     lastActivityAt = Date.now();
-    pane.classList.remove('has-changes', 'done'); // 내가 입력 중 → 알림/완료표시 해제
+    pane.classList.remove('has-changes'); // 내가 입력 중 → 알림/완료표시 해제
+    if (paneObj._doneAt || pane.classList.contains('done')) clearPaneDone(paneObj);
     if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: 'input', data: d }));
     else { showBanner('연결이 끊겨 입력이 전달되지 않습니다 — 재연결 중…'); onWake(); }
   });
@@ -1562,6 +1749,9 @@ function addPane(cfg, placement) {
       } else if (act === 'chatonly') {
         if (chatMode() === 'off') applyChatMode('bubble');   // 대화가 꺼져 있으면 켜주고 접는다
         applyChatLayout(chatLayout() === 'chat' ? 'split' : 'chat');
+      } else if (act === 'term') {
+        b.classList.toggle('on', pane.classList.toggle('show-term'));
+        setTimeout(() => paneObj.fit(), 60);
       }
     }));
 
@@ -1612,16 +1802,26 @@ function addPane(cfg, placement) {
     };
     function renderChat() {
       if (!log) return;
-      const mode = chatMode();
+      const desk = deskViewOn();
+      const mode = desk ? 'desk' : chatMode();
       if (mode === 'off') return;
       const all = mergedItems();
-      const items = all.slice(document.body.classList.contains('chat-only') ? -60 : -14);
-      log.className = 'chatlog' + (mode === 'discord' ? ' discord' : '');
-      const html = items.length ? (mode === 'discord' ? discordHtml(items) : bubbleHtml(items))
-        : `<div class="cempty">${transcriptReady ? '아직 주고받은 메시지가 없습니다.' : '이 세션의 대화 기록을 아직 못 찾았습니다.<br><b>여기서 메시지를 보내면 바로 표시됩니다.</b>'}</div>`;
+      const items = all.slice(desk ? -120 : (document.body.classList.contains('chat-only') ? -60 : -14));
+      log.className = 'chatlog' + (mode === 'discord' ? ' discord' : '') + (desk ? ' desk' : '');
+      let html;
+      if (!items.length) {
+        html = `<div class="cempty">${transcriptReady ? '아직 주고받은 메시지가 없습니다.' : '이 세션의 대화 기록을 아직 못 찾았습니다.<br><b>여기서 메시지를 보내면 바로 표시됩니다.</b>'}</div>`;
+      } else if (desk && window.DeskRender) {
+        html = window.DeskRender.html(items, { aiName: aiName() });
+      } else {
+        html = mode === 'discord' ? discordHtml(items) : bubbleHtml(items);
+      }
       if (html !== log.dataset.html) {
         const atBottom = log.scrollHeight - log.scrollTop - log.clientHeight < 40;
+        // 펼쳐 둔 도구 결과는 다시 그려도 펼친 채로 둔다
+        const open = new Set([...log.querySelectorAll('details[open][data-i]')].map((d) => d.dataset.i));
         log.innerHTML = html; log.dataset.html = html;
+        open.forEach((i) => { const d = log.querySelector(`details[data-i="${CSS.escape(i)}"]`); if (d) d.open = true; });
         if (atBottom) log.scrollTop = log.scrollHeight;
       }
     }
@@ -1629,7 +1829,8 @@ function addPane(cfg, placement) {
     async function refreshLog() {
       if (!log) return;
       if (!document.body.contains(pane) && pane.parentElement !== minStash) { clearInterval(logTimer); return; }
-      if (chatMode() === 'off' || !document.body.classList.contains('compose-on')) return;
+      if (!deskViewOn() && (chatMode() === 'off' || !document.body.classList.contains('compose-on'))) return;
+      if (deskViewOn() && pane !== (activePane && activePane.el)) return; // 데스크톱 뷰는 보이는 세션만 읽는다
       if (logBusy) { renderChat(); return; }
       logBusy = true;
       try {
@@ -1714,6 +1915,7 @@ function addPane(cfg, placement) {
   rebuildAll();
   setActive(paneObj);
   updateStatus();
+  return paneObj;
 }
 
 /* ---------- 웹 미리보기 패널 (iframe) ---------- */
@@ -1790,7 +1992,7 @@ function addPreviewPane(url, placement, label) {
       pane.remove();
       rebuildAll();
       if (activePane === paneObj) setActive(columns[0] ? columns[0].panes[0] : null);
-      updateStatus();
+      updateStatus(); leaveIfProjectEmpty();
     },
   };
   col.panes.push(paneObj);
@@ -2532,10 +2734,12 @@ async function initState() {
     if (s.settings) { shellSettings = { ...shellSettings, ...s.settings }; renderShellPopover(); }
   } catch {}
   if (!profiles.find((p) => p.id === 'default')) profiles.unshift({ id: 'default', name: '기본' });
-  if (!profiles.find((p) => p.id === activeProfileId)) activeProfileId = 'default';
-  restoreLayoutForProfile(activeProfileId); // 마지막으로 열려있던 패널 레이아웃 복원
+  if (!profiles.find((p) => p.id === activeProfileId)) enterWorkspace('default', '');
+  restoreLayoutForProfile(activeProfileId); // 마지막으로 열려있던 패널 레이아웃 복원(프로젝트 탭 전부)
   restoreMinimized(); // 최소화(트레이)돼 있던 패널도 복원
-  renderTabs();
+  enterWorkspace(activeProfileId, preferredProjectOf(activeProfileId));
+  saveLastProject();
+  updateStatus();
   loadRecent();
 }
 initState();

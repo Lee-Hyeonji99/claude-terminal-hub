@@ -1,116 +1,112 @@
 'use strict';
 /**
- * 펫 연동 (데스크톱 앱 전용) — 패널 화면에서 Claude 질문을 찾아 펫에 넘기고,
- * 펫에서 고른 답을 그 패널에 키로 쳐 준다.
+ * 알림 모으기 — 패널마다 «Claude 질문» 과 «작업 완료» 를 찾아
+ *   1) 프로젝트(작업 경로)별로 묶어 펫에 넘기고 (데스크톱 앱: 프로젝트마다 펫 하나)
+ *   2) 기다리는 알림 개수를 작업표시줄 아이콘 배지로 (브라우저는 탭 제목 앞 숫자) 보여준다.
+ * 펫에서 고른 답은 PromptAnswer 로 그 패널에 키로 쳐 준다.
  *
- * app.js 의 전역(columns · minimized · profileWorkspaces · profiles · activeProfileId ·
- * switchProfile · restorePane · setActive)을 쓴다 — app.js 다음에 로드한다.
+ * app.js 의 전역(allWorkspacePanes · revealPane · markPaneDone · clearPaneDone · profiles)을 쓴다 —
+ * app.js · prompt-answer.js 다음에 로드한다.
  *
- * 화면은 xterm 버퍼에서 읽는다. 최소화·다른 프로필에 숨겨진 패널도 버퍼는 계속 갱신되므로
- * 보이지 않는 세션의 질문도 잡힌다.
+ * 작업 완료는 두 경로로 잡는다: 터미널 벨(app.js) + 상태줄 «esc to interrupt» 가 떠 있다가
+ * 사라지는 전환(여기). 벨을 안 울리는 환경에서도 완료를 놓치지 않기 위해서다.
  */
 (function initPetBridge() {
   const hub = window.claudeHub;
-  if (!hub || !hub.petState || !window.PromptScan) return;
+  const PA = window.PromptAnswer;
+  const PK = window.ProjectKey;
+  if (!PA || !PK) return;
+  const hasPet = !!(hub && hub.petState);
 
   const SCAN_MS = 700;
-  // 자리 이동과 글자를 한 번에 보내면 Claude 가 같은 화면 상태로 처리해 글자가 사라진다(외부 위젯 실측 2026-09-22).
-  const STEP_PAUSE_MS = 400;
-  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-  const shortName = (p) => (p ? (String(p).split(/[\\/]/).filter(Boolean).pop() || p) : '');
+  const IDLE_TICKS_FOR_DONE = 2;   // 멈춘 상태가 이만큼 이어져야 완료로 본다(상태줄 깜빡임 무시)
+  const BASE_TITLE = document.title;
 
-  function allPanes() {
-    const set = new Set();
-    columns.forEach((c) => c.panes.forEach((p) => set.add(p)));
-    for (const [pid, w] of Object.entries(profileWorkspaces)) {
-      if (pid !== activeProfileId && w && Array.isArray(w.columns)) w.columns.forEach((c) => c.panes.forEach((p) => set.add(p)));
-    }
-    minimized.forEach((p) => set.add(p));
-    return [...set].filter((p) => p && p.term && p.cfg && !p.cfg.viewer && !p.cfg.preview);
-  }
-  // 스크롤해 올려 둔 패널이어도 지금 화면(맨 아래)을 읽는다.
-  function screenOf(term) {
-    const b = term.buffer.active;
-    const out = [];
-    for (let y = b.baseY; y < b.baseY + term.rows; y++) {
-      const line = b.getLine(y);
-      out.push(line ? line.translateToString(true) : '');
-    }
-    return out;
-  }
-  function promptOf(p) {
-    try { return PromptScan.parsePrompt(screenOf(p.term)); } catch { return null; }
+  function termPanes() {
+    return allWorkspacePanes().filter((p) => p && p.term && p.cfg && !p.cfg.viewer && !p.cfg.preview);
   }
   function profileName(id) {
     const f = (typeof profiles !== 'undefined' ? profiles : []).find((x) => x.id === id);
     return f && f.id !== 'default' ? f.name : '';
   }
 
+  // 일하는 중 → 멈춤 전환 감지 (패널 객체에 상태를 둔다)
+  function trackWorking(p, working, asking) {
+    if (working) { p._wasWorking = true; p._idleTicks = 0; return; }
+    if (!p._wasWorking) return;
+    if (asking) { p._wasWorking = false; return; } // 질문 대기는 완료가 아니라 질문 알림으로 간다
+    p._idleTicks = (p._idleTicks || 0) + 1;
+    if (p._idleTicks >= IDLE_TICKS_FOR_DONE) { p._wasWorking = false; p._idleTicks = 0; markPaneDone(p); }
+  }
+
+  function collect() {
+    const projects = new Map();
+    let pending = 0;
+    for (const p of termPanes()) {
+      const prompt = PA.promptOf(p);
+      const working = !prompt && PA.isWorking(p);
+      trackWorking(p, working, !!prompt);
+      const id = PK.projectId(p.cfg.cwd);
+      if (!projects.has(id)) {
+        projects.set(id, { id, name: PK.projectName(p.cfg.cwd) || '기타', cwd: p.cfg.cwd || '', hue: PK.projectHue(id), working: 0, questions: [], done: [] });
+      }
+      const proj = projects.get(id);
+      if (working) proj.working++;   // 펫 팩이면 걷는 동작으로 보여준다
+      const base = { key: p.cfg.key, title: p.cfg.title || 'claude', profile: profileName(p.cfg.profile) };
+      if (prompt) {
+        proj.questions.push({ ...base, sig: PA.signature(prompt), cwd: proj.name, prompt });
+        pending++;
+      } else if (p._doneAt) {
+        proj.done.push({ ...base, at: p._doneAt });
+        pending++;
+      }
+    }
+    return { projects: [...projects.values()], pending };
+  }
+
+  /* ---------- 작업표시줄 배지 ---------- */
+  function badgeDataUrl(n) {
+    const c = document.createElement('canvas');
+    c.width = 32; c.height = 32;
+    const g = c.getContext('2d');
+    g.fillStyle = '#e5484d';
+    g.beginPath(); g.arc(16, 16, 15, 0, Math.PI * 2); g.fill();
+    g.fillStyle = '#fff';
+    const label = n > 99 ? '99+' : String(n);
+    g.font = `bold ${label.length > 2 ? 12 : label.length > 1 ? 16 : 20}px "Segoe UI",sans-serif`;
+    g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.fillText(label, 16, 17);
+    return c.toDataURL('image/png');
+  }
+  let lastBadge = -1;
+  function updateBadge(n) {
+    if (n === lastBadge) return;
+    lastBadge = n;
+    document.title = n ? `(${n}) ${BASE_TITLE}` : BASE_TITLE;
+    if (hub && hub.setBadge) hub.setBadge({ count: n, dataUrl: n ? badgeDataUrl(n) : null });
+  }
+
   let lastJson = '';
   function scan() {
-    const list = [];
-    for (const p of allPanes()) {
-      const prompt = promptOf(p);
-      if (!prompt) continue;
-      list.push({
-        key: p.cfg.key,
-        sig: PromptScan.promptSignature(prompt),
-        title: p.cfg.title || 'claude',
-        cwd: shortName(p.cfg.cwd),
-        profile: profileName(p.cfg.profile),
-        prompt,
-      });
-    }
-    const json = JSON.stringify(list);
-    if (json !== lastJson) { lastJson = json; hub.petState(list); }
+    const { projects, pending } = collect();
+    updateBadge(pending);
+    if (!hasPet) return;
+    const json = JSON.stringify(projects);
+    if (json !== lastJson) { lastJson = json; hub.petState({ projects }); }
   }
   setInterval(scan, SCAN_MS);
 
-  function sendKeys(p, data) {
-    if (!p.ws || p.ws.readyState !== WebSocket.OPEN) return false;
-    p.ws.send(JSON.stringify({ type: 'input', data }));
-    return true;
-  }
-  async function sendSeq(p, keys) {
-    for (let i = 0; i < keys.length; i++) {
-      if (!sendKeys(p, keys[i])) return false;
-      if (i < keys.length - 1) await sleep(keys[i + 1] === '\r' ? STEP_PAUSE_MS : 60);
-    }
-    return true;
-  }
-  function focusPane(p) {
-    if (p.cfg.profile && p.cfg.profile !== activeProfileId) switchProfile(p.cfg.profile);
-    if (minimized.includes(p)) restorePane(p);
-    setActive(p);
-  }
+  if (!hasPet) return;
 
   hub.onPetAnswer(async (msg) => {
     const { key, sig, action } = msg || {};
     const reply = (ok, message) => hub.petResult({ key, sig, ok, message: message || '' });
-    const p = allPanes().find((x) => x.cfg.key === key);
+    const p = termPanes().find((x) => x.cfg.key === key);
     if (!p || !action) return reply(false, '세션을 찾을 수 없습니다');
-    if (action.type === 'focus') { focusPane(p); return reply(true); }
-
-    // 카드를 띄운 뒤 터미널에서 먼저 답했을 수 있다. 그때 키를 보내면 다음 질문에 꽂힌다.
-    const prompt = promptOf(p);
-    if (!prompt || PromptScan.promptSignature(prompt) !== sig) return reply(false, '질문이 바뀌었습니다 — 터미널을 확인하세요');
-
-    if (action.type === 'cancel') return reply(sendKeys(p, '\x1b'), '연결이 끊겨 보내지 못했습니다');
-    const opt = prompt.options.find((o) => o.number === action.number);
-    if (!opt) return reply(false, '없는 선택지입니다');
-
-    let ok;
-    if (action.type === 'text') {
-      // 줄바꿈은 Enter 로 먹혀 중간에 확정되므로 공백으로 바꾼다.
-      const text = String(action.text || '').replace(/\r?\n/g, ' ').trim();
-      if (!text) return reply(false, '보낼 내용이 없습니다');
-      ok = await sendSeq(p, PromptScan.keysToSelect(prompt, opt.number, true));
-      if (ok) { await sleep(STEP_PAUSE_MS); ok = sendKeys(p, text); }
-      if (ok) { await sleep(STEP_PAUSE_MS); ok = sendKeys(p, '\r'); }
-    } else {
-      ok = await sendSeq(p, PromptScan.keysToSelect(prompt, opt.number, false));
-    }
-    reply(ok, ok ? '' : '연결이 끊겨 보내지 못했습니다');
+    if (action.type === 'focus') { revealPane(p); clearPaneDone(p); return reply(true); }
+    if (action.type === 'dismiss') { clearPaneDone(p); setTimeout(scan, 50); return reply(true); }
+    const r = await PA.answer(p, sig, action);
+    reply(r.ok, r.message);
     setTimeout(scan, 300); // 카드를 빨리 걷어 낸다
   });
 
