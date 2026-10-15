@@ -83,6 +83,13 @@ const TERM_THEMES = {
 };
 let activeTermTheme = null; // 캐릭터 테마일 때 이미지에서 만든 팔레트가 들어간다
 function currentTermTheme() { return activeTermTheme || TERM_THEMES[document.body.dataset.theme] || TERM_THEMES.dark; }
+// 밝은 터미널(파스텔)에선 다크 배경 기준으로 칠한 출력(Claude Code 다크 테마 등)도 읽히게 글자색 대비를 끌어올린다
+let termIsLight = false;
+function currentTermContrast() { return termIsLight ? 4.5 : 1; }
+function applyTermThemeToPanes() {
+  const theme = currentTermTheme(), contrast = currentTermContrast();
+  forEachTermPane((p) => { p.term.options.theme = theme; p.term.options.minimumContrastRatio = contrast; });
+}
 
 /* ---------- 탭(프로젝트)별 테마 ----------
  * 전체 기본 테마는 cth_theme, 탭 전용 테마는 cth_proj_themes = { 워크스페이스키: 테마키 }.
@@ -813,8 +820,8 @@ function buildCharPalette(cols, mode, fallbackHex, forceHex) {
     v['--ok'] = hsl(150, 45, 34);
     v['--danger'] = hsl(2, 62, 46);
     v['--sb-thumb'] = hsl(h, 35, 76);
-    v['--term-bg'] = hsl(h, 34, 11);
-    v['--term-fg'] = hsl(h, 30, 92);
+    v['--term-bg'] = hsl(h, Math.min(60, sat + 10), 97);   // 파스텔은 터미널도 밝게
+    v['--term-fg'] = hsl(h, 32, 17);
     v['--accent2'] = hsl(h2, Math.max(42, a2.s * 100), 44);
     v['--on-accent'] = '#ffffff';
   } else {
@@ -840,14 +847,20 @@ function buildCharPalette(cols, mode, fallbackHex, forceHex) {
   }
   return v;
 }
+// 밝은 터미널 배경용 ANSI 16색 (Tokyo Night Day 계열) — white 계열도 밝은 배경에서 읽히는 회색으로
+const LIGHT_ANSI = {
+  black: '#3760bf', red: '#c64343', green: '#387068', yellow: '#8c6c3e', blue: '#2e7de9', magenta: '#9854f1', cyan: '#007197', white: '#6172b0',
+  brightBlack: '#8990b3', brightRed: '#d65252', brightGreen: '#4d8a6a', brightYellow: '#a27629', brightBlue: '#358aff', brightMagenta: '#a463ff', brightCyan: '#007ea8', brightWhite: '#3760bf',
+};
+const withAlpha = (color, a) => color.replace(/\)$/, ` / ${a})`);
 // UI 팔레트 → xterm ANSI 16색 (배경/전경/파랑·시안만 캐릭터 색으로, 나머지는 가독성 좋은 기본값)
 function ansiFromVars(v, mode) {
-  const base = mode === 'pastel' ? TERM_THEMES.tokyonight : TERM_THEMES.tokyonight;
-  return Object.assign({}, base, {
+  const light = mode === 'pastel';
+  return Object.assign({}, light ? LIGHT_ANSI : TERM_THEMES.tokyonight, {
     background: v['--term-bg'], foreground: v['--term-fg'],
     blue: v['--accent'], brightBlue: v['--accent'],
     cyan: v['--accent2'], brightCyan: v['--accent2'],
-  });
+  }, light ? { cursor: v['--accent'], cursorAccent: v['--term-bg'], selectionBackground: withAlpha(v['--accent'], 0.25) } : {});
 }
 
 const CHAR_VARS = ['--bg', '--panel', '--head', '--border', '--text', '--muted', '--accent', '--active',
@@ -878,8 +891,8 @@ async function applyCharTheme(key) {
   if (lv >= 2 && t.ui) applyUiFont(`'${t.ui}',${DEFAULT_UI_FONT}`, false);
   else applyUiFont(localStorage.getItem('cth_ui_font') || DEFAULT_UI_FONT, false);
   activeTermTheme = ansiFromVars(v, mode);
-  const termTheme = currentTermTheme();
-  forEachTermPane((p) => { p.term.options.theme = termTheme; });
+  termIsLight = mode === 'pastel';
+  applyTermThemeToPanes();
   updateComposePlaceholders(t);
   renderCharColors(key, cols);
   applyCursors();
@@ -941,14 +954,14 @@ function renderTheme(t) {
   if (isChar) { applyCharTheme(t); return; }
   if (!TERM_THEMES[t]) t = 'dark';
   activeTermTheme = null;
+  termIsLight = false;
   clearCharVars();
   document.body.classList.remove('cth-char', 'lv1', 'lv2', 'lv3');
   document.body.removeAttribute('data-char');
   document.body.dataset.theme = t;
   applyUiFont(localStorage.getItem('cth_ui_font') || DEFAULT_UI_FONT, false);
   updateComposePlaceholders(null);
-  const termTheme = currentTermTheme();
-  forEachTermPane((p) => { p.term.options.theme = termTheme; });
+  applyTermThemeToPanes();
   applyCursors();
   setTimeout(() => { try { fitAll(); } catch {} }, 60);
 }
@@ -1535,6 +1548,7 @@ function addPane(cfg, placement) {
     fontSize: termFontSize,
     lineHeight: termLineHeight,
     theme: currentTermTheme(),
+    minimumContrastRatio: currentTermContrast(),
     scrollback: 8000,
     allowProposedApi: true,
   });
