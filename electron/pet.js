@@ -109,7 +109,7 @@ function initPet({ url, mainWin }) {
     const alive = new Set(projects.map((p) => p.id));
     for (const pet of [...pets.values()]) if (!alive.has(pet.id)) destroyPet(pet);
     for (const proj of projects) {
-      const data = { project: { id: proj.id, name: proj.name, cwd: proj.cwd, hue: proj.hue }, working: proj.working || 0, questions: proj.questions, done: proj.done };
+      const data = { project: { id: proj.id, name: proj.name, cwd: proj.cwd, hue: proj.hue }, working: proj.working || 0, questions: proj.questions, done: proj.done, sessions: proj.sessions || [] };
       let pet = pets.get(proj.id);
       if (!pet) { pet = { id: proj.id, win: null, card: null, data, sig: '', drag: null }; pets.set(proj.id, pet); }
       pet.data = data;
@@ -141,12 +141,22 @@ function initPet({ url, mainWin }) {
   ipcMain.on('pet:toggle', () => setVisible(!st.visible));
   ipcMain.handle('pet:visible', () => st.visible);
 
+  // 허브 창을 확실히 맨 앞으로 — Windows 는 focus() 만으로는 작업표시줄만 깜빡이고 안 올라올 때가 있어
+  // 잠깐 항상 위로 올렸다 내린다.
+  function bringMainToFront() {
+    if (!mainWin || mainWin.isDestroyed()) return;
+    if (mainWin.isMinimized()) mainWin.restore();
+    mainWin.show();
+    mainWin.setAlwaysOnTop(true);
+    mainWin.moveTop();
+    mainWin.focus();
+    mainWin.webContents.focus();
+    setTimeout(() => { if (!mainWin.isDestroyed()) mainWin.setAlwaysOnTop(false); }, 150);
+  }
+
   // ---- 펫 → 허브 ----
   ipcMain.on('pet:answer', (_e, payload) => {
-    if (payload && payload.action && payload.action.type === 'focus' && mainWin && !mainWin.isDestroyed()) {
-      if (mainWin.isMinimized()) mainWin.restore();
-      mainWin.show(); mainWin.focus();
-    }
+    if (payload && payload.action && payload.action.type === 'focus') bringMainToFront();
     if (mainWin && !mainWin.isDestroyed()) { try { mainWin.webContents.send('pet:answer', payload); } catch {} }
   });
   ipcMain.on('pet:hide', (e) => {

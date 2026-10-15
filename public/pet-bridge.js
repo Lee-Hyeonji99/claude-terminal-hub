@@ -48,11 +48,14 @@
       trackWorking(p, working, !!prompt);
       const id = PK.projectId(p.cfg.cwd);
       if (!projects.has(id)) {
-        projects.set(id, { id, name: PK.projectName(p.cfg.cwd) || '기타', cwd: p.cfg.cwd || '', hue: PK.projectHue(id), working: 0, questions: [], done: [] });
+        projects.set(id, { id, name: PK.projectName(p.cfg.cwd) || '기타', cwd: p.cfg.cwd || '', hue: PK.projectHue(id), working: 0, questions: [], done: [], sessions: [] });
       }
       const proj = projects.get(id);
       if (working) proj.working++;   // 펫 팩이면 걷는 동작으로 보여준다
       const base = { key: p.cfg.key, title: p.cfg.title || 'claude', profile: profileName(p.cfg.profile) };
+      // 펫을 누르면 뜨는 세션 목록 — 고르면 허브에서 그 세션으로 간다
+      const state = prompt ? 'ask' : working ? 'work' : p._doneAt ? 'done' : 'idle';
+      proj.sessions.push({ ...base, state });
       if (prompt) {
         proj.questions.push({ ...base, sig: PA.signature(prompt), cwd: proj.name, prompt });
         pending++;

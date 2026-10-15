@@ -15,10 +15,11 @@
   let project = null;             // { id, name, cwd, hue }
   let list = [];                  // 질문
   let done = [];                  // 작업 완료 { key, title, profile, at }
+  let sessions = [];              // 이 프로젝트의 세션 전부 { key, title, profile, state: ask|work|done|idle }
   const seenDone = new Set();
   let idx = 0;
   let open = false;
-  let view = 'questions';         // 'questions' | 'settings'(캐릭터 바꾸기)
+  let view = 'questions';         // 'questions' | 'done' | 'sessions'(허브로 가기) | 'settings'(캐릭터 바꾸기)
   let typingFor = null;           // 글 입력 중인 선택지 번호 (sig 별)
   let draft = '';
   let msg = { text: '', kind: '' };
@@ -303,6 +304,7 @@
       toQ.onclick = () => { view = 'questions'; render(); };
       head.append(toQ);
     }
+    head.append(sessionsBtn());
     const close = el('button', 'ib', '접기');
     close.onclick = () => { open = false; render(); };
     head.append(close);
@@ -330,9 +332,62 @@
     card.append(head, scroll, foot);
   }
 
+  // 세션 목록 — 하나 고르면 허브 창을 맨 앞으로 올리고 그 프로젝트 탭 · 세션으로 간다
+  const STATE_LABEL = { ask: '질문 대기', work: '작업 중', done: '완료', idle: '대기' };
+  function focusSession(key) {
+    if (!api || !key) return;
+    open = false;
+    render();
+    api.answer({ key, sig: '', action: { type: 'focus' } });
+  }
+  function sessionsBtn() {
+    const b = el('button', 'ib', '세션');
+    b.title = '이 프로젝트 세션 목록 — 골라서 허브로 가기';
+    b.onclick = () => { view = 'sessions'; render(); };
+    return b;
+  }
+  function renderSessions() {
+    const head = el('div', 'head');
+    const who = el('div', 'who');
+    who.append(el('b', null, '허브에서 열기'));
+    who.append(el('span', null, projectLabel()));
+    head.append(who);
+    if (list.length) {
+      const toQ = el('button', 'ib', `질문 ${list.length}`);
+      toQ.onclick = () => { view = 'questions'; render(); };
+      head.append(toQ);
+    }
+    const close = el('button', 'ib', '접기');
+    close.onclick = () => { open = false; render(); };
+    head.append(close);
+    const scroll = el('div', 'scroll');
+    if (!sessions.length) scroll.append(el('div', 'empty', '이 프로젝트에 열린 세션이 없어요.'));
+    const box = el('div', 'slist');
+    for (const s of sessions) {
+      const row = el('button', 'sitem');
+      row.title = '허브에서 이 세션 열기';
+      row.append(el('span', 'sdot ' + s.state));
+      const t = el('span', 'dt');
+      t.append(el('b', null, s.title));
+      t.append(el('span', null, [STATE_LABEL[s.state] || '', s.profile].filter(Boolean).join(' · ')));
+      row.append(t);
+      row.onclick = () => focusSession(s.key);
+      box.append(row);
+    }
+    scroll.append(box);
+    const foot = el('div', 'foot');
+    foot.append(el('span', 'msg', '오른쪽 클릭 = 캐릭터 바꾸기'));
+    const hide = el('button', 'ib', '숨기기');
+    hide.title = '이 프로젝트 펫만 숨깁니다 — 새 알림이 오면 다시 나와요';
+    hide.onclick = () => api && api.hide();
+    foot.append(hide);
+    card.append(head, scroll, foot);
+  }
+
   function renderCard() {
     card.textContent = '';
     if (view === 'settings') { renderSettings(); return; }
+    if (view === 'sessions') { renderSessions(); return; }
     const r = current();
     if (done.length && (view === 'done' || !r)) { renderDone(); return; }
     if (!r) {
@@ -365,7 +420,7 @@
     next.onclick = () => { idx++; typingFor = null; render(); };
     const close = el('button', 'ib', '접기');
     close.onclick = () => { open = false; render(); };
-    head.append(who, prev, pager, next, close);
+    head.append(who, prev, pager, next, sessionsBtn(), close);
 
     const scroll = el('div', 'scroll');
     if (r.prompt.body) scroll.append(el('div', 'tag', r.prompt.body));
@@ -444,7 +499,8 @@
     api && api.dragEnd();
     lastActivity = Date.now();
     if (dragging) { dragging = false; updateAction(); }
-    if (clicked) { open = !open; if (open) view = 'questions'; render(); }
+    // 누르면: 질문·완료가 있으면 그 카드, 없으면 세션 목록(골라서 허브로 가기)
+    if (clicked) { open = !open; if (open) view = (list.length || done.length) ? 'questions' : 'sessions'; render(); }
   });
   petEl.addEventListener('dblclick', (e) => e.preventDefault());
   // 오른쪽 클릭 → 캐릭터 바꾸기
@@ -478,6 +534,7 @@
       const prevKey = current() && current().sig;
       // 작업 완료 — 새로 끝난 세션이 있으면 카드를 펼친다(질문이 보이고 있으면 질문이 우선)
       done = Array.isArray(d.done) ? d.done : [];
+      sessions = Array.isArray(d.sessions) ? d.sessions : [];
       const freshDone = done.filter((x) => !seenDone.has(`${x.key}@${x.at}`));
       freshDone.forEach((x) => seenDone.add(`${x.key}@${x.at}`));
       if (freshDone.length && !(open && view === 'questions' && current())) {
@@ -499,7 +556,7 @@
       }
       if (!list.length) { msg = { text: '', kind: '' }; typingFor = null; }
       // 알림이 다 처리되면 카드를 접는다(사용자가 눌러 연 빈 카드는 그대로)
-      if (hadItems && !list.length && !done.length && view !== 'settings') open = false;
+      if (hadItems && !list.length && !done.length && view !== 'settings' && view !== 'sessions') open = false;
       updateAction();
       render();
     });

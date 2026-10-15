@@ -85,6 +85,14 @@
   .ditem .dt b{display:block;font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .ditem .dt span{display:block;font-size:11px;color:var(--muted)}
   .ditem .ok{color:var(--ok);font-weight:700}
+  .slist{display:flex;flex-direction:column;gap:4px;padding-bottom:6px}
+  .sitem{display:flex;align-items:center;gap:9px;width:100%;text-align:left;background:var(--opt);border:1px solid transparent;border-radius:9px;padding:7px 9px;color:inherit;font:inherit;cursor:pointer}
+  .sitem:hover,.sitem:focus-visible{border-color:var(--accent);outline:none}
+  .sitem .dt{flex:1;min-width:0}
+  .sitem .dt b{display:block;font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .sitem .dt span{display:block;font-size:11px;color:var(--muted)}
+  .sdot{width:8px;height:8px;border-radius:50%;flex:none;background:var(--muted)}
+  .sdot.ask{background:var(--accent)} .sdot.work{background:#e3a23b} .sdot.done{background:var(--ok)}
   .badge{position:absolute;top:2px;right:2px;min-width:20px;height:20px;padding:0 5px;box-sizing:border-box;border-radius:10px;background:var(--err);color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;border:2px solid var(--card)}
   .badge[hidden]{display:none}
   @keyframes bob{0%,100%{transform:translateY(0)}50%{transform:translateY(-3px)}}
