@@ -21,6 +21,7 @@ const { WebSocketServer } = require('ws');
 const petPack = require('./lib/pet-pack');
 const pastedImages = require('./lib/pasted-images');
 const claudeRegistry = require('./lib/claude-registry');
+const activity = require('./lib/activity');
 let pty;
 try {
   pty = require('node-pty');
@@ -903,6 +904,9 @@ function beginWatch(session, jsonl, isResume) {
     w.pos = curr.size;
     if (w.isResume) broadcastJson(session, { type: 'changed' });
     for (const a of extractArtifacts(delta)) broadcastJson(session, { type: 'artifact', path: a.path, tool: a.tool });
+    // HUD «무슨 일 하는 중» — 마지막 도구 사용(또는 새 턴 시작)
+    const act = activity.lastActivity(delta);
+    if (act) { session.activity = { ...act, at: Date.now() }; broadcastJson(session, { type: 'activity', ...session.activity }); }
   });
 }
 function startWatch(session) {
@@ -1079,6 +1083,7 @@ wss.on('connection', (ws) => {
         safeSend({ type: 'ready', pid: existing.term.pid, cwd: existing.cwd, reattached: true });
         // 끊겨 있는 동안 /clear 로 세션이 바뀌었을 수 있다 — 지금 ID 를 알려 레이아웃에 남긴다
         if (existing.resumeId) safeSend({ type: 'session', id: existing.resumeId });
+        if (existing.activity) safeSend({ type: 'activity', ...existing.activity });
         if (existing.buf) { try { ws.send(existing.buf); } catch {} } // 최근 화면 재생 → 재부착 클라이언트 상태 복원
         try { existing.term.resize(cols, rows); } catch {}
         return;
