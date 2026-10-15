@@ -41,6 +41,10 @@ body.desk-view .pane .compose textarea{width:100%;max-width:820px;border-radius:
 body.desk-view .pane .compose .crow{width:100%;max-width:820px;padding:6px 10px 8px;background:var(--panel);border:1px solid var(--border);border-top:none;border-radius:0 0 16px 16px}
 body.desk-view .pane .compose:focus-within textarea,body.desk-view .pane .compose:focus-within .crow{border-color:var(--accent)}
 body.desk-view .pane .compose .cbtn.send{border-radius:10px;padding:5px 14px}
+/* 캐릭터 테마 «풀캐릭»(lv3) 은 입력창을 알약 모양으로 바꾸는데, 데스크톱 뷰에서는 아래 버튼 줄과 한 덩어리여야 한다 */
+body.desk-view.cth-char .pane .compose{border-radius:0;margin:0}
+body.desk-view.cth-char .pane .compose textarea{border-radius:16px 16px 0 0;padding:12px 16px}
+body.desk-view.cth-char .pane .compose .cbtn.send{border-radius:10px}
 
 /* 메시지 */
 .chatlog.desk .cempty{margin:auto;font-size:12.5px}
