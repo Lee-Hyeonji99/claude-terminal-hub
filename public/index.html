@@ -470,6 +470,12 @@
     <div class="popover-wrap">
       <button id="themeBtn" class="ghost icon-btn" title="색상 테마"><span data-icon="palette"></span></button>
       <div id="themePopover" class="popover">
+        <div class="popover-sep" style="margin-top:0">적용 범위 <span style="font-weight:400">— 탭 우클릭으로도 열림</span></div>
+        <div class="seg-row" id="themeScopeRow">
+          <button data-tscope="all">전체 기본</button>
+          <button data-tscope="tab">이 탭만</button>
+        </div>
+        <div class="popover-sep">테마</div>
         <div class="popover-item" data-theme="dark"><span class="swatch" style="background:#0c0e14"></span>다크 (기본)</div>
         <div class="popover-item" data-theme="dracula"><span class="swatch" style="background:#282a36"></span>Dracula</div>
         <div class="popover-item" data-theme="solarized"><span class="swatch" style="background:#002b36"></span>Solarized Dark</div>
@@ -735,6 +741,7 @@
           <div class="kv"><span>줄 처음 / 끝</span><b><code>Ctrl+A</code> · <code>Ctrl+E</code></b></div>
           <div class="kv"><span>붙여넣기</span><b><code>Ctrl+V</code> · 우클릭</b></div>
           <div class="kv"><span>글자 크기</span><b><code>Ctrl +</code> · <code>Ctrl -</code> · <code>Ctrl 0</code></b></div>
+          <div class="kv"><span>프로젝트 탭 전환</span><b><code>Ctrl 1</code>~<code>Ctrl 8</code> · <code>Ctrl 9</code>(마지막)</b></div>
         </section>
         <section>
           <h4>Claude 명령어</h4>

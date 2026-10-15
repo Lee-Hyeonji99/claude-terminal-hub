@@ -83,6 +83,34 @@ const TERM_THEMES = {
 };
 let activeTermTheme = null; // 캐릭터 테마일 때 이미지에서 만든 팔레트가 들어간다
 function currentTermTheme() { return activeTermTheme || TERM_THEMES[document.body.dataset.theme] || TERM_THEMES.dark; }
+
+/* ---------- 탭(프로젝트)별 테마 ----------
+ * 전체 기본 테마는 cth_theme, 탭 전용 테마는 cth_proj_themes = { 워크스페이스키: 테마키 }.
+ * 전용 테마가 있는 탭에 있는 동안만 덮어쓴다. 모드·강도·커서·글꼴 설정은 전체 공통. */
+const PROJ_THEMES_KEY = 'cth_proj_themes';
+let projThemes = (() => {
+  try {
+    const o = JSON.parse(localStorage.getItem(PROJ_THEMES_KEY) || '{}');
+    return (o && typeof o === 'object' && !Array.isArray(o)) ? o : {};
+  } catch { return {}; }
+})();
+let renderedTheme = null;   // 지금 화면에 칠해진 테마 (첫 적용 전엔 null)
+function saveProjThemes() { try { localStorage.setItem(PROJ_THEMES_KEY, JSON.stringify(projThemes)); } catch {} }
+function globalTheme() { return localStorage.getItem('cth_theme') || 'dark'; }
+function isKnownTheme(t) { return !!(t && (TERM_THEMES[t] || (window.CHAR_THEME_MAP || {})[t])); }
+function projectThemeOf(wsKey) { const t = projThemes[wsKey]; return isKnownTheme(t) ? t : null; }
+function effectiveTheme() { return projectThemeOf(currentWsKey()) || globalTheme(); }
+function themeLabel(t) {
+  const c = (window.CHAR_THEME_MAP || {})[t];
+  if (c) return c.name;
+  const el = document.querySelector(`#themePopover .popover-item[data-theme="${t}"]`);
+  return el ? el.textContent.trim() : t;
+}
+function setProjectTheme(wsKey, t) {
+  const { [wsKey]: _drop, ...rest } = projThemes;
+  projThemes = t ? { ...rest, [wsKey]: t } : rest;
+  saveProjThemes();
+}
 let activePane = null;
 
 /* ---------- 새 메시지 알림 (OS 알림 / 브라우저 알림) ---------- */
@@ -367,6 +395,8 @@ function switchWorkspace(profile, project) {
   }
   updateStatus();
   if (activePane) setActive(activePane);
+  if (renderedTheme !== null && effectiveTheme() !== renderedTheme) refreshTheme();   // 탭 전용 테마
+  else updateThemeScopeRow();
 }
 
 // 패널 cfg 의 (계정, 작업 경로)에 맞는 워크스페이스로 옮겨 간다. 경로가 없는 패널(미리보기)은 지금 자리.
@@ -428,27 +458,53 @@ function clearPaneDone(p) {
 }
 window.addEventListener('focus', () => { if (activePane) clearPaneDone(activePane); });
 
+// 탭 막대에 보이는 프로젝트들 — 왼쪽부터 보이는 순서 그대로 (Ctrl+숫자 전환도 이 순서를 쓴다)
+function visibleProjectEntries() {
+  const cur = currentWsKey();
+  return workspaceEntriesOf(activeProfileId).filter(([k, w]) => wsPaneCount(w) > 0 || k === cur);
+}
+
+// Ctrl+1~8 → n번째 프로젝트 탭, Ctrl+9 → 마지막 탭 (브라우저 탭과 같은 규칙)
+function switchToProjectTab(n) {
+  const entries = visibleProjectEntries();
+  const idx = n === 9 ? entries.length - 1 : n - 1;
+  if (idx < 0 || idx >= entries.length) return false;
+  switchWorkspace(activeProfileId, PK.parseWorkspaceKey(entries[idx][0]).project);
+  return true;
+}
+
 function renderProjectTabs() {
   const bar = document.getElementById('projTabs');
   if (!bar) return;
   const cur = currentWsKey();
-  const entries = workspaceEntriesOf(activeProfileId).filter(([k, w]) => wsPaneCount(w) > 0 || k === cur);
+  const entries = visibleProjectEntries();
   const onlyEmpty = entries.length <= 1 && !activeProject && wsPaneCount(workspaces[cur]) === 0;
   bar.style.display = onlyEmpty ? 'none' : 'flex';
   bar.innerHTML = '';
   if (onlyEmpty) return;
-  entries.forEach(([k, w]) => {
+  entries.forEach(([k, w], i) => {
     const { project } = PK.parseWorkspaceKey(k);
     const cwd = projectCwd[k] || project;
     const n = wsPaneCount(w);
     const done = w.columns.some((c) => c.panes.some((p) => p._doneAt || (p.el && p.el.classList.contains('done'))));
+    const own = projectThemeOf(k);
     const t = document.createElement('div');
-    t.className = 'ptab' + (k === cur ? ' active' : '') + (done ? ' done' : '');
-    t.title = (cwd || '작업 경로 없는 패널') + (done ? '\n작업 완료된 세션이 있습니다' : '');
+    t.className = 'ptab' + (k === cur ? ' active' : '') + (done ? ' done' : '') + (own ? ' themed' : '');
+    const shortcut = i < 8 ? `Ctrl+${i + 1}` : (i === entries.length - 1 ? 'Ctrl+9' : '');
+    t.title = (cwd || '작업 경로 없는 패널')
+      + (shortcut ? `  (${shortcut})` : '')
+      + (own ? `\n전용 테마: ${themeLabel(own)}` : '')
+      + '\n우클릭 = 이 탭 테마 지정'
+      + (done ? '\n작업 완료된 세션이 있습니다' : '');
     t.innerHTML = `<span class="pdot" style="--hue:${PK.projectHue(project)}"></span>${ICON.folder}`
       + `<span class="pname">${escapeHtml(project ? PK.projectName(cwd) : '기타')}</span>`
       + (n ? `<span class="cnt">${n}</span>` : '');
     t.addEventListener('click', () => switchWorkspace(activeProfileId, project));
+    t.addEventListener('contextmenu', (e) => {
+      e.preventDefault();
+      switchWorkspace(activeProfileId, project);
+      openThemePopover();
+    });
     bar.appendChild(t);
   });
   const add = document.createElement('button');
@@ -808,6 +864,7 @@ async function applyCharTheme(key) {
   const mode = themeMode(), lv = themeLevel();
   let cols = null;
   if (full) { try { cols = await extractColors(full); } catch {} }
+  if (renderedTheme !== key) return;   // 색을 뽑는 사이 다른 테마(다른 탭)로 바뀌었다
   const v = buildCharPalette(cols, mode, t.fallback, localStorage.getItem('cth_pick_' + key) || null);
   const b = document.body;
   b.dataset.theme = 'char';
@@ -851,9 +908,27 @@ function updateComposePlaceholders(t) {
   document.querySelectorAll('.compose textarea').forEach((ta) => { ta.placeholder = ph; });
 }
 
+// 테마 고르기(사용자 선택) — 지금 탭에 전용 테마가 있으면 그 탭 것을, 아니면 전체 기본을 바꾼다.
 function applyTheme(t) {
+  const k = currentWsKey();
+  if (projectThemeOf(k)) { setProjectTheme(k, t); renderTabs(); }
+  else localStorage.setItem('cth_theme', t);
+  renderTheme(t);
+}
+// 저장은 건드리지 않고 지금 탭에 맞는 테마로 다시 칠한다 (탭 전환 · 모드/강도 변경 후)
+function refreshTheme() { renderTheme(effectiveTheme()); }
+
+function updateThemeScopeRow() {
+  const row = document.getElementById('themeScopeRow');
+  if (!row) return;
+  const scope = projectThemeOf(currentWsKey()) ? 'tab' : 'all';
+  row.querySelectorAll('button').forEach((b) => b.classList.toggle('on', b.dataset.tscope === scope));
+}
+
+function renderTheme(t) {
   const isChar = !!CHAR_MAP()[t];
-  localStorage.setItem('cth_theme', t);
+  renderedTheme = t;
+  updateThemeScopeRow();
   document.querySelectorAll('#themePopover .popover-item').forEach((el) => el.classList.toggle('active', el.dataset.theme === t));
   const charOn = ['charOptsSep', 'themeModeRow', 'themeLevelRow', 'assetDrop', 'charColorSep', 'charColors'];
   charOn.forEach((id) => {
@@ -1486,6 +1561,8 @@ function addPane(cfg, placement) {
     if (e.type !== 'keydown') return true;
     const k = e.key.toLowerCase();
     if ((e.ctrlKey || e.metaKey) && !e.altKey) {
+      // Ctrl+1~9 = 프로젝트 탭 전환(document keydown 이 처리) — pty 로 제어문자를 보내지 않는다
+      if (!e.shiftKey && /^Digit[1-9]$/.test(e.code)) return false;
       // 붙여넣기: Ctrl+V / Ctrl+Shift+V
       if (k === 'v') { e.preventDefault(); pasteFromClipboard(); return false; }
       // 복사: Ctrl+Shift+C 는 항상, Ctrl+C 는 선택영역이 있을 때만(없으면 인터럽트 \x03 전달)
@@ -2387,6 +2464,18 @@ document.querySelectorAll('#themePopover .popover-item').forEach((el) => {
   el.addEventListener('click', () => { applyTheme(el.dataset.theme); closePopovers(); });
 });
 setupPopover('themeBtn', 'themePopover');
+// 적용 범위: «이 탭만» 이면 지금 테마를 이 탭 전용으로 고정, «전체 기본» 이면 전용 테마를 지우고 전체를 따른다
+document.getElementById('themeScopeRow').addEventListener('click', (e) => {
+  const b = e.target.closest('button'); if (!b) return;
+  const k = currentWsKey();
+  setProjectTheme(k, b.dataset.tscope === 'tab' ? (renderedTheme || globalTheme()) : null);
+  refreshTheme();
+  renderTabs();
+});
+function openThemePopover() {
+  closePopovers();
+  document.getElementById('themePopover').classList.add('open');
+}
 setupPopover('accentBtn', 'accentPopover');
 setupPopover('cursorBtn', 'cursorPopover');
 buildAccentPicker();
@@ -2413,20 +2502,20 @@ function buildCharThemeList() {
   box.querySelectorAll('.popover-item').forEach((el) => {
     el.addEventListener('click', () => { applyTheme(el.dataset.theme); });
   });
-  const cur = localStorage.getItem('cth_theme');
+  const cur = renderedTheme || effectiveTheme();
   box.querySelectorAll('.popover-item').forEach((el) => el.classList.toggle('active', el.dataset.theme === cur));
 }
 document.getElementById('themeModeRow').addEventListener('click', (e) => {
   const b = e.target.closest('button'); if (!b) return;
   localStorage.setItem('cth_theme_mode', b.dataset.mode);
   segSelect('themeModeRow', b.dataset.mode);
-  applyTheme(localStorage.getItem('cth_theme') || 'dark');
+  refreshTheme();
 });
 document.getElementById('themeLevelRow').addEventListener('click', (e) => {
   const b = e.target.closest('button'); if (!b) return;
   localStorage.setItem('cth_theme_level', b.dataset.lv);
   segSelect('themeLevelRow', b.dataset.lv);
-  applyTheme(localStorage.getItem('cth_theme') || 'dark');
+  refreshTheme();
 });
 
 // 캐릭터 이미지 넣기 (클릭 · 드래그&드롭) → 서버의 theme-assets 폴더에 저장
@@ -2538,7 +2627,7 @@ segSelect('themeModeRow', themeMode());
 segSelect('themeLevelRow', String(themeLevel()));
 loadThemeAssets().then(() => {
   buildCharThemeList();
-  applyTheme(localStorage.getItem('cth_theme') || 'dark');
+  refreshTheme();
   applyAccent(localStorage.getItem('cth_accent') || null);
 });
 
@@ -2659,6 +2748,9 @@ document.addEventListener('keydown', (e) => {
   if (e.key === '=' || e.key === '+') { e.preventDefault(); applyFontSize(termFontSize + 1); }
   else if (e.key === '-' || e.key === '_') { e.preventDefault(); applyFontSize(termFontSize - 1); }
   else if (e.key === '0') { e.preventDefault(); applyFontSize(13); }
+  else if (!e.shiftKey && /^Digit[1-9]$/.test(e.code)) {
+    if (switchToProjectTab(Number(e.code.slice(5)))) e.preventDefault();
+  }
 });
 applyFontSize(termFontSize);
 
@@ -2672,7 +2764,7 @@ applyFontSize(termFontSize);
   sel.addEventListener('change', () => {
     applyUiFont(sel.value);
     // 캐릭터 테마 Lv2+ 는 테마 추천 글꼴을 쓰므로, 직접 고르면 그 선택이 우선하도록 다시 적용
-    applyTheme(localStorage.getItem('cth_theme') || 'dark');
+    refreshTheme();
     applyUiFont(sel.value);
   });
   markMissingFonts(sel, window.UI_FONTS);
