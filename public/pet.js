@@ -34,6 +34,14 @@
   };
   const current = () => list[Math.min(idx, list.length - 1)] || null;
 
+  // 드롭다운처럼 — 사용자가 이 펫의 카드를 열면 다른 펫에 열려 있던 카드는 닫는다.
+  // 펫 창들은 같은 주소라 localStorage 를 같이 쓰므로 storage 이벤트로 알린다(질문이 와서 저절로 열린 건 알리지 않음).
+  const OPEN_KEY = 'cth_pet_open';
+  const selfId = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+  function claimOpen() {
+    try { localStorage.setItem(OPEN_KEY, JSON.stringify({ by: selfId, at: Date.now() })); } catch { /* 저장 불가 환경 */ }
+  }
+
   function send(action) {
     const r = current();
     if (!r || !api) return;
@@ -149,7 +157,7 @@
   async function takeImage(file) {
     if (!file || !Avatar) return;
     try {
-      await Avatar.uploadCustom(file);
+      await Avatar.uploadCustom(file, project && project.id);
       msg = { text: '캐릭터를 바꿨어요', kind: 'ok' };
     } catch (e) {
       msg = { text: (e && e.message) || '바꾸지 못했어요', kind: 'err' };
@@ -165,7 +173,7 @@
     render();
     try {
       const p = await Avatar.importPack(folder);
-      const scope = Avatar.globalPack() && Avatar.globalPack() !== p.id && project ? 'project' : 'all';
+      const scope = project ? 'project' : 'all';   // 펫에 넣은 팩은 그 펫에만 — «모든 펫» 은 목록에서 따로 고른다
       Avatar.usePack(p.id, scope, project && project.id);
       msg = { text: scope === 'project' ? `${p.name} 팩을 이 펫에 썼어요` : `${p.name} 팩을 모든 펫에 썼어요`, kind: 'ok' };
     } catch (e) {
@@ -184,8 +192,8 @@
     if (Avatar.themeDir()) box.append(el('div', 'hint', `테마 전용 펫: ${Avatar.themeDir()}${Avatar.themeDir().includes('\\') ? '\\' : '/'}<테마키> 폴더에 넣으면 그 테마에서 자동으로 써요`));
     const pid = project && project.id;
     const mine = Avatar.projectPack(pid);
-    const all = Avatar.mode() === 'pack' ? Avatar.globalPack() : '';
-    const automatic = !mine && Avatar.mode() === 'theme' ? Avatar.themePack(project && project.theme) : null;
+    const all = Avatar.globalMode() === 'pack' ? Avatar.globalPack() : '';
+    const automatic = !mine && Avatar.mode(pid) === 'theme' ? Avatar.themePack(project && project.theme) : null;
     for (const p of Avatar.packs()) {
       const row = el('div', 'packrow' + (p.id === (mine || all || (automatic && automatic.id)) ? ' on' : ''));
       const t = el('span', 'pn');
@@ -218,10 +226,11 @@
   function renderSettings() {
     const box = el('div', 'set');
     if (Avatar) renderPackSection(box);
-    box.append(el('div', 't', '캐릭터 표시 방식'));
-    const m = Avatar ? Avatar.mode() : 'default';
-    // 단일 이미지를 고르면 이 펫의 팩 지정도 풀어야 바로 보인다
-    const pickMode = (mode) => { Avatar.clearProjectPack(project && project.id); Avatar.setMode(mode); applyAvatar(); render(); };
+    box.append(el('div', 't', '캐릭터 표시 방식 — 이 펫만'));
+    const pid = project && project.id;
+    const m = Avatar ? Avatar.mode(pid) : 'default';
+    // 이 펫에만 적용 — 단일 이미지를 고르면 이 펫의 팩 지정도 풀어야 바로 보인다
+    const pickMode = (mode) => { Avatar.clearProjectPack(pid); Avatar.setMode(mode, pid); applyAvatar(); render(); };
     const { theme, file } = Avatar ? Avatar.themeInfo(project && project.theme) : { theme: null, file: null };
     const builtin = Avatar && Avatar.themePack(project && project.theme);
     const themeSub = builtin ? `${theme ? theme.name : '기본 랏코'} · 상태에 맞춰 7가지 동작으로 움직여요` : !theme ? '허브에서 캐릭터 테마를 고르면 그 캐릭터가 나와요'
@@ -235,8 +244,8 @@
       return b;
     };
     box.append(choice('theme', '캐릭터 테마 따라가기', themeSub, () => pickMode('theme')));
-    box.append(choice('custom', '내 이미지', Avatar && Avatar.hasCustom() ? '골라 둔 이미지 · 눌러서 다시 고르기' : '이미지를 골라요 (gif 면 움직여요)', () => {
-      if (Avatar.hasCustom() && m !== 'custom') pickMode('custom'); else { Avatar.clearProjectPack(project && project.id); pickImageFile(); }
+    box.append(choice('custom', '내 이미지', Avatar && Avatar.hasCustom(pid) ? '골라 둔 이미지 · 눌러서 다시 고르기' : '이미지를 골라요 (gif 면 움직여요)', () => {
+      if (Avatar.hasCustom(pid) && m !== 'custom') pickMode('custom'); else { Avatar.clearProjectPack(pid); pickImageFile(); }
     }));
     box.append(choice('default', '기본 캐릭터', '프로젝트마다 색이 달라요', () => pickMode('default')));
     box.append(el('div', 'hint', '팁: 이미지 파일이나 펫 팩 폴더를 캐릭터 위에 끌어다 놓아도 바뀌어요.'));
@@ -280,7 +289,7 @@
     e.preventDefault(); e.stopPropagation();
     petEl.classList.remove('drop-over');
     const f = (e.dataTransfer.files || [])[0];
-    open = true; view = 'settings';
+    open = true; view = 'settings'; claimOpen();
     if (Avatar && Avatar.isImage(f)) { takeImage(f); return; }
     // 이미지가 아니면 펫 팩 폴더로 본다(manifest.json 이 없으면 서버가 알려준다)
     const folder = f && api && api.filePath ? api.filePath(f) : '';
@@ -512,7 +521,11 @@
     lastActivity = Date.now();
     if (dragging) { dragging = false; updateAction(); }
     // 누르면: 질문·완료가 있으면 그 카드, 없으면 세션 목록(골라서 허브로 가기)
-    if (clicked) { open = !open; if (open) view = (list.length || done.length) ? 'questions' : 'sessions'; render(); }
+    if (clicked) {
+      open = !open;
+      if (open) { view = (list.length || done.length) ? 'questions' : 'sessions'; claimOpen(); }
+      render();
+    }
   });
   petEl.addEventListener('dblclick', (e) => e.preventDefault());
   // 오른쪽 클릭 → 캐릭터 바꾸기
@@ -521,11 +534,18 @@
     const same = open && view === 'settings';
     view = same ? 'questions' : 'settings';
     open = !same || list.length > 0;
+    if (open) claimOpen();
     msg = { text: '', kind: '' };
     render();
   });
   // 허브에서 캐릭터 테마를 바꾸면(같은 주소라 localStorage 공유) 펫도 따라 바꾼다.
   window.addEventListener('storage', (e) => {
+    if (e.key === OPEN_KEY) {
+      let who = null;
+      try { who = JSON.parse(e.newValue || 'null'); } catch { /* 깨진 값 */ }
+      if (who && who.by !== selfId && open) { open = false; typingFor = null; msg = { text: '', kind: '' }; render(); }
+      return;
+    }
     if (!e.key || /^cth_(theme|proj_themes|pet_)/.test(e.key)) {
       (Avatar ? Avatar.loadFiles() : Promise.resolve()).then(() => { applyAvatar(); if (view === 'settings') render(); });
     }

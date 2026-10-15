@@ -17,7 +17,10 @@
   const KEY_FILE = 'cth_pet_image';
   const KEY_VER = 'cth_pet_ver';
   const KEY_PACK = 'cth_pet_pack';               // 모든 펫에 쓸 팩 id
-  const projectPackKey = (pid) => `cth_pet_pack@${pid}`;   // 이 프로젝트 펫만 (빈 값 = 지정 없음)
+  // 펫마다(프로젝트마다) 따로 — 표시 방식 · 내 이미지 · 팩. 없으면 위의 전체 값(옛 설정)을 따른다.
+  const projectPackKey = (pid) => `cth_pet_pack@${pid}`;
+  const projectModeKey = (pid) => `cth_pet_mode@${pid}`;
+  const projectFileKey = (pid) => `cth_pet_image@${pid}`;
   const MODES = ['pack', 'theme', 'custom', 'default'];
   const IMG_RE = /\.(png|webp|jpe?g|gif|svg)$/i;
 
@@ -40,7 +43,19 @@
   const pick = (cands) => (cands || []).find((c) => files.includes(c)) || null;
   const packById = (id) => packs.find((p) => p.id === id) || null;
 
-  function mode() { const m = get(KEY_MODE); return MODES.includes(m) ? m : 'theme'; }
+  function globalMode() { const m = get(KEY_MODE); return MODES.includes(m) ? m : 'theme'; }
+  function mode(projectId) {
+    const own = projectId ? get(projectModeKey(projectId)) : null;
+    return MODES.includes(own) ? own : globalMode();
+  }
+  const customFile = (projectId) => (projectId && get(projectFileKey(projectId))) || get(KEY_FILE);
+  // 프로젝트 경로 → 짧은 파일 이름 조각 (펫마다 내 이미지를 따로 저장)
+  function slugOf(projectId) {
+    let h = 2166136261;
+    const s = String(projectId || '');
+    for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); }
+    return (h >>> 0).toString(36);
+  }
   function themeInfo(themeKey) {
     const t = (window.CHAR_THEME_MAP || {})[themeKey || get('cth_theme') || ''];
     if (!t) return { theme: null, file: null };
@@ -51,7 +66,7 @@
   function packFor(projectId) {
     const own = projectId ? get(projectPackKey(projectId)) : null;
     if (own && packById(own)) return { pack: packById(own), scope: 'project' };
-    if (mode() === 'pack') { const g = packById(get(KEY_PACK)); if (g) return { pack: g, scope: 'all' }; }
+    if (mode(projectId) === 'pack') { const g = packById(get(KEY_PACK)); if (g) return { pack: g, scope: 'all' }; }
     return null;
   }
   const packUrls = (p) => {
@@ -68,9 +83,9 @@
   function resolve(projectId, themeKey) {
     const pk = packFor(projectId);
     if (pk) return resolvedPack(pk.pack, pk.scope);
-    const m = mode();
+    const m = mode(projectId);
     if (m === 'custom') {
-      const f = get(KEY_FILE);
+      const f = customFile(projectId);
       if (f && files.includes(f)) return { mode: m, url: `/theme-assets/${encodeURIComponent(f)}?v=${get(KEY_VER) || 0}` };
     }
     if (m === 'theme') {
@@ -89,21 +104,21 @@
     r.readAsDataURL(file);
   });
 
-  /** 펫 전용 이미지 저장 — 한 장만 유지(pet-custom.<확장자>). */
-  async function uploadCustom(file) {
+  /** 펫 전용 이미지 저장 — 펫(프로젝트)마다 한 장(pet-custom-<조각>.<확장자>). */
+  async function uploadCustom(file, projectId) {
     if (!file || !IMG_RE.test(file.name || '')) throw new Error('이미지 파일만 쓸 수 있어요 (png·gif·webp·jpg·svg)');
     if (file.size > 8 * 1024 * 1024) throw new Error('8MB 보다 큰 이미지는 못 써요');
     const ext = (file.name.match(IMG_RE) || ['.png'])[0].toLowerCase();
-    const name = 'pet-custom' + ext;
+    const name = (projectId ? `pet-custom-${slugOf(projectId)}` : 'pet-custom') + ext;
     const r = await fetch('/api/theme-assets', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name, dataUrl: await readAsDataUrl(file) }),
     });
     const j = await r.json().catch(() => ({}));
     if (!r.ok) throw new Error(j.error || '저장하지 못했어요');
-    set(KEY_FILE, j.file || name);
+    set(projectId ? projectFileKey(projectId) : KEY_FILE, j.file || name);
     set(KEY_VER, String(Date.now())); // 같은 이름으로 덮어써도 새로 읽게
-    set(KEY_MODE, 'custom');
+    set(projectId ? projectModeKey(projectId) : KEY_MODE, 'custom');
     await loadFiles();
   }
 
@@ -120,23 +135,34 @@
     return j.pack;
   }
 
-  /** 팩 쓰기 — scope 'all' 이면 모든 펫, 'project' 면 이 프로젝트 펫만. */
+  /** 팩 쓰기 — scope 'project' 면 이 펫만, 'all' 이면 모든 펫(펫마다 따로 고른 것도 지우고 맞춘다). */
   function usePack(id, scope, projectId) {
     if (scope === 'project' && projectId) { set(projectPackKey(projectId), id); return; }
+    clearPerPetChoices();
     set(KEY_PACK, id);
     set(KEY_MODE, 'pack');
+  }
+  function clearPerPetChoices() {
+    try {
+      const keys = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i);
+        if (/^cth_pet_(pack|mode|image)@/.test(k)) keys.push(k);
+      }
+      keys.forEach(del);
+    } catch { /* 저장 불가 환경 */ }
   }
   // 이 프로젝트 지정 해제 — 전체 설정을 따른다
   function clearProjectPack(projectId) { if (projectId) del(projectPackKey(projectId)); }
 
   window.PetAvatar = {
-    loadFiles, resolve, mode, themeInfo, themePack, uploadCustom, importPack, usePack, clearProjectPack,
+    loadFiles, resolve, mode, globalMode, themeInfo, themePack, uploadCustom, importPack, usePack, clearProjectPack,
     packs: () => packs.slice(),
     themeDir: () => themeDir,
     projectPack: (pid) => (pid ? get(projectPackKey(pid)) || '' : ''),
     globalPack: () => get(KEY_PACK) || '',
-    setMode: (m) => { if (MODES.includes(m)) set(KEY_MODE, m); },
-    hasCustom: () => { const f = get(KEY_FILE); return !!(f && files.includes(f)); },
+    setMode: (m, projectId) => { if (MODES.includes(m)) set(projectId ? projectModeKey(projectId) : KEY_MODE, m); },
+    hasCustom: (projectId) => { const f = customFile(projectId); return !!(f && files.includes(f)); },
     isImage: (file) => !!(file && IMG_RE.test(file.name || '')),
   };
 })();
