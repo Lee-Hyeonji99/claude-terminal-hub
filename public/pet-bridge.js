@@ -48,7 +48,7 @@
       trackWorking(p, working, !!prompt);
       const id = PK.projectId(p.cfg.cwd);
       if (!projects.has(id)) {
-        const theme = projectThemeOf(PK.workspaceKey(p.cfg.profile, id)) || globalTheme();
+        const theme = (groupProjects() && projectThemeOf(PK.workspaceKey(p.cfg.profile, id))) || globalTheme();
         projects.set(id, { id, name: PK.projectName(p.cfg.cwd) || '기타', cwd: p.cfg.cwd || '', hue: PK.projectHue(id), theme, working: 0, questions: [], done: [], sessions: [] });
       }
       const proj = projects.get(id);

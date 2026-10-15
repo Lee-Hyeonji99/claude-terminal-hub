@@ -470,7 +470,7 @@
     <div class="popover-wrap">
       <button id="themeBtn" class="ghost icon-btn" title="색상 테마"><span data-icon="palette"></span></button>
       <div id="themePopover" class="popover">
-        <div class="popover-sep" style="margin-top:0">적용 범위 <span style="font-weight:400">— 탭 우클릭으로도 열림</span></div>
+        <div class="popover-sep" id="themeScopeSep" style="margin-top:0">적용 범위 <span style="font-weight:400">— 탭 우클릭으로도 열림</span></div>
         <div class="seg-row" id="themeScopeRow">
           <button data-tscope="all">전체 기본</button>
           <button data-tscope="tab">이 탭만</button>
@@ -553,8 +553,14 @@
     </div>
     <select id="lineHeight" class="ghost" title="터미널 줄간격" style="padding:4px 6px;font-size:11px"></select>
     <div class="popover-wrap">
-      <button id="shellBtn" class="ghost icon-btn" title="터미널 셸 — 세션을 어떤 셸로 열지"><span data-icon="tool"></span></button>
+      <button id="shellBtn" class="ghost icon-btn" title="프로젝트별 탭 · 터미널 셸"><span data-icon="tool"></span></button>
       <div id="shellPopover" class="popover" style="min-width:270px">
+        <div class="popover-sep" style="margin-top:0">프로젝트별 탭</div>
+        <div class="seg-row" id="groupProjectsRow">
+          <button data-group="on">켬 — 작업 경로마다 탭</button>
+          <button data-group="off">끔 — 한 화면</button>
+        </div>
+        <div class="popover-note" style="padding:2px 8px 6px;font-size:11px;color:var(--muted)">바꾸면 화면을 새로고침합니다. 세션은 그대로 이어집니다. 끄면 전체 테마만 씁니다.</div>
         <div class="popover-sep">세션을 열 셸</div>
         <div class="popover-item" data-shell="powershell"><span class="swatch" style="background:#012456"></span><span id="shellLabelDefault">PowerShell</span></div>
         <div class="popover-item" data-shell="tmux"><span class="swatch" style="background:#1bb91f"></span>tmux</div>

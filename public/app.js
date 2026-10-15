@@ -106,7 +106,7 @@ function saveProjThemes() { try { localStorage.setItem(PROJ_THEMES_KEY, JSON.str
 function globalTheme() { return localStorage.getItem('cth_theme') || 'dark'; }
 function isKnownTheme(t) { return !!(t && (TERM_THEMES[t] || (window.CHAR_THEME_MAP || {})[t])); }
 function projectThemeOf(wsKey) { const t = projThemes[wsKey]; return isKnownTheme(t) ? t : null; }
-function effectiveTheme() { return projectThemeOf(currentWsKey()) || globalTheme(); }
+function effectiveTheme() { return (groupProjects() && projectThemeOf(currentWsKey())) || globalTheme(); }
 function themeLabel(t) {
   const c = (window.CHAR_THEME_MAP || {})[t];
   if (c) return c.name;
@@ -300,6 +300,20 @@ const workspaces = {};   // key -> { columns, activePane, columnSizes }
 const projectCwd = {};   // key -> 원래 표기의 작업 경로 (탭 이름·툴팁)
 const lastProjectOf = (() => { try { return JSON.parse(localStorage.getItem('cth_last_project') || '{}') || {}; } catch { return {}; } })();
 const currentWsKey = () => PK.workspaceKey(activeProfileId, activeProject);
+// 프로젝트별 탭 켜기/끄기 (기본 켬). 끄면 계정마다 탭 하나에 세션을 모두 모으고 전체 테마를 쓴다.
+// 바꿀 때는 레이아웃을 저장하고 새로고침한다 — pty 는 서버에 살아 있어 같은 key 로 다시 붙고,
+// 복원하면서 패널마다 작업 경로로(켬) 또는 한 탭으로(끔) 다시 나뉜다.
+function groupProjects() { try { return localStorage.getItem('cth_group_projects') !== '0'; } catch { return true; } }
+function projectOfCwd(cwd) { return groupProjects() ? PK.projectId(cwd) : ''; }
+function setGroupProjects(on) {
+  if (on === groupProjects()) return;
+  saveLayout();
+  try {
+    localStorage.setItem('cth_group_projects', on ? '1' : '0');
+    localStorage.removeItem('cth_last_project');
+  } catch { /* 저장 못 하면 그대로 */ }
+  location.reload();
+}
 workspaces[currentWsKey()] = { columns, activePane: null, columnSizes: null };
 const accountCache = {}; // id -> 계정 라벨 (탭 호버 툴팁)
 function fetchAccount(id) {
@@ -385,6 +399,8 @@ function enterWorkspace(profile, project) {
   columns.forEach((c) => stage.appendChild(c.el));
   rebuildAll();
   if (activePane && activePane.el) activePane.el.classList.add('active');
+  // 탭 전용 테마 — 사용자 전환뿐 아니라 복원 중 오가는 경우도 화면 테마를 지금 탭에 맞춘다
+  if (renderedTheme !== null && effectiveTheme() !== renderedTheme) refreshTheme();
 }
 
 // 사용자가 보는 전환 — 탭·상태·최근 목록까지 갱신
@@ -402,8 +418,7 @@ function switchWorkspace(profile, project) {
   }
   updateStatus();
   if (activePane) setActive(activePane);
-  if (renderedTheme !== null && effectiveTheme() !== renderedTheme) refreshTheme();   // 탭 전용 테마
-  else updateThemeScopeRow();
+  updateThemeScopeRow();
 }
 
 // 패널 cfg 의 (계정, 작업 경로)에 맞는 워크스페이스로 옮겨 간다. 경로가 없는 패널(미리보기)은 지금 자리.
@@ -412,9 +427,9 @@ function routeToWorkspaceFor(cfg) {
   // 지워진 계정 소속이면 지금 계정으로 — 아니면 어느 탭에서도 안 보이는 세션이 된다
   const profile = profiles.some((x) => x.id === cfg.profile) ? cfg.profile : activeProfileId;
   cfg.profile = profile;
-  const project = PK.projectId(cfg.cwd);
+  const project = projectOfCwd(cfg.cwd);
   const key = PK.workspaceKey(profile, project);
-  if (!projectCwd[key]) projectCwd[key] = cfg.cwd;
+  if (project && !projectCwd[key]) projectCwd[key] = cfg.cwd;
   if (profile !== activeProfileId || project !== activeProject) switchWorkspace(profile, project);
 }
 
@@ -473,6 +488,7 @@ function visibleProjectEntries() {
 
 // Ctrl+1~8 → n번째 프로젝트 탭, Ctrl+9 → 마지막 탭 (브라우저 탭과 같은 규칙)
 function switchToProjectTab(n) {
+  if (!groupProjects()) return false;
   const entries = visibleProjectEntries();
   const idx = n === 9 ? entries.length - 1 : n - 1;
   if (idx < 0 || idx >= entries.length) return false;
@@ -485,6 +501,7 @@ function renderProjectTabs() {
   if (!bar) return;
   const cur = currentWsKey();
   const entries = visibleProjectEntries();
+  if (!groupProjects()) { bar.style.display = 'none'; bar.innerHTML = ''; return; }
   const onlyEmpty = entries.length <= 1 && !activeProject && wsPaneCount(workspaces[cur]) === 0;
   bar.style.display = onlyEmpty ? 'none' : 'flex';
   bar.innerHTML = '';
@@ -688,6 +705,16 @@ async function saveShellSettings(patch) {
 }
 
 setupPopover('shellBtn', 'shellPopover');
+(function initGroupProjects() {
+  const row = document.getElementById('groupProjectsRow');
+  if (!row) return;
+  const mark = () => row.querySelectorAll('button').forEach((b) => b.classList.toggle('on', (b.dataset.group === 'on') === groupProjects()));
+  mark();
+  row.addEventListener('click', (e) => {
+    const b = e.target.closest('button'); if (!b) return;
+    setGroupProjects(b.dataset.group === 'on');
+  });
+})();
 document.getElementById('shellPopover').addEventListener('click', (e) => {
   const item = e.target.closest('.popover-item[data-shell]');
   if (!item) return;
@@ -924,7 +951,7 @@ function updateComposePlaceholders(t) {
 // 테마 고르기(사용자 선택) — 지금 탭에 전용 테마가 있으면 그 탭 것을, 아니면 전체 기본을 바꾼다.
 function applyTheme(t) {
   const k = currentWsKey();
-  if (projectThemeOf(k)) { setProjectTheme(k, t); renderTabs(); }
+  if (groupProjects() && projectThemeOf(k)) { setProjectTheme(k, t); renderTabs(); }
   else localStorage.setItem('cth_theme', t);
   renderTheme(t);
 }
@@ -934,6 +961,10 @@ function refreshTheme() { renderTheme(effectiveTheme()); }
 function updateThemeScopeRow() {
   const row = document.getElementById('themeScopeRow');
   if (!row) return;
+  const grouped = groupProjects();
+  row.hidden = !grouped;
+  const sep = document.getElementById('themeScopeSep');
+  if (sep) sep.hidden = !grouped;
   const scope = projectThemeOf(currentWsKey()) ? 'tab' : 'all';
   row.querySelectorAll('button').forEach((b) => b.classList.toggle('on', b.dataset.tscope === scope));
 }
@@ -1367,7 +1398,8 @@ function restoreLayoutForProfile(pid) {
       const parsed = PK.parseWorkspaceKey(k);
       if (parsed && ws.cwd) projectCwd[k] = ws.cwd;
       // 옛 형식은 빈 프로젝트로 들어가 패널마다 제 프로젝트 탭으로 갈라진다(addPane 의 경로 라우팅).
-      enterWorkspace(pid, parsed ? parsed.project : '');
+      // 프로젝트 탭을 끈 상태면 모두 빈 프로젝트(탭 하나)로 모은다
+      enterWorkspace(pid, parsed && groupProjects() ? parsed.project : '');
       restoreWorkspaceSnapshot(ws, !!parsed); // 옛 형식은 패널이 여러 탭으로 갈라져 비율이 안 맞는다
     }
   } finally {
