@@ -11,6 +11,7 @@
   },
   "scripts": {
     "start": "node server.js",
+    "test": "node --test test/*.test.js",
     "app": "electron electron/main.js",
     "postinstall": "electron-rebuild -f -w node-pty",
     "dist:win": "electron-builder --win --x64 --publish never",
@@ -38,6 +39,7 @@
     "asar": false,
     "files": [
       "server.js",
+      "lib/**/*",
       "electron/**/*",
       "public/**/*",
       "bin/**/*",

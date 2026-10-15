@@ -18,6 +18,7 @@ const crypto = require('crypto');
 const { execFile, execFileSync } = require('child_process');
 const express = require('express');
 const { WebSocketServer } = require('ws');
+const petPack = require('./lib/pet-pack');
 let pty;
 try {
   pty = require('node-pty');
@@ -175,6 +176,26 @@ app.post('/api/theme-assets', (req, res) => {
     res.json({ ok: true, file: safe });
   } catch (e) {
     res.status(500).json({ error: String((e && e.message) || e) });
+  }
+});
+
+// ---- 펫 팩 (동작별 움직이는 이미지 묶음) — 사용자 PC 에만 둔다(lib/pet-pack.js) ----
+const PET_PACKS_DIR = path.join(HUB_DATA_DIR, 'pet-packs');
+app.use('/pet-packs', express.static(PET_PACKS_DIR, {
+  etag: false,
+  setHeaders: (res) => res.setHeader('Cache-Control', 'no-store'),
+}));
+app.get('/api/pet-packs', (_req, res) => {
+  res.json({ dir: PET_PACKS_DIR, packs: petPack.listPacks(PET_PACKS_DIR) });
+});
+// body = { path: '<manifest.json 이 든 팩 폴더 절대경로>' } — 펫에 폴더를 끌어다 놓거나 골랐을 때
+app.post('/api/pet-packs/import', (req, res) => {
+  const src = String((req.body && req.body.path) || '').trim();
+  if (!src || !path.isAbsolute(src)) return res.status(400).json({ error: '팩 폴더의 전체 경로가 필요합니다' });
+  try {
+    res.json({ ok: true, pack: petPack.importPack(src, PET_PACKS_DIR) });
+  } catch (e) {
+    res.status(400).json({ error: String((e && e.message) || e) });
   }
 });
 

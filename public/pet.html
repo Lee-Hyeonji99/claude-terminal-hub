@@ -13,9 +13,10 @@
       --opt:#f3f4f7; --opt-hover:#e8eaf0; }
   }
   html,body{margin:0;background:transparent;overflow:hidden;font:13px/1.45 'Pretendard','Segoe UI',system-ui,sans-serif;color:var(--text);user-select:none}
-  /* 창은 내용 크기에 맞춰 줄어든다 — 오른쪽 아래 정렬이라 캐릭터가 늘 같은 자리에 있다 */
-  #root{position:fixed;right:0;bottom:0;display:flex;flex-direction:column;align-items:flex-end;gap:6px;padding:8px}
-  .card{width:340px;max-height:500px;display:flex;flex-direction:column;background:var(--card);border:1px solid var(--line);border-radius:14px;box-shadow:0 10px 28px rgba(0,0,0,.35);overflow:hidden}
+  /* 창은 «펫 + 카드» 크기 — 둘의 자리는 main(electron/pet-layout.js)이 정해 pet:layout 으로 알려준다.
+     카드는 자리가 있는 쪽(위/아래·왼/오른)으로 펼쳐지고 펫은 제자리에 있다. */
+  #petBox{position:absolute;left:0;top:0;width:100px;height:100px;box-sizing:border-box;padding:8px}
+  .card{position:absolute;left:0;top:0;width:340px;max-height:500px;box-sizing:border-box;display:flex;flex-direction:column;background:var(--card);border:1px solid var(--line);border-radius:14px;box-shadow:0 6px 18px rgba(0,0,0,.3);overflow:hidden}
   .card[hidden]{display:none}
   .head{display:flex;align-items:center;gap:6px;padding:9px 10px 7px 12px;border-bottom:1px solid var(--line)}
   .who{flex:1;min-width:0}
@@ -64,6 +65,26 @@
   .choice .dot{width:9px;height:9px;border-radius:50%;border:2px solid var(--muted);flex:none}
   .choice.on .dot{border-color:var(--accent);background:var(--accent)}
   .choice small{display:block;color:var(--muted);font-size:11px}
+  /* 프로젝트 구분 — 기본 캐릭터는 프로젝트마다 색이 다르고, 아래에 프로젝트 이름표 */
+  .pet svg{filter:hue-rotate(var(--hue-shift,0deg)) drop-shadow(0 6px 10px rgba(0,0,0,.35))}
+  .ptag{position:absolute;left:50%;bottom:-4px;transform:translateX(-50%);max-width:96px;padding:1px 7px;border-radius:9px;background:var(--card);border:1px solid var(--line);color:var(--text);font-size:10.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;pointer-events:none;box-shadow:0 2px 6px rgba(0,0,0,.25)}
+  .ptag:empty{display:none}
+  .pet.done-only .badge{background:var(--ok)}
+  /* 펫 팩 — 이미지가 스스로 움직이므로 살랑/통통 효과는 끈다 */
+  .pet.packed img,.pet.packed.asking img{animation:none}
+  .packrow{display:flex;align-items:center;gap:6px;background:var(--opt);border:1px solid transparent;border-radius:9px;padding:6px 8px}
+  .packrow.on{border-color:var(--accent)}
+  .packrow .pn{flex:1;min-width:0}
+  .packrow .pn span{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .packrow .pn small{display:block;color:var(--muted);font-size:11px}
+  .set .t:not(:first-child){margin-top:6px}
+  .set{flex:1;min-height:0;overflow-y:auto}
+  .dlist{display:flex;flex-direction:column;gap:5px;padding-bottom:6px}
+  .ditem{display:flex;align-items:center;gap:8px;background:var(--opt);border-radius:9px;padding:7px 9px}
+  .ditem .dt{flex:1;min-width:0}
+  .ditem .dt b{display:block;font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .ditem .dt span{display:block;font-size:11px;color:var(--muted)}
+  .ditem .ok{color:var(--ok);font-weight:700}
   .badge{position:absolute;top:2px;right:2px;min-width:20px;height:20px;padding:0 5px;box-sizing:border-box;border-radius:10px;background:var(--err);color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;border:2px solid var(--card)}
   .badge[hidden]{display:none}
   @keyframes bob{0%,100%{transform:translateY(0)}50%{transform:translateY(-3px)}}
@@ -74,6 +95,7 @@
 <body>
 <div id="root">
   <div class="card" id="card" hidden></div>
+  <div id="petBox">
   <div class="pet" id="pet" title="끌어서 옮기기 · 눌러서 열기/접기 · 오른쪽 클릭: 캐릭터 바꾸기">
     <img id="petImg" alt="" hidden>
     <svg id="petSvg" viewBox="0 0 100 100" aria-hidden="true">
@@ -91,10 +113,13 @@
       <path id="mouth" d="M44 64q6 5 12 0" stroke="#2a160c" stroke-width="3" fill="none" stroke-linecap="round"/>
     </svg>
     <div class="badge" id="badge" hidden>0</div>
+    <div class="ptag" id="ptag"></div>
+  </div>
   </div>
 </div>
 <script src="/themes.js"></script>
 <script src="/pet-avatar.js"></script>
+<script src="/pet-mood.js"></script>
 <script src="/pet.js"></script>
 </body>
 </html>

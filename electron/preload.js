@@ -9,6 +9,8 @@ contextBridge.exposeInMainWorld('claudeHub', {
   pickFolder: (initial) => ipcRenderer.invoke('pick-folder', initial),
   pickFile: () => ipcRenderer.invoke('pick-file'),
   notify: (payload) => ipcRenderer.send('cth-notify', payload),
+  // 기다리는 알림 개수 → 작업표시줄 아이콘 배지 ({ count, dataUrl })
+  setBadge: (payload) => ipcRenderer.send('cth-badge', payload),
   // 업데이트: 헤더의 버전 팝오버에서 직접 확인/설치할 수 있게 노출
   checkUpdate: () => ipcRenderer.invoke('update-check'),
   installUpdate: () => ipcRenderer.invoke('update-install'),

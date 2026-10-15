@@ -172,6 +172,20 @@ ipcMain.on('cth-notify', (e, payload) => {
   win.once('focus', () => win.flashFrame(false));
 });
 
+// 알림 배지: 펫에 걸린 질문·작업 완료 개수를 작업표시줄 아이콘에 띄운다.
+// Windows 는 오버레이 아이콘(렌더러가 그린 빨간 원+숫자), macOS 는 Dock 배지, Linux 는 Unity 배지.
+ipcMain.on('cth-badge', (e, payload) => {
+  const win = BrowserWindow.fromWebContents(e.sender);
+  if (!win || win.isDestroyed()) return;
+  const count = Math.max(0, Math.floor(Number(payload && payload.count) || 0));
+  try { app.setBadgeCount(count); } catch { /* 지원 안 하는 플랫폼 */ }
+  if (process.platform !== 'win32') return;
+  try {
+    const img = count && payload.dataUrl ? nativeImage.createFromDataURL(payload.dataUrl) : null;
+    win.setOverlayIcon(img && !img.isEmpty() ? img : null, count ? `알림 ${count}건` : '');
+  } catch { /* 오버레이 실패는 무시 — 알림 자체는 펫·OS 알림으로 간다 */ }
+});
+
 // 자동 업데이트: GitHub Release 에 올라간 최신 버전을 백그라운드로 받아뒀다가,
 // 사용자 확인 후(또는 다음 종료 시 자동으로) 설치한다. 개발 실행(패키징 안 됨)일 땐 업데이트 서버가 없어 스킵.
 autoUpdater.autoDownload = true;

@@ -1,16 +1,21 @@
 'use strict';
 /**
- * 펫 화면 — 허브가 넘겨준 질문 목록을 카드로 보여주고, 고른 답을 허브에 돌려준다.
- * 창 관리·전달은 electron/pet.js, 질문 찾기·키 입력은 public/pet-bridge.js 담당.
+ * 펫 화면 — 프로젝트(작업 경로) 하나의 펫. 허브가 넘겨준 그 프로젝트의 질문·작업 완료를 카드로 보여주고,
+ * 고른 답이나 «보기»·«확인» 을 허브에 돌려준다.
+ * 창 관리·배치는 electron/pet.js(+pet-layout.js), 알림 모으기·키 입력은 public/pet-bridge.js 담당.
  */
 (function () {
   const api = window.pet;
   const $ = (id) => document.getElementById(id);
-  const root = $('root'), card = $('card'), petEl = $('pet'), badge = $('badge');
+  const card = $('card'), petEl = $('pet'), badge = $('badge'), petBox = $('petBox'), ptag = $('ptag');
   const petImg = $('petImg'), petSvg = $('petSvg');
   const Avatar = window.PetAvatar;
+  const BASE_HUE = 20;            // 기본 캐릭터(주황)의 색상각 — 프로젝트 색만큼 돌린다
 
-  let list = [];
+  let project = null;             // { id, name, cwd, hue }
+  let list = [];                  // 질문
+  let done = [];                  // 작업 완료 { key, title, profile, at }
+  const seenDone = new Set();
   let idx = 0;
   let open = false;
   let view = 'questions';         // 'questions' | 'settings'(캐릭터 바꾸기)
@@ -33,6 +38,14 @@
     msg = { text: '보내는 중…', kind: '' };
     render();
     api.answer({ key: r.key, sig: r.sig, action });
+  }
+  // 작업 완료 항목 — 보기(허브에서 그 세션 열기) / 확인(알림만 지우기)
+  function sendDone(key, type) {
+    if (!api) return;
+    done = done.filter((d) => d.key !== key);
+    if (!done.length && !list.length) open = false;
+    render();
+    api.answer({ key, sig: '', action: { type } });
   }
 
   function renderOptions(r, box) {
@@ -82,8 +95,40 @@
   }
 
   /* ---------- 캐릭터 ---------- */
+  // 펫 팩이면 상태에 맞는 동작 이미지로 갈아 끼운다(public/pet-mood.js).
+  const Mood = window.PetMood;
+  const MOOD_ROLL_MS = 6000;      // 이 간격마다 «가끔 두리번» 주사위를 다시 굴린다
+  let packView = null;            // { id, name, scope, actions:{동작:url} }
+  let curAction = null;
+  let dragging = false;
+  let working = 0;
+  let lastActivity = Date.now();
+  let roll = Math.random();
+  function updateAction() {
+    if (!packView || !Mood) return;
+    const a = Mood.pickAction({
+      actions: Object.keys(packView.actions), questions: list.length, done: done.length, working,
+      dragging, idleMs: Date.now() - lastActivity, roll,
+    });
+    if (a && (a !== curAction || petImg.dataset.pack !== packView.id)) {
+      curAction = a;
+      petImg.dataset.pack = packView.id;
+      petImg.src = packView.actions[a];
+    }
+  }
+  setInterval(() => { roll = Math.random(); updateAction(); }, MOOD_ROLL_MS);
+
   function applyAvatar() {
-    const a = Avatar ? Avatar.resolve() : { url: null };
+    const a = Avatar ? Avatar.resolve(project && project.id) : { url: null };
+    packView = a.mode === 'pack' ? a.pack : null;
+    petEl.classList.toggle('packed', !!packView);
+    if (packView) {
+      petImg.hidden = false; petSvg.hidden = true;
+      updateAction();
+      return;
+    }
+    curAction = null;
+    delete petImg.dataset.pack;
     if (a.url) {
       if (petImg.getAttribute('src') !== a.url) petImg.src = a.url;
       petImg.hidden = false; petSvg.hidden = true;
@@ -111,10 +156,68 @@
     render();
   }
 
+  // 펫 팩 폴더 가져오기 — 처음 가져온 팩은 모든 펫에, 이미 전체 팩이 있으면 이 펫에만 쓴다.
+  async function takePackFolder(folder) {
+    if (!folder || !Avatar) return;
+    msg = { text: '펫 팩 가져오는 중…', kind: '' };
+    render();
+    try {
+      const p = await Avatar.importPack(folder);
+      const scope = Avatar.globalPack() && Avatar.globalPack() !== p.id && project ? 'project' : 'all';
+      Avatar.usePack(p.id, scope, project && project.id);
+      msg = { text: scope === 'project' ? `${p.name} 팩을 이 펫에 썼어요` : `${p.name} 팩을 모든 펫에 썼어요`, kind: 'ok' };
+    } catch (e) {
+      msg = { text: (e && e.message) || '팩을 가져오지 못했어요', kind: 'err' };
+    }
+    applyAvatar();
+    render();
+  }
+  async function pickPackFolder() {
+    if (!api || !api.pickFolder) return;
+    try { const f = await api.pickFolder(); if (f) takePackFolder(f); } catch { /* 취소 */ }
+  }
+
+  function renderPackSection(box) {
+    box.append(el('div', 't', '펫 팩 — 상태에 따라 움직여요'));
+    const pid = project && project.id;
+    const mine = Avatar.projectPack(pid);
+    const all = Avatar.mode() === 'pack' ? Avatar.globalPack() : '';
+    for (const p of Avatar.packs()) {
+      const row = el('div', 'packrow' + (p.id === (mine || all) ? ' on' : ''));
+      const t = el('span', 'pn');
+      t.append(el('span', null, p.name));
+      t.append(el('small', null, p.id === mine ? '이 펫에 쓰는 중' : p.id === all ? '모든 펫에 쓰는 중' : `${Object.keys(p.actions).length}가지 동작`));
+      const toAll = el('button', 'btn' + (p.id === all ? ' primary' : ''), '모든 펫');
+      toAll.onclick = () => { Avatar.usePack(p.id, 'all'); applyAvatar(); render(); };
+      row.append(t, toAll);
+      if (pid) {
+        const toMe = el('button', 'btn' + (p.id === mine ? ' primary' : ''), '이 펫만');
+        toMe.onclick = () => { Avatar.usePack(p.id, 'project', pid); applyAvatar(); render(); };
+        row.append(toMe);
+      }
+      box.append(row);
+    }
+    const acts = el('div', 'row');
+    if (mine) {
+      const clear = el('button', 'btn', '이 펫 지정 해제');
+      clear.title = '모든 펫 설정을 따릅니다';
+      clear.onclick = () => { Avatar.clearProjectPack(pid); applyAvatar(); render(); };
+      acts.append(clear);
+    }
+    const imp = el('button', 'btn', '팩 폴더 가져오기…');
+    imp.title = 'manifest.json 이 든 펫 팩 폴더';
+    imp.onclick = pickPackFolder;
+    acts.append(imp);
+    box.append(acts);
+  }
+
   function renderSettings() {
     const box = el('div', 'set');
-    box.append(el('div', 't', '캐릭터 바꾸기'));
+    if (Avatar) renderPackSection(box);
+    box.append(el('div', 't', '이미지 한 장으로'));
     const m = Avatar ? Avatar.mode() : 'default';
+    // 단일 이미지를 고르면 이 펫의 팩 지정도 풀어야 바로 보인다
+    const pickMode = (mode) => { Avatar.clearProjectPack(project && project.id); Avatar.setMode(mode); applyAvatar(); render(); };
     const { theme, file } = Avatar ? Avatar.themeInfo() : { theme: null, file: null };
     const themeSub = !theme ? '허브에서 캐릭터 테마를 고르면 그 캐릭터가 나와요'
       : file ? `지금 테마: ${theme.name}` : `${theme.name} 이미지가 없어요 — 허브 팔레트에서 넣을 수 있어요`;
@@ -126,16 +229,16 @@
       b.onclick = onPick;
       return b;
     };
-    box.append(choice('theme', '캐릭터 테마 따라가기', themeSub, () => { Avatar.setMode('theme'); applyAvatar(); render(); }));
+    box.append(choice('theme', '캐릭터 테마 따라가기', themeSub, () => pickMode('theme')));
     box.append(choice('custom', '내 이미지', Avatar && Avatar.hasCustom() ? '골라 둔 이미지 · 눌러서 다시 고르기' : '이미지를 골라요 (gif 면 움직여요)', () => {
-      if (Avatar.hasCustom() && m !== 'custom') { Avatar.setMode('custom'); applyAvatar(); render(); } else pickImageFile();
+      if (Avatar.hasCustom() && m !== 'custom') pickMode('custom'); else { Avatar.clearProjectPack(project && project.id); pickImageFile(); }
     }));
-    box.append(choice('default', '기본 캐릭터', '주황 동그라미', () => { Avatar.setMode('default'); applyAvatar(); render(); }));
-    box.append(el('div', 'hint', '팁: 이미지 파일을 캐릭터 위에 끌어다 놓아도 바뀌어요.'));
+    box.append(choice('default', '기본 캐릭터', '프로젝트마다 색이 달라요', () => pickMode('default')));
+    box.append(el('div', 'hint', '팁: 이미지 파일이나 펫 팩 폴더를 캐릭터 위에 끌어다 놓아도 바뀌어요.'));
     const foot = el('div', 'foot');
     foot.append(el('span', 'msg' + (msg.kind ? ' ' + msg.kind : ''), msg.text));
     const back = el('button', 'ib', list.length ? '질문으로' : '닫기');
-    back.onclick = () => { view = 'questions'; msg = { text: '', kind: '' }; if (!list.length) open = false; render(); };
+    back.onclick = () => { view = 'questions'; msg = { text: '', kind: '' }; if (!list.length && !done.length) open = false; render(); };
     const hide = el('button', 'ib', '펫 숨기기');
     hide.onclick = () => api && api.hide();
     foot.append(back, hide);
@@ -172,25 +275,74 @@
     e.preventDefault(); e.stopPropagation();
     petEl.classList.remove('drop-over');
     const f = (e.dataTransfer.files || [])[0];
-    if (Avatar && !Avatar.isImage(f)) { msg = { text: '캐릭터에는 이미지 파일만 놓을 수 있어요', kind: 'err' }; open = true; view = 'settings'; render(); return; }
     open = true; view = 'settings';
-    takeImage(f);
+    if (Avatar && Avatar.isImage(f)) { takeImage(f); return; }
+    // 이미지가 아니면 펫 팩 폴더로 본다(manifest.json 이 없으면 서버가 알려준다)
+    const folder = f && api && api.filePath ? api.filePath(f) : '';
+    if (folder) { takePackFolder(folder); return; }
+    msg = { text: '이미지 파일이나 펫 팩 폴더를 놓아 주세요', kind: 'err' };
+    render();
   });
   // 받는 칸 밖에 떨어뜨려도 창이 그 파일로 이동하지 않게.
   document.addEventListener('dragover', (e) => { if (hasFiles(e)) e.preventDefault(); });
   document.addEventListener('drop', (e) => { if (hasFiles(e)) e.preventDefault(); });
 
+  const projectLabel = () => (project ? project.name : '');
+  const ago = (t) => {
+    const s = Math.max(0, Math.round((Date.now() - t) / 1000));
+    return s < 60 ? '방금' : s < 3600 ? `${Math.floor(s / 60)}분 전` : `${Math.floor(s / 3600)}시간 전`;
+  };
+  function renderDone() {
+    const head = el('div', 'head');
+    const who = el('div', 'who');
+    who.append(el('b', null, '작업 완료'));
+    who.append(el('span', null, projectLabel()));
+    head.append(who);
+    if (list.length) {
+      const toQ = el('button', 'ib', `질문 ${list.length}`);
+      toQ.onclick = () => { view = 'questions'; render(); };
+      head.append(toQ);
+    }
+    const close = el('button', 'ib', '접기');
+    close.onclick = () => { open = false; render(); };
+    head.append(close);
+    const scroll = el('div', 'scroll');
+    const box = el('div', 'dlist');
+    for (const d of done) {
+      const row = el('div', 'ditem');
+      row.append(el('span', 'ok', '✓'));
+      const t = el('div', 'dt');
+      t.append(el('b', null, d.title));
+      t.append(el('span', null, [ago(d.at), d.profile].filter(Boolean).join(' · ')));
+      const view = el('button', 'btn primary', '보기');
+      view.onclick = () => sendDone(d.key, 'focus');
+      const ok = el('button', 'btn', '확인');
+      ok.onclick = () => sendDone(d.key, 'dismiss');
+      row.append(t, view, ok);
+      box.append(row);
+    }
+    scroll.append(box);
+    const foot = el('div', 'foot');
+    foot.append(el('span', 'msg', ''));
+    const all = el('button', 'ib', '모두 확인');
+    all.onclick = () => { [...done].forEach((d) => sendDone(d.key, 'dismiss')); };
+    foot.append(all);
+    card.append(head, scroll, foot);
+  }
+
   function renderCard() {
     card.textContent = '';
     if (view === 'settings') { renderSettings(); return; }
     const r = current();
+    if (done.length && (view === 'done' || !r)) { renderDone(); return; }
     if (!r) {
-      card.append(el('div', 'empty', '기다리는 질문이 없어요. 질문이 오면 여기 뜹니다.'));
+      card.append(el('div', 'empty', `${projectLabel() ? projectLabel() + ' — ' : ''}기다리는 질문이 없어요. 질문이 오거나 작업이 끝나면 여기 뜹니다.`));
       const foot = el('div', 'foot');
-      foot.append(el('span', 'msg', 'Ctrl+Alt+P 로 꺼내기/숨기기'));
+      foot.append(el('span', 'msg', 'Ctrl+Alt+P 로 모두 꺼내기/숨기기'));
       const change = el('button', 'ib', '캐릭터 바꾸기');
       change.onclick = () => { view = 'settings'; render(); };
       const hide = el('button', 'ib', '숨기기');
+      hide.title = '이 프로젝트 펫만 숨깁니다 — 새 알림이 오면 다시 나와요';
       hide.onclick = () => api && api.hide();
       foot.append(change, hide);
       card.append(foot);
@@ -200,6 +352,12 @@
     const who = el('div', 'who');
     who.append(el('b', null, r.title));
     who.append(el('span', null, [r.cwd, r.profile].filter(Boolean).join(' · ')));
+    if (done.length) {
+      const more = el('button', 'ib', `완료 ${done.length}`);
+      more.title = '작업이 끝난 세션 보기';
+      more.onclick = () => { view = 'done'; render(); };
+      who.append(more);
+    }
     const prev = el('button', 'ib', '‹'); prev.disabled = idx <= 0;
     prev.onclick = () => { idx--; typingFor = null; render(); };
     const pager = el('span', 'pager', `${idx + 1}/${list.length}`);
@@ -230,9 +388,12 @@
 
   function render() {
     if (idx >= list.length) idx = Math.max(0, list.length - 1);
-    petEl.classList.toggle('asking', list.length > 0);
-    badge.hidden = list.length === 0;
-    badge.textContent = String(list.length);
+    if (view === 'done' && !done.length) view = 'questions';
+    const n = list.length + done.length;
+    petEl.classList.toggle('asking', n > 0);
+    petEl.classList.toggle('done-only', !list.length && done.length > 0);
+    badge.hidden = n === 0;
+    badge.textContent = String(n);
     card.hidden = !open;
     // 입력 중인 칸을 다시 그리면 한글 조합이 끊긴다 — 같은 질문이면 카드는 그대로 둔다.
     const r = current();
@@ -240,11 +401,24 @@
     if (open && !(typing && r && card.dataset.sig === r.sig)) { renderCard(); card.dataset.sig = r ? r.sig : ''; }
     requestAnimationFrame(fit);
   }
-  // 창 크기를 내용에 맞춘다 — main 이 오른쪽 아래를 기준으로 다시 배치한다.
+  // 카드 크기를 main 에 알린다 — main 이 펫 자리는 그대로 두고 카드 펼칠 쪽과 창 크기를 정한다.
   function fit() {
     if (!api) return;
-    const b = root.getBoundingClientRect();
-    api.resize(b.width, b.height);
+    if (card.hidden) { api.resize(0, 0); return; }
+    api.resize(card.offsetWidth, card.offsetHeight);
+  }
+  function applyLayout(l) {
+    if (!l || !l.pet) return;
+    petBox.style.left = l.pet.x + 'px';
+    petBox.style.top = l.pet.y + 'px';
+    if (l.card) { card.style.left = l.card.x + 'px'; card.style.top = l.card.y + 'px'; }
+  }
+  function applyProject() {
+    ptag.textContent = project ? project.name : '';
+    petBox.title = project ? project.cwd : '';
+    const shift = project && Number.isFinite(project.hue) ? project.hue - BASE_HUE : 0;
+    petEl.style.setProperty('--hue-shift', `${shift}deg`);
+    document.title = project ? `Claude Pet — ${project.name}` : 'Claude Pet';
   }
 
   // ---- 캐릭터: 끌면 이동, 누르면 열기/접기 ----
@@ -257,7 +431,10 @@
   });
   petEl.addEventListener('pointermove', (e) => {
     if (!press) return;
-    if (!press.moved && Math.hypot(e.clientX - press.x, e.clientY - press.y) > 4) press.moved = true;
+    if (!press.moved && Math.hypot(e.clientX - press.x, e.clientY - press.y) > 4) {
+      press.moved = true;
+      dragging = true; updateAction();
+    }
     if (press.moved && api) api.drag();
   });
   petEl.addEventListener('pointerup', () => {
@@ -265,6 +442,8 @@
     const clicked = !press.moved;
     press = null;
     api && api.dragEnd();
+    lastActivity = Date.now();
+    if (dragging) { dragging = false; updateAction(); }
     if (clicked) { open = !open; if (open) view = 'questions'; render(); }
   });
   petEl.addEventListener('dblclick', (e) => e.preventDefault());
@@ -286,8 +465,26 @@
   if (Avatar) Avatar.loadFiles().then(applyAvatar);
 
   if (api) {
-    api.onState((next) => {
+    api.onLayout(applyLayout);
+    api.onState((data) => {
+      const d = data || {};
+      const hadItems = list.length + done.length > 0;
+      const projectChanged = (project && project.id) !== (d.project && d.project.id);
+      project = d.project || null;
+      applyProject();
+      if (projectChanged) applyAvatar();   // 프로젝트별 펫 팩 지정이 있을 수 있다
+      working = Number(d.working) || 0;
+      if (working || (d.questions || []).length || (d.done || []).length) lastActivity = Date.now();
       const prevKey = current() && current().sig;
+      // 작업 완료 — 새로 끝난 세션이 있으면 카드를 펼친다(질문이 보이고 있으면 질문이 우선)
+      done = Array.isArray(d.done) ? d.done : [];
+      const freshDone = done.filter((x) => !seenDone.has(`${x.key}@${x.at}`));
+      freshDone.forEach((x) => seenDone.add(`${x.key}@${x.at}`));
+      if (freshDone.length && !(open && view === 'questions' && current())) {
+        open = true;
+        if (view !== 'settings') view = 'done';
+      }
+      const next = d.questions;
       list = Array.isArray(next) ? next : [];
       // 보고 있던 질문이 남아 있으면 그 자리를 유지한다.
       const keep = list.findIndex((r) => r.sig === prevKey);
@@ -301,10 +498,15 @@
         msg = { text: '', kind: '' };
       }
       if (!list.length) { msg = { text: '', kind: '' }; typingFor = null; }
+      // 알림이 다 처리되면 카드를 접는다(사용자가 눌러 연 빈 카드는 그대로)
+      if (hadItems && !list.length && !done.length && view !== 'settings') open = false;
+      updateAction();
       render();
     });
     api.onResult((r) => {
-      msg = r && r.ok ? { text: '보냈어요', kind: 'ok' } : { text: (r && r.message) || '보내지 못했어요', kind: 'err' };
+      // 결과는 모든 펫에 온다 — 이 프로젝트 질문에 대한 것만 받는다
+      if (!r || !list.some((q) => q.key === r.key && q.sig === r.sig)) return;
+      msg = r.ok ? { text: '보냈어요', kind: 'ok' } : { text: r.message || '보내지 못했어요', kind: 'err' };
       render();
     });
   }
