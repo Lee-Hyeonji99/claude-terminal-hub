@@ -18,8 +18,7 @@
   try { folded = JSON.parse(get(KEY_FOLDED) || '{}') || {}; } catch { folded = {}; }
 
   let items = [];
-  side.innerHTML = '<div class="hud-head"><span class="hud-tag">PARTY</span><span class="hud-sum"></span></div><div class="hud-list"></div>';
-  const sum = side.querySelector('.hud-sum');
+  side.innerHTML = '<div class="hud-list"></div>';
   const list = side.querySelector('.hud-list');
 
   const paneByKey = (key) => allWorkspacePanes().find((x) => x.cfg && x.cfg.key === key);
@@ -45,7 +44,6 @@
     const visible = inOn() && items.length > 0 && sideOpen();
     side.hidden = !visible;
     if (!visible) return;
-    sum.textContent = HV.summary(items);
     HV.renderList(list, items, opts);
   }
   window.addEventListener('cth-status', (e) => { items = Array.isArray(e.detail) ? e.detail : []; draw(); });
@@ -71,6 +69,12 @@
     if (hub.hudVisible) hub.hudVisible().then((v) => mark(deskRow, v)).catch(() => {});
     if (hub.onHudVisible) hub.onHudVisible((v) => mark(deskRow, v));
     deskRow.addEventListener('click', (e) => { const b = e.target.closest('button'); if (b) hub.hudSetVisible(b.dataset.v === 'on'); });
+  }
+  // 캐릭터 이미지 목록 — 펫 설정이나 캐릭터 테마가 바뀌면 다시 읽는다
+  const Avatar = window.PetAvatar;
+  if (Avatar) {
+    Avatar.loadFiles().then(draw).catch(() => {});
+    window.addEventListener('storage', (e) => { if (!e.key || /^cth_(theme|proj_themes|pet_)/.test(e.key)) Avatar.loadFiles().then(draw).catch(() => {}); });
   }
   const lnbToggle = document.getElementById('lnbToggle');
   if (lnbToggle) lnbToggle.addEventListener('click', draw);

@@ -51,6 +51,7 @@
     return {
       key: p.cfg.key, title: p.cfg.title || 'claude', project: proj.name, hue: proj.hue,
       projectKey: PK.workspaceKey(p.cfg.profile, projectOfCwd(p.cfg.cwd)),
+      projectId: proj.id, theme: proj.theme,   // HUD 캐릭터 — 그 프로젝트 펫과 같은 캐릭터(pet-avatar.js)
       character: charTheme ? charTheme.name : '', profile: profileName(p.cfg.profile),
       state, since: p._hudSince, lastWorkAt,
       tool: state === 'work' && act ? act.tool : '', target: state === 'work' && act ? act.target : '',

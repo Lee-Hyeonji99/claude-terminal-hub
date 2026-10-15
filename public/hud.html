@@ -15,11 +15,15 @@
     text-shadow:1px 0 0 #000,-1px 0 0 #000,0 1px 0 #000,0 -1px 0 #000,1px 1px 0 #000,-1px -1px 0 #000,1px -1px 0 #000,-1px 1px 0 #000,0 2px 6px rgba(0,0,0,.7);
     transition:background .15s,border-color .15s}
   #hud:hover,#hud.dragging,#hud.pressing{background:rgba(10,12,18,.42);border-color:rgba(255,255,255,.12)}
-  #hud .hud-head{border-bottom-color:rgba(255,255,255,.16)}
-  #hud .hud-proj + .hud-proj{border-top-color:rgba(255,255,255,.1)}
   #hud button{text-shadow:inherit}   /* 버튼은 기본으로 글자 그림자를 끈다 */
-  #hud .hud-face{text-shadow:none}
-  #hud .hud-face,#hud .hud-qi,#hud .hud-spin,#hud .hud-fold svg,#hud .hud-hbtn,#hud .lock{filter:drop-shadow(0 1px 2px rgba(0,0,0,.9))}
+  #hud .hud-blob,#hud .hud-qi,#hud .hud-spin,#hud .hud-fold svg,#hud .tools{filter:drop-shadow(0 1px 2px rgba(0,0,0,.9))}
+  #hud .is-idle-sprite{filter:none}
+  /* 모서리 도구(잠금 · 닫기) — 마우스를 올렸을 때만. 잠겨 있으면 자물쇠는 늘 작게 보인다 */
+  .tools{position:absolute;top:4px;right:6px;display:flex;align-items:center;gap:4px;z-index:2}
+  .tools .hud-hbtn{opacity:0;transition:opacity .15s;padding:1px 5px}
+  #hud:hover .tools .hud-hbtn{opacity:1}
+  .toast{position:absolute;left:50%;top:-2px;transform:translate(-50%,-100%);white-space:nowrap;font-size:11.5px;color:#fff;opacity:0;transition:opacity .15s;pointer-events:none}
+  .toast.show{opacity:1;transform:translate(-50%,0)}
   #hud.locked{cursor:default}
   #hud.dragging{cursor:grabbing}
   .grip{opacity:0;transition:opacity .15s}
@@ -37,8 +41,8 @@
 </head>
 <body>
 <div class="hud" id="hud" role="group" aria-label="작업 현황 — 끌어서 옮기기, 꾹 누르면 이동 잠금">
-  <div class="hud-head">
-    <span class="hud-tag">PARTY</span><span class="hud-sum" id="sum"></span>
+  <div class="toast" id="toast" role="status"></div>
+  <div class="tools">
     <svg class="press" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10" fill="none" stroke="#3a4560" stroke-width="2.5"/><circle class="run" cx="12" cy="12" r="10" fill="none" stroke="#7aa2ff" stroke-width="2.5" stroke-dasharray="63" stroke-dashoffset="63" transform="rotate(-90 12 12)"/></svg>
     <svg class="lock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" role="img" aria-label="이동 잠금"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>
     <button class="hud-hbtn" id="close" type="button" title="바탕화면 HUD 끄기 — 허브 헤더의 HUD 버튼으로 다시 켜요" aria-label="바탕화면 HUD 끄기">✕</button>
@@ -48,6 +52,8 @@
     <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M11 4L4 11M11 8L8 11" stroke="#6b7590" stroke-width="1.5" stroke-linecap="round"/></svg>
   </div>
 </div>
+<script src="/themes.js"></script>
+<script src="/pet-avatar.js"></script>
 <script src="/hud-view.js"></script>
 <script>
 'use strict';
@@ -55,13 +61,13 @@
   const api = window.hudApi;
   const HV = window.HudView;
   const hud = document.getElementById('hud');
-  const sum = document.getElementById('sum');
+  const toastEl = document.getElementById('toast');
   const list = document.getElementById('list');
   const BASE_W = 360;
   const LONG_PRESS_MS = 600;
   let items = [];
   let scale = 1, locked = false;
-  let toastUntil = 0, toastText = '';
+  let toastTimer = 0;
   let folded = {};
   try { folded = JSON.parse(localStorage.getItem('cth_hud_desk_folded') || '{}') || {}; } catch { folded = {}; }
 
@@ -86,11 +92,15 @@
   function draw() {
     hud.style.zoom = String(scale);
     hud.classList.toggle('locked', locked);
-    sum.textContent = Date.now() < toastUntil ? toastText : HV.summary(items);
     HV.renderList(list, items, opts);
     requestAnimationFrame(fit);
   }
-  function toast(text) { toastText = text; toastUntil = Date.now() + 1500; draw(); }
+  function toast(text) {
+    toastEl.textContent = text;
+    toastEl.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => toastEl.classList.remove('show'), 1500);
+  }
 
   // ---- 끌기 · 꾹 누르기(이동 잠금) ----
   let press = null, suppressClick = false;
@@ -152,7 +162,7 @@
   grip.addEventListener('pointermove', (e) => {
     if (!rs) return;
     scale = Math.round(Math.min(1.6, Math.max(0.6, rs.k + (e.screenX - rs.x) / BASE_W)) * 100) / 100;
-    sum.textContent = Math.round(scale * 100) + '%';
+    toast(Math.round(scale * 100) + '%');
     hud.style.zoom = String(scale);
     requestAnimationFrame(fit);
   });
@@ -164,6 +174,10 @@
   if (api) {
     api.onState((l) => { items = Array.isArray(l) ? l : []; draw(); });
     api.onSettings((s) => { scale = Number(s && s.scale) || 1; locked = !!(s && s.locked); draw(); });
+  }
+  if (window.PetAvatar) {
+    window.PetAvatar.loadFiles().then(draw).catch(() => {});
+    window.addEventListener('storage', (e) => { if (!e.key || /^cth_(theme|proj_themes|pet_)/.test(e.key)) window.PetAvatar.loadFiles().then(draw).catch(() => {}); });
   }
   setInterval(() => { if (!press && !rs) draw(); }, 1000);
   draw();

@@ -26,7 +26,7 @@
       const k = it.projectKey || it.project || it.key;
       if (!map.has(k)) {
         map.set(k, {
-          key: k, hue: it.hue, project: it.project || '',
+          key: k, hue: it.hue, project: it.project || '', projectId: it.projectId || '', theme: it.theme || '',
           name: it.character || it.project || it.title,
           sub: it.character ? (it.project || '') : (it.profile || ''),
           sessions: [],
@@ -74,12 +74,47 @@
     return s;
   }
 
+  /* ---- 캐릭터 — 그 프로젝트 펫과 같은 캐릭터(pet-avatar.js). 상태에 맞는 동작 이미지를 고른다 ---- */
+  const ACTION_FOR = { work: ['walk', 'run', 'idle'], ask: ['pose', 'look-around', 'idle'], rest: ['idle'] };
+  function spriteOf(p) {
+    const A = root.PetAvatar;
+    if (!A) return null;
+    let r = null;
+    try { r = A.resolve(p.projectId, p.theme); } catch { return null; }
+    if (r && r.mode === 'pack' && r.pack && r.pack.actions) {
+      const acts = r.pack.actions;
+      const a = (ACTION_FOR[p.state] || ['idle']).find((x) => acts[x]) || Object.keys(acts)[0];
+      return acts[a] || null;
+    }
+    return (r && r.url) || null;
+  }
+  // 펫 이미지가 없을 때의 기본 캐릭터(펫 기본 SVG 와 같은 모양, 프로젝트 색)
+  const blob = (hue) => `<svg viewBox="0 0 100 100" aria-hidden="true"><path d="M50 12c22 0 38 17 38 40 0 21-15 36-38 36S12 73 12 52c0-23 16-40 38-40z" fill="hsl(${Number(hue) || 0} 72% 66%)"/><ellipse cx="38" cy="50" rx="5" ry="7" fill="#2a160c"/><ellipse cx="62" cy="50" rx="5" ry="7" fill="#2a160c"/><circle cx="40" cy="47" r="1.8" fill="#fff"/><circle cx="64" cy="47" r="1.8" fill="#fff"/><path d="M44 64q6 5 12 0" stroke="#2a160c" stroke-width="3" fill="none" stroke-linecap="round"/></svg>`;
+  // 1초마다 다시 그려도 움직이는 이미지가 처음부터 다시 돌지 않게 같은 이미지 요소를 다시 쓴다
+  function spriteEl(box, p) {
+    const src = spriteOf(p);
+    if (!src) { const s = el('span', 'hud-sprite hud-blob'); s.innerHTML = blob(p.hue); return s; }
+    box._sprites = box._sprites || new Map();
+    const k = `${p.key}|${src}`;
+    let img = box._sprites.get(k);
+    if (!img) {
+      img = el('img', 'hud-sprite');
+      img.alt = '';
+      img.draggable = false;
+      img.src = src;
+      box._sprites.set(k, img);
+    }
+    img._used = true;
+    return img;
+  }
+
   /**
    * @param box 그릴 자리(.hud-list)
    * @param opts { isFolded(projectKey), onToggle(projectKey), onPickSession(sessionKey), onPickProject(project) }
    */
   function renderList(box, items, opts = {}, now = Date.now()) {
     box.textContent = '';
+    if (box._sprites) box._sprites.forEach((img) => { img._used = false; });
     const projects = groupProjects(items);
     if (!projects.length) { box.append(el('div', 'hud-empty', '열린 Claude 세션이 없어요')); return; }
     for (const p of projects) {
@@ -88,7 +123,7 @@
       const row = el('div', 'hud-pm');
 
       const av = el('span', 'hud-av');
-      av.append(el('span', 'hud-face', (p.name || '?').slice(0, 1)));
+      av.append(spriteEl(box, p));
       if (p.state === 'ask') av.append(icon('ask', 'hud-qi', '질문 대기'));
       row.append(av);
 
@@ -137,6 +172,8 @@
       }
       box.append(wrap);
     }
+    // 이번에 안 쓴 캐릭터 이미지는 버린다(프로젝트가 닫혔거나 동작이 바뀜)
+    if (box._sprites) box._sprites.forEach((img, k) => { if (!img._used) box._sprites.delete(k); });
   }
 
   const api = { renderList, summary, groupProjects, clock };
