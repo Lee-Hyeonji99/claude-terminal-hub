@@ -464,13 +464,21 @@
   function fit() {
     if (!api) return;
     if (card.hidden) { api.resize(0, 0); return; }
-    api.resize(card.offsetWidth, card.offsetHeight);
+    // 줄여 놓은 높이가 아니라 원래 높이를 알려야 자리가 생겼을 때 다시 커진다
+    const capped = card.style.maxHeight;
+    card.style.maxHeight = '';
+    const w = card.offsetWidth, h = card.offsetHeight;
+    card.style.maxHeight = capped;
+    api.resize(w, h);
   }
   function applyLayout(l) {
     if (!l || !l.pet) return;
     petBox.style.left = l.pet.x + 'px';
     petBox.style.top = l.pet.y + 'px';
-    if (l.card) { card.style.left = l.card.x + 'px'; card.style.top = l.card.y + 'px'; }
+    if (l.card) {
+      card.style.left = l.card.x + 'px'; card.style.top = l.card.y + 'px';
+      card.style.maxHeight = l.cardMaxH ? l.cardMaxH + 'px' : '';
+    }
   }
   function applyProject() {
     ptag.textContent = project ? project.name : '';

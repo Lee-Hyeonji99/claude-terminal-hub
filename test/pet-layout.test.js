@@ -80,3 +80,38 @@ test('창은 펫과 카드를 모두 감싼다', () => {
   assert.ok(pet.x >= 0 && pet.y >= 0 && pet.x + PET_BOX <= L.window.width && pet.y + PET_BOX <= L.window.height);
   assert.ok(cc.x >= 0 && cc.y >= 0 && cc.x + card.w <= L.window.width && cc.y + card.h <= L.window.height);
 });
+
+const overlaps = (a, b) => a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height;
+const placed = (L, c) => ({
+  pet: { x: L.window.x + L.local.pet.x, y: L.window.y + L.local.pet.y, width: PET_BOX, height: PET_BOX },
+  card: { x: L.window.x + L.local.card.x, y: L.window.y + L.local.card.y, width: c.w, height: L.local.cardMaxH || c.h },
+});
+
+test('작업영역보다 키 큰 카드: 높이를 줄여 넣고 펫과 겹치지 않는다', () => {
+  const small = { x: 0, y: 0, width: 1280, height: 480 };
+  const smallWa = { x: 0, y: 0, width: 1280, height: 440 };
+  const big = { w: 340, h: 500 };
+  const L = computeLayout({ anchor: { x: 600, y: 0 }, card: big, workArea: smallWa, bounds: small });
+  const r = placed(L, big);
+  assert.ok(L.local.cardMaxH > 0 && L.local.cardMaxH < big.h);
+  assert.ok(!overlaps(r.pet, r.card));
+  assert.ok(inside(r.card, smallWa));
+});
+
+test('들어갈 자리가 있으면 높이를 줄이지 않는다', () => {
+  const L = computeLayout({ anchor: { x: 800, y: 0 }, card, workArea, bounds });
+  assert.equal(L.local.cardMaxH, null);
+  const r = placed(L, card);
+  assert.ok(!overlaps(r.pet, r.card));
+});
+
+test('옆에도 자리가 없는 좁은 화면: 위/아래 넓은 쪽에 줄여 넣고 펫과 겹치지 않는다', () => {
+  const narrow = { x: 0, y: 0, width: 400, height: 520 };
+  const narrowWa = { x: 0, y: 0, width: 400, height: 480 };
+  const L = computeLayout({ anchor: { x: 150, y: 0 }, card, workArea: narrowWa, bounds: narrow });
+  const r = placed(L, card);
+  assert.match(L.side, /^below-/);
+  assert.equal(L.local.cardMaxH, 380);
+  assert.ok(!overlaps(r.pet, r.card));
+  assert.ok(inside(r.card, narrowWa));
+});

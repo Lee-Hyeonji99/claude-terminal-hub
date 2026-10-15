@@ -171,8 +171,11 @@ function initPet({ url, mainWin }) {
     if (!pet || !s) return;
     const w = Math.min(MAX_CARD.w, Math.ceil(Number(s.w) || 0));
     const h = Math.min(MAX_CARD.h, Math.ceil(Number(s.h) || 0));
+    const opened = !pet.card && w > 0 && h > 0;
     pet.card = w > 0 && h > 0 ? { w, h } : null;
     place(pet);
+    // 카드를 펼친 펫을 다른 펫 창보다 앞으로 — 안 그러면 옆 펫이 카드 위에 비쳐 보인다
+    if (opened && pet.win && !pet.win.isDestroyed()) pet.win.moveTop();
   });
   // 드래그 — 렌더러 좌표 대신 OS 커서 위치를 쓴다(배율이 다른 모니터 사이에서도 맞는다).
   ipcMain.on('pet:drag-start', (e) => {
