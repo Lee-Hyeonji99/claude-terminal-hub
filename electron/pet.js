@@ -13,6 +13,7 @@ const { app, BrowserWindow, ipcMain, screen, globalShortcut } = require('electro
 const path = require('path');
 const fs = require('fs');
 const { computeLayout, clampPet, PET_BOX } = require('./pet-layout');
+const { bringToFront } = require('./focus-main');
 
 const MAX_CARD = { w: 420, h: 640 };
 const SPACING = 12;
@@ -141,18 +142,7 @@ function initPet({ url, mainWin }) {
   ipcMain.on('pet:toggle', () => setVisible(!st.visible));
   ipcMain.handle('pet:visible', () => st.visible);
 
-  // 허브 창을 확실히 맨 앞으로 — Windows 는 focus() 만으로는 작업표시줄만 깜빡이고 안 올라올 때가 있어
-  // 잠깐 항상 위로 올렸다 내린다.
-  function bringMainToFront() {
-    if (!mainWin || mainWin.isDestroyed()) return;
-    if (mainWin.isMinimized()) mainWin.restore();
-    mainWin.show();
-    mainWin.setAlwaysOnTop(true);
-    mainWin.moveTop();
-    mainWin.focus();
-    mainWin.webContents.focus();
-    setTimeout(() => { if (!mainWin.isDestroyed()) mainWin.setAlwaysOnTop(false); }, 150);
-  }
+  const bringMainToFront = () => bringToFront(mainWin);
 
   // ---- 펫 → 허브 ----
   ipcMain.on('pet:answer', (_e, payload) => {
