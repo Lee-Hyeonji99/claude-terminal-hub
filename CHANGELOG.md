@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [1.23.2] - 2026-10-15
 
 ### Fixed
 - **`/clear` 한 세션이 허브를 다시 켜면 옛 대화로 열리던 문제** — `/clear` 하면 Claude Code 는 같은 프로세스에서 새 세션 ID 로 바꾸는데, 허브는 패널을 열 때의 ID 만 기억하고 있었다. 이제 Claude Code 의 세션 등록부(`<설정 폴더>/sessions/<pid>.json`)를 따라가 바뀐 ID 를 레이아웃에 남기고, 패널 제목·대화 보기도 새 대화로 바꾼다.
