@@ -179,14 +179,21 @@ app.post('/api/theme-assets', (req, res) => {
   }
 });
 
-// ---- 펫 팩 (동작별 움직이는 이미지 묶음) — 사용자 PC 에만 둔다(lib/pet-pack.js) ----
+// ---- 펫 팩 — 모두 사용자 PC 에만 둔다(저작권: 저장소·설치파일에 넣지 않는다) ----
+//   pet-packs/<id>/      : 펫 설정에서 «팩 폴더 가져오기» 로 복사해 온 팩
+//   theme-packs/<테마키>/ : 캐릭터 테마 전용 펫 — 폴더째 넣어 두면 그 테마에서 자동으로 쓴다. 없으면 기본 펫.
 const PET_PACKS_DIR = path.join(HUB_DATA_DIR, 'pet-packs');
+const THEME_PACKS_DIR = path.join(HUB_DATA_DIR, 'theme-packs');
 app.use('/pet-packs', express.static(PET_PACKS_DIR, {
   etag: false,
   setHeaders: (res) => res.setHeader('Cache-Control', 'no-store'),
 }));
+app.use('/theme-packs', express.static(THEME_PACKS_DIR, {
+  etag: false,
+  setHeaders: (res) => res.setHeader('Cache-Control', 'no-store'),
+}));
 app.get('/api/pet-packs', (_req, res) => {
-  res.json({ dir: PET_PACKS_DIR, packs: petPack.listPacks(PET_PACKS_DIR) });
+  res.json({ dir: PET_PACKS_DIR, themeDir: THEME_PACKS_DIR, packs: petPack.listAvailablePacks(PET_PACKS_DIR, THEME_PACKS_DIR) });
 });
 // body = { path: '<manifest.json 이 든 팩 폴더 절대경로>' } — 펫에 폴더를 끌어다 놓거나 골랐을 때
 app.post('/api/pet-packs/import', (req, res) => {

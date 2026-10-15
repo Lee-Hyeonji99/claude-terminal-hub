@@ -2,14 +2,14 @@
 /**
  * 펫 캐릭터 고르기 — 넷 중 하나.
  *   pack    : 펫 팩(동작별 움직이는 이미지 묶음). 상태에 따라 동작이 바뀐다(public/pet-mood.js).
- *   theme   : 허브의 캐릭터 테마를 따라간다(테마 아이콘 → 전신 이미지 순). 테마가 없으면 기본.
+ *   theme   : 허브의 캐릭터 테마 전용 팩을 따라간다(일반 테마는 랏코 팩). 팩이 없으면 테마 이미지 → 기본 SVG.
  *   custom  : 사용자가 펫에 끌어다 놓은(또는 고른) 이미지 한 장. gif 면 움직인다.
  *   default : 기본 동그라미(SVG).
  *
  * 펫 팩은 «모든 펫» 에 쓰거나 «이 프로젝트 펫만» 에 쓸 수 있다(프로젝트별 지정이 우선).
  *
- * 이미지는 사용자 PC 에만 둔다 — 단일 이미지는 ~/.claude-terminal-hub/theme-assets/,
- * 팩은 ~/.claude-terminal-hub/pet-packs/<id>/ (저장소·설치파일에 넣지 않는다: 저작권).
+ * 이미지·팩은 모두 사용자 PC 에만 둔다(저작권: 저장소·설치파일에 넣지 않는다).
+ *   테마 전용 팩 ~/.claude-terminal-hub/theme-packs/<테마키>/ · 가져온 팩 ~/.claude-terminal-hub/pet-packs/<id>/
  * 펫 창과 허브 창은 같은 주소라 localStorage 를 함께 쓰므로 storage 이벤트로 서로 바로 바뀐다.
  */
 (function () {
@@ -27,6 +27,7 @@
 
   let files = [];
   let packs = [];
+  let themeDir = '';
   async function loadFiles() {
     const [a, b] = await Promise.all([
       fetch('/api/theme-assets').then((r) => r.json()).catch(() => ({})),
@@ -34,13 +35,14 @@
     ]);
     files = (a && a.files) || [];
     packs = (b && b.packs) || [];
+    themeDir = (b && b.themeDir) || '';
   }
   const pick = (cands) => (cands || []).find((c) => files.includes(c)) || null;
   const packById = (id) => packs.find((p) => p.id === id) || null;
 
   function mode() { const m = get(KEY_MODE); return MODES.includes(m) ? m : 'theme'; }
-  function themeInfo() {
-    const t = (window.CHAR_THEME_MAP || {})[get('cth_theme') || ''];
+  function themeInfo(themeKey) {
+    const t = (window.CHAR_THEME_MAP || {})[themeKey || get('cth_theme') || ''];
     if (!t) return { theme: null, file: null };
     return { theme: t, file: pick(t.icon) || pick(t.full) };
   }
@@ -52,19 +54,29 @@
     if (mode() === 'pack') { const g = packById(get(KEY_PACK)); if (g) return { pack: g, scope: 'all' }; }
     return null;
   }
-  const packUrls = (p) => Object.fromEntries(Object.entries(p.actions).map(([a, f]) => [a, `/pet-packs/${encodeURIComponent(p.id)}/${encodeURIComponent(f)}`]));
+  const packUrls = (p) => {
+    const base = p.themed ? `/theme-packs/${encodeURIComponent(p.theme)}` : `/pet-packs/${encodeURIComponent(p.id)}`;
+    return Object.fromEntries(Object.entries(p.actions).map(([a, f]) => [a, `${base}/${encodeURIComponent(f)}`]));
+  };
+  function themePack(themeKey) {
+    const { theme } = themeInfo(themeKey);
+    return packById(theme ? theme.petPack : 'theme:rakko');
+  }
+  const resolvedPack = (p, scope) => ({ mode: 'pack', url: null, pack: { id: p.id, name: p.name, scope, actions: packUrls(p) } });
 
   /** 지금 보여줄 캐릭터. {mode, url} — url 이 null 이면 기본 SVG. 팩이면 {mode:'pack', pack:{id, name, actions:{동작:url}}} */
-  function resolve(projectId) {
+  function resolve(projectId, themeKey) {
     const pk = packFor(projectId);
-    if (pk) return { mode: 'pack', url: null, pack: { id: pk.pack.id, name: pk.pack.name, scope: pk.scope, actions: packUrls(pk.pack) } };
+    if (pk) return resolvedPack(pk.pack, pk.scope);
     const m = mode();
     if (m === 'custom') {
       const f = get(KEY_FILE);
       if (f && files.includes(f)) return { mode: m, url: `/theme-assets/${encodeURIComponent(f)}?v=${get(KEY_VER) || 0}` };
     }
     if (m === 'theme') {
-      const { file } = themeInfo();
+      const themed = themePack(themeKey);
+      if (themed) return resolvedPack(themed, 'theme');
+      const { file } = themeInfo(themeKey);
       if (file) return { mode: m, url: `/theme-assets/${encodeURIComponent(file)}` };
     }
     return { mode: m, url: null };
@@ -118,8 +130,9 @@
   function clearProjectPack(projectId) { if (projectId) del(projectPackKey(projectId)); }
 
   window.PetAvatar = {
-    loadFiles, resolve, mode, themeInfo, uploadCustom, importPack, usePack, clearProjectPack,
+    loadFiles, resolve, mode, themeInfo, themePack, uploadCustom, importPack, usePack, clearProjectPack,
     packs: () => packs.slice(),
+    themeDir: () => themeDir,
     projectPack: (pid) => (pid ? get(projectPackKey(pid)) || '' : ''),
     globalPack: () => get(KEY_PACK) || '',
     setMode: (m) => { if (MODES.includes(m)) set(KEY_MODE, m); },

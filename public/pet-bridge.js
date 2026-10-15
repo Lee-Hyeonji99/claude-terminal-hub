@@ -48,7 +48,8 @@
       trackWorking(p, working, !!prompt);
       const id = PK.projectId(p.cfg.cwd);
       if (!projects.has(id)) {
-        projects.set(id, { id, name: PK.projectName(p.cfg.cwd) || '기타', cwd: p.cfg.cwd || '', hue: PK.projectHue(id), working: 0, questions: [], done: [], sessions: [] });
+        const theme = projectThemeOf(PK.workspaceKey(p.cfg.profile, id)) || globalTheme();
+        projects.set(id, { id, name: PK.projectName(p.cfg.cwd) || '기타', cwd: p.cfg.cwd || '', hue: PK.projectHue(id), theme, working: 0, questions: [], done: [], sessions: [] });
       }
       const proj = projects.get(id);
       if (working) proj.working++;   // 펫 팩이면 걷는 동작으로 보여준다

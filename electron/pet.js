@@ -109,7 +109,7 @@ function initPet({ url, mainWin }) {
     const alive = new Set(projects.map((p) => p.id));
     for (const pet of [...pets.values()]) if (!alive.has(pet.id)) destroyPet(pet);
     for (const proj of projects) {
-      const data = { project: { id: proj.id, name: proj.name, cwd: proj.cwd, hue: proj.hue }, working: proj.working || 0, questions: proj.questions, done: proj.done, sessions: proj.sessions || [] };
+      const data = { project: { id: proj.id, name: proj.name, cwd: proj.cwd, hue: proj.hue, theme: proj.theme }, working: proj.working || 0, questions: proj.questions, done: proj.done, sessions: proj.sessions || [] };
       let pet = pets.get(proj.id);
       if (!pet) { pet = { id: proj.id, win: null, card: null, data, sig: '', drag: null }; pets.set(proj.id, pet); }
       pet.data = data;

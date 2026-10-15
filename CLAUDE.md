@@ -61,7 +61,9 @@ UI/서버 변경 후 가능하면 실제로 확인한다.
 - 세션 제목 우선순위: Claude `/rename`(custom-title) > ai-title > 첫 메시지.
 - 프로필별 계정 분리: `CLAUDE_CONFIG_DIR = ~/.claude-hub-profiles/<id>`.
 - **캐릭터 테마 이미지**: `~/.claude-terminal-hub/theme-assets/` (서버가 `/theme-assets` 로 읽기 제공, `POST /api/theme-assets` 로 저장).
-  - **저작권 있는 캐릭터 이미지는 저장소·설치파일에 절대 넣지 않는다.** 저장소가 public 이고 Release 로 배포되므로 재배포가 된다. 앱은 사용자 PC 의 이 폴더를 읽기만 하고, 이미지가 없으면 색상 팔레트만 적용하고 아이콘 자리는 숨긴다(정상 동작).
+  - **저작권 있는 캐릭터 이미지(AI 로 다시 그린 2차 창작 포함)는 저장소·설치파일에 절대 넣지 않는다.** 저장소가 public 이고 Release 로 배포되므로 재배포가 된다. 앱은 사용자 PC 의 폴더를 읽기만 하고, 이미지가 없으면 색상 팔레트만 적용하고 아이콘 자리는 숨긴다(정상 동작). `package.json` 의 `build.files` 에 이미지 폴더를 넣지 말 것. (2026-10-15 다른 에이전트가 번들해 push 했다가 이력에서 지운 적 있음)
+  - **테마 전용 펫 팩**: `~/.claude-terminal-hub/theme-packs/<테마키>/` (manifest.json + 동작 이미지). 있으면 그 캐릭터 테마에서 자동으로 쓰고(id `theme:<테마키>`), 일반 테마는 `rakko` 폴더를 쓴다. 없으면 테마 이미지 → 기본 SVG. 가져온 팩은 `~/.claude-terminal-hub/pet-packs/<id>/`.
+  - 펫 우선순위: 직접 고른 프로젝트 팩 → 직접 고른 전체 팩 → 테마 전용 팩 → 테마 이미지(`<테마키>-default.webp` 등) → 기본 SVG.
   - 팔레트는 하드코딩하지 않고 이미지에서 대표색을 추출해 생성한다(`public/app.js` 의 `extractColors`/`buildCharPalette`). 테마 메타는 `public/themes.js`.
 - **세션 영속(reattach)**: pty 는 ws 에 종속되지 않고 `ptyStore`(key→session)로 유지된다. ws 가 끊겨도 pty 는 살아있고 재연결 시 같은 key 로 재부착한다. 실제 종료는 클라이언트의 `{type:'kill'}`(패널 X) 또는 프로세스 exit 뿐 — 따라서 **서버 프로세스를 죽이면 살아있는 모든 세션이 사라진다**(§3 더욱 중요).
 

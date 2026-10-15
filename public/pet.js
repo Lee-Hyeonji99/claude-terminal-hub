@@ -5,7 +5,8 @@
  * 창 관리·배치는 electron/pet.js(+pet-layout.js), 알림 모으기·키 입력은 public/pet-bridge.js 담당.
  */
 (function () {
-  const api = window.pet;
+  // 브라우저에서는 id="pet" 요소가 window.pet 으로 노출될 수 있다.
+  const api = window.pet && typeof window.pet.onState === 'function' ? window.pet : null;
   const $ = (id) => document.getElementById(id);
   const card = $('card'), petEl = $('pet'), badge = $('badge'), petBox = $('petBox'), ptag = $('ptag');
   const petImg = $('petImg'), petSvg = $('petSvg');
@@ -120,11 +121,11 @@
   setInterval(() => { roll = Math.random(); updateAction(); }, MOOD_ROLL_MS);
 
   function applyAvatar() {
-    const a = Avatar ? Avatar.resolve(project && project.id) : { url: null };
+    const a = Avatar ? Avatar.resolve(project && project.id, project && project.theme) : { url: null };
     packView = a.mode === 'pack' ? a.pack : null;
     petEl.classList.toggle('packed', !!packView);
     if (packView) {
-      petImg.hidden = false; petSvg.hidden = true;
+      petImg.hidden = false; petSvg.toggleAttribute('hidden', true);
       updateAction();
       return;
     }
@@ -132,12 +133,12 @@
     delete petImg.dataset.pack;
     if (a.url) {
       if (petImg.getAttribute('src') !== a.url) petImg.src = a.url;
-      petImg.hidden = false; petSvg.hidden = true;
+      petImg.hidden = false; petSvg.toggleAttribute('hidden', true);
     } else {
-      petImg.hidden = true; petSvg.hidden = false;
+      petImg.hidden = true; petSvg.toggleAttribute('hidden', false);
     }
   }
-  petImg.addEventListener('error', () => { petImg.hidden = true; petSvg.hidden = false; });
+  petImg.addEventListener('error', () => { petImg.hidden = true; petSvg.toggleAttribute('hidden', false); });
 
   function pickImageFile() {
     const inp = document.createElement('input');
@@ -180,14 +181,16 @@
 
   function renderPackSection(box) {
     box.append(el('div', 't', '펫 팩 — 상태에 따라 움직여요'));
+    if (Avatar.themeDir()) box.append(el('div', 'hint', `테마 전용 펫: ${Avatar.themeDir()}${Avatar.themeDir().includes('\\') ? '\\' : '/'}<테마키> 폴더에 넣으면 그 테마에서 자동으로 써요`));
     const pid = project && project.id;
     const mine = Avatar.projectPack(pid);
     const all = Avatar.mode() === 'pack' ? Avatar.globalPack() : '';
+    const automatic = !mine && Avatar.mode() === 'theme' ? Avatar.themePack(project && project.theme) : null;
     for (const p of Avatar.packs()) {
-      const row = el('div', 'packrow' + (p.id === (mine || all) ? ' on' : ''));
+      const row = el('div', 'packrow' + (p.id === (mine || all || (automatic && automatic.id)) ? ' on' : ''));
       const t = el('span', 'pn');
       t.append(el('span', null, p.name));
-      t.append(el('small', null, p.id === mine ? '이 펫에 쓰는 중' : p.id === all ? '모든 펫에 쓰는 중' : `${Object.keys(p.actions).length}가지 동작`));
+      t.append(el('small', null, p.id === mine ? '이 펫에 쓰는 중' : p.id === all ? '모든 펫에 쓰는 중' : automatic && p.id === automatic.id ? '테마에 맞춰 쓰는 중' : `${p.themed ? '테마 팩 · ' : ''}${Object.keys(p.actions).length}가지 동작`));
       const toAll = el('button', 'btn' + (p.id === all ? ' primary' : ''), '모든 펫');
       toAll.onclick = () => { Avatar.usePack(p.id, 'all'); applyAvatar(); render(); };
       row.append(t, toAll);
@@ -215,12 +218,13 @@
   function renderSettings() {
     const box = el('div', 'set');
     if (Avatar) renderPackSection(box);
-    box.append(el('div', 't', '이미지 한 장으로'));
+    box.append(el('div', 't', '캐릭터 표시 방식'));
     const m = Avatar ? Avatar.mode() : 'default';
     // 단일 이미지를 고르면 이 펫의 팩 지정도 풀어야 바로 보인다
     const pickMode = (mode) => { Avatar.clearProjectPack(project && project.id); Avatar.setMode(mode); applyAvatar(); render(); };
-    const { theme, file } = Avatar ? Avatar.themeInfo() : { theme: null, file: null };
-    const themeSub = !theme ? '허브에서 캐릭터 테마를 고르면 그 캐릭터가 나와요'
+    const { theme, file } = Avatar ? Avatar.themeInfo(project && project.theme) : { theme: null, file: null };
+    const builtin = Avatar && Avatar.themePack(project && project.theme);
+    const themeSub = builtin ? `${theme ? theme.name : '기본 랏코'} · 상태에 맞춰 7가지 동작으로 움직여요` : !theme ? '허브에서 캐릭터 테마를 고르면 그 캐릭터가 나와요'
       : file ? `지금 테마: ${theme.name}` : `${theme.name} 이미지가 없어요 — 허브 팔레트에서 넣을 수 있어요`;
     const choice = (key, label, sub, onPick) => {
       const b = el('button', 'choice' + (m === key ? ' on' : ''));
@@ -514,7 +518,7 @@
   });
   // 허브에서 캐릭터 테마를 바꾸면(같은 주소라 localStorage 공유) 펫도 따라 바꾼다.
   window.addEventListener('storage', (e) => {
-    if (!e.key || /^cth_(theme|pet_)/.test(e.key)) {
+    if (!e.key || /^cth_(theme|proj_themes|pet_)/.test(e.key)) {
       (Avatar ? Avatar.loadFiles() : Promise.resolve()).then(() => { applyAvatar(); if (view === 'settings') render(); });
     }
   });
@@ -525,7 +529,8 @@
     api.onState((data) => {
       const d = data || {};
       const hadItems = list.length + done.length > 0;
-      const projectChanged = (project && project.id) !== (d.project && d.project.id);
+      const projectChanged = (project && project.id) !== (d.project && d.project.id)
+        || (project && project.theme) !== (d.project && d.project.theme);
       project = d.project || null;
       applyProject();
       if (projectChanged) applyAvatar();   // 프로젝트별 펫 팩 지정이 있을 수 있다

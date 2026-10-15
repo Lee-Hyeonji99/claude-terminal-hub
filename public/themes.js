@@ -62,6 +62,13 @@ window.CHAR_THEMES = [
   },
 ];
 
+// 테마 전용 펫 팩(~/.claude-terminal-hub/theme-packs/<테마키>/)과 예비 이미지 이름 <테마키>-default.webp
+for (const theme of window.CHAR_THEMES) {
+  theme.petPack = `theme:${theme.key}`;
+  theme.icon.push(`${theme.key}-default.webp`);
+  theme.full.push(`${theme.key}-default.webp`);
+}
+
 window.CHAR_THEME_MAP = Object.fromEntries(window.CHAR_THEMES.map((t) => [t.key, t]));
 
 // UI 글꼴 후보 (번들된 것 + 시스템)

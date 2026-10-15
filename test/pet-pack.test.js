@@ -4,7 +4,7 @@ const assert = require('node:assert/strict');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
-const { importPack, listPacks, packSlug } = require('../lib/pet-pack.js');
+const { importPack, listPacks, listAvailablePacks, packSlug } = require('../lib/pet-pack.js');
 
 function tmp() { return fs.mkdtempSync(path.join(os.tmpdir(), 'petpack-')); }
 function makePack(dir, manifest, files) {
@@ -110,4 +110,20 @@ test('listPacks: 가져온 팩 목록', () => {
   fs.mkdirSync(path.join(dest, 'junk')); // manifest 없는 폴더는 건너뛴다
   assert.deepEqual(listPacks(dest), [{ id: 'alpha', name: 'alpha', actions: { idle: 'i.gif' } }]);
   assert.deepEqual(listPacks(path.join(dest, 'nope')), []);
+});
+
+test('테마 전용 팩과 같은 이름의 가져온 팩도 각각 선택할 수 있다', () => {
+  const user = tmp(), themeRoot = tmp();
+  makePack(path.join(user, 'rakko'), { name: '내 랏코', actions: { idle: 'i.gif' } }, { 'i.gif': GIF });
+  makePack(path.join(themeRoot, 'rakko'), { name: '랏코', actions: { idle: { webp: 'i.webp', gif: 'i.gif' } } }, { 'i.webp': WEBP, 'i.gif': GIF });
+  assert.deepEqual(listAvailablePacks(user, themeRoot), [
+    { id: 'theme:rakko', name: '랏코', actions: { idle: 'i.webp' }, themed: true, theme: 'rakko' },
+    { id: 'rakko', name: '내 랏코', actions: { idle: 'i.gif' } },
+  ]);
+});
+
+test('listPacks: 사라진 파일은 빼고 다른 형식으로 대체한다', () => {
+  const root = tmp();
+  makePack(path.join(root, 'test'), { actions: { idle: 'missing.webp', walk: { webp: 'missing.webp', gif: 'walk.gif' } } }, { 'walk.gif': GIF });
+  assert.deepEqual(listPacks(root)[0].actions, { walk: 'walk.gif' });
 });
