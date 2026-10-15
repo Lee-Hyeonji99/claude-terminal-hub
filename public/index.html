@@ -470,10 +470,9 @@
     <div class="popover-wrap">
       <button id="themeBtn" class="ghost icon-btn" title="색상 테마"><span data-icon="palette"></span></button>
       <div id="themePopover" class="popover">
-        <div class="popover-sep" id="themeScopeSep" style="margin-top:0">적용 범위 <span style="font-weight:400">— 탭 우클릭으로도 열림</span></div>
-        <div class="seg-row" id="themeScopeRow">
-          <button data-tscope="all">전체 기본</button>
-          <button data-tscope="tab">이 탭만</button>
+        <div class="popover-sep" id="themeScopeSep" style="margin-top:0">기본 테마</div>
+        <div class="seg-row" id="themeScopeRow" hidden>
+          <button data-tscope="reset">기본 테마로 맞추기</button>
         </div>
         <div class="popover-sep">테마</div>
         <div class="popover-item" data-theme="dark"><span class="swatch" style="background:#0c0e14"></span>다크 (기본)</div>

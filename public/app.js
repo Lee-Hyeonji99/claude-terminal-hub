@@ -106,7 +106,26 @@ function saveProjThemes() { try { localStorage.setItem(PROJ_THEMES_KEY, JSON.str
 function globalTheme() { return localStorage.getItem('cth_theme') || 'dark'; }
 function isKnownTheme(t) { return !!(t && (TERM_THEMES[t] || (window.CHAR_THEME_MAP || {})[t])); }
 function projectThemeOf(wsKey) { const t = projThemes[wsKey]; return isKnownTheme(t) ? t : null; }
-function effectiveTheme() { return (groupProjects() && projectThemeOf(currentWsKey())) || globalTheme(); }
+/* 탭마다 테마가 따로다. 첫 번째 탭(기본 탭)의 테마가 «기본 테마»(cth_theme) — 새 탭은 열릴 때 그 기본 테마로 고정된다.
+ * 프로젝트별 탭을 끄면(탭 하나) 기본 테마만 쓴다. */
+function isDefaultTab(wsKey) {
+  if (!groupProjects()) return true;
+  const parsed = PK.parseWorkspaceKey(wsKey);
+  if (!parsed) return true;
+  const cur = currentWsKey();
+  const first = workspaceEntriesOf(parsed.profile).find(([k, w]) => wsPaneCount(w) > 0 || k === cur);
+  return !first || first[0] === wsKey;
+}
+function themeOfWorkspace(wsKey) {
+  return isDefaultTab(wsKey) ? globalTheme() : (projectThemeOf(wsKey) || globalTheme());
+}
+function effectiveTheme() { return themeOfWorkspace(currentWsKey()); }
+// 새로 생긴 프로젝트 탭은 지금의 기본 테마로 고정 — 이후 기본 테마를 바꿔도 이미 열린 탭은 그대로다
+function pinNewTabTheme(wsKey) {
+  const parsed = PK.parseWorkspaceKey(wsKey);
+  if (!parsed || !parsed.project || !groupProjects() || projectThemeOf(wsKey)) return;
+  setProjectTheme(wsKey, globalTheme());
+}
 function themeLabel(t) {
   const c = (window.CHAR_THEME_MAP || {})[t];
   if (c) return c.name;
@@ -392,6 +411,7 @@ function enterWorkspace(profile, project) {
   activeProfileId = profile;
   activeProject = project;
   localStorage.setItem('cth_active_profile', profile);
+  if (!workspaces[currentWsKey()]) pinNewTabTheme(currentWsKey());
   const w = workspaces[currentWsKey()] || (workspaces[currentWsKey()] = { columns: [], activePane: null, columnSizes: null });
   columns = w.columns;
   activePane = w.activePane || null;
@@ -511,14 +531,15 @@ function renderProjectTabs() {
     const cwd = projectCwd[k] || project;
     const n = wsPaneCount(w);
     const done = w.columns.some((c) => c.panes.some((p) => p._doneAt || (p.el && p.el.classList.contains('done'))));
-    const own = projectThemeOf(k);
+    const tabTheme = themeOfWorkspace(k);
+    const own = i > 0 && tabTheme !== globalTheme() ? tabTheme : null;   // 기본 테마와 다른 탭만 표시
     const t = document.createElement('div');
     t.className = 'ptab' + (k === cur ? ' active' : '') + (done ? ' done' : '') + (own ? ' themed' : '');
     const shortcut = i < 8 ? `Ctrl+${i + 1}` : (i === entries.length - 1 ? 'Ctrl+9' : '');
     t.title = (cwd || '작업 경로 없는 패널')
       + (shortcut ? `  (${shortcut})` : '')
-      + (own ? `\n전용 테마: ${themeLabel(own)}` : '')
-      + '\n우클릭 = 이 탭 테마 지정'
+      + `\n테마: ${themeLabel(tabTheme)}${i === 0 ? ' (기본 테마)' : ''}`
+      + '\n우클릭 = 이 탭 테마 바꾸기'
       + (done ? '\n작업 완료된 세션이 있습니다' : '');
     t.innerHTML = `<span class="pdot" style="--hue:${PK.projectHue(project)}"></span>${ICON.folder}`
       + `<span class="pname">${escapeHtml(project ? PK.projectName(cwd) : '기타')}</span>`
@@ -948,25 +969,32 @@ function updateComposePlaceholders(t) {
   document.querySelectorAll('.compose textarea').forEach((ta) => { ta.placeholder = ph; });
 }
 
-// 테마 고르기(사용자 선택) — 지금 탭에 전용 테마가 있으면 그 탭 것을, 아니면 전체 기본을 바꾼다.
+// 테마 고르기(사용자 선택) — 첫 번째 탭이면 기본 테마를, 다른 탭이면 그 탭 테마만 바꾼다.
 function applyTheme(t) {
   const k = currentWsKey();
-  if (groupProjects() && projectThemeOf(k)) { setProjectTheme(k, t); renderTabs(); }
-  else localStorage.setItem('cth_theme', t);
+  if (isDefaultTab(k)) {
+    localStorage.setItem('cth_theme', t);
+    const parsed = PK.parseWorkspaceKey(k);
+    if (groupProjects() && parsed && parsed.project) setProjectTheme(k, t);   // 나중에 첫 탭이 아니게 돼도 같은 테마
+  } else {
+    setProjectTheme(k, t);
+  }
+  renderTabs();
   renderTheme(t);
 }
 // 저장은 건드리지 않고 지금 탭에 맞는 테마로 다시 칠한다 (탭 전환 · 모드/강도 변경 후)
 function refreshTheme() { renderTheme(effectiveTheme()); }
 
+// 테마 메뉴 맨 위 — 지금 고르는 테마가 «기본 테마»(첫 탭)인지 «이 탭 테마»인지 알려 준다
 function updateThemeScopeRow() {
-  const row = document.getElementById('themeScopeRow');
-  if (!row) return;
-  const grouped = groupProjects();
-  row.hidden = !grouped;
   const sep = document.getElementById('themeScopeSep');
-  if (sep) sep.hidden = !grouped;
-  const scope = projectThemeOf(currentWsKey()) ? 'tab' : 'all';
-  row.querySelectorAll('button').forEach((b) => b.classList.toggle('on', b.dataset.tscope === scope));
+  const row = document.getElementById('themeScopeRow');
+  if (!sep || !row) return;
+  const isDefault = isDefaultTab(currentWsKey());
+  sep.innerHTML = isDefault
+    ? '기본 테마 <span style="font-weight:400">— 첫 탭 · 새 탭은 이 테마로 열려요</span>'
+    : '이 탭 테마 <span style="font-weight:400">— 다른 탭에는 영향 없음</span>';
+  row.hidden = isDefault;
 }
 
 function renderTheme(t) {
@@ -2512,11 +2540,10 @@ document.querySelectorAll('#themePopover .popover-item').forEach((el) => {
   el.addEventListener('click', () => { applyTheme(el.dataset.theme); closePopovers(); });
 });
 setupPopover('themeBtn', 'themePopover');
-// 적용 범위: «이 탭만» 이면 지금 테마를 이 탭 전용으로 고정, «전체 기본» 이면 전용 테마를 지우고 전체를 따른다
+// 첫 탭이 아닌 탭에서 «기본 테마로 맞추기» — 이 탭 테마를 지금의 기본 테마로
 document.getElementById('themeScopeRow').addEventListener('click', (e) => {
   const b = e.target.closest('button'); if (!b) return;
-  const k = currentWsKey();
-  setProjectTheme(k, b.dataset.tscope === 'tab' ? (renderedTheme || globalTheme()) : null);
+  setProjectTheme(currentWsKey(), globalTheme());
   refreshTheme();
   renderTabs();
 });
