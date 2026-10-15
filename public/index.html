@@ -7,6 +7,7 @@
   <link rel="icon" href="data:," />
   <link rel="stylesheet" href="/vendor/xterm/css/xterm.css" />
   <link rel="stylesheet" href="/desk-view.css" />
+  <link rel="stylesheet" href="/hud.css" />
   <style>
     /* 번들 글꼴 (오프라인 앱이므로 CDN 대신 동봉) — 전부 OFL 1.1 */
     @font-face{font-family:'Pretendard';src:url('/fonts/pretendard-400.woff2') format('woff2');font-weight:400;font-display:swap}
@@ -577,6 +578,22 @@
         </div>
       </div>
     </div>
+    <div class="popover-wrap">
+      <button id="hudBtn" class="ghost icon-btn" title="작업 현황 HUD — 누가 무슨 일을 몇 분째 하는지"><span data-icon="hud"></span></button>
+      <div id="hudPopover" class="popover" style="min-width:230px">
+        <div class="popover-sep" style="margin-top:0">허브 화면 안 <span style="font-weight:400">— 사이드바 맨 위</span></div>
+        <div class="seg-row" id="hudInRow">
+          <button data-v="on">켬</button>
+          <button data-v="off">끔</button>
+        </div>
+        <div class="popover-sep" id="hudDeskSep">바탕화면 <span style="font-weight:400">— 항상 위</span></div>
+        <div class="seg-row" id="hudDeskRow">
+          <button data-v="on">켬</button>
+          <button data-v="off">끔</button>
+        </div>
+        <div class="popover-note" style="padding:2px 8px 6px;font-size:11px;color:var(--muted);line-height:1.5">줄을 누르면 그 탭·세션으로 가요.<br>바탕화면 HUD: 끌어서 옮기기 · 꾹 누르면 이동 잠금 · 오른쪽 아래 모서리로 크기</div>
+      </div>
+    </div>
     <button id="petBtn" class="ghost icon-btn" title="펫 꺼내기/숨기기 (Ctrl+Alt+P) — 질문 카드를 바탕화면 맨 앞에" style="display:none"><span data-icon="paw"></span></button>
     <button id="composeBtn" class="ghost icon-btn" title="입력창(컴포즈) 켜기/끄기 — 터미널 아래 GUI 입력"><span data-icon="keyboard"></span></button>
     <div class="popover-wrap">
@@ -630,10 +647,13 @@
   <!-- 최소화 트레이 (최소화된 세션이 있을 때만 표시) -->
   <div id="minTray" style="display:none"></div>
 
+
   <div id="dropIndicator"><span class="dz"></span></div>
 
   <div id="main">
     <aside id="lnb">
+      <!-- 작업 현황 HUD (허브 안) — 사이드바 맨 위, public/hud.js -->
+      <section id="hudSide" class="hud" aria-label="작업 현황" hidden></section>
       <div class="lnb-head">
         <span id="lnbTitle">최근 세션</span>
         <div class="lnb-head-btns">
@@ -774,5 +794,7 @@
   <script src="/desk-view.js"></script>
   <script src="/file-drop.js"></script>
   <script src="/feedback.js"></script>
+  <script src="/hud-view.js"></script>
+  <script src="/hud.js"></script>
 </body>
 </html>

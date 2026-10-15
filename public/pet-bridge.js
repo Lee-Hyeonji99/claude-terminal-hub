@@ -39,8 +39,27 @@
     if (p._idleTicks >= IDLE_TICKS_FOR_DONE) { p._wasWorking = false; p._idleTicks = 0; markPaneDone(p); }
   }
 
+  /* ---------- HUD — 세션마다 상태 · 그 상태가 된 때 · 마지막 작업 때 · 지금 도구 ---------- */
+  // 상태가 바뀐 때를 패널 객체에 남긴다(_hudState/_hudSince). 일하는 동안은 마지막 작업 때를 계속 갱신.
+  function hudItemOf(p, state, proj) {
+    const now = Date.now();
+    if (p._hudState !== state) { p._hudState = state; p._hudSince = now; }
+    if (state === 'work') p._lastWorkAt = now;
+    const act = p._activity || null;
+    const lastWorkAt = Math.max(p._lastWorkAt || 0, (act && act.at) || 0) || null;
+    const charTheme = (typeof CHAR_MAP === 'function' && CHAR_MAP()[proj.theme]) || null;
+    return {
+      key: p.cfg.key, title: p.cfg.title || 'claude', project: proj.name, hue: proj.hue,
+      projectKey: PK.workspaceKey(p.cfg.profile, projectOfCwd(p.cfg.cwd)),
+      character: charTheme ? charTheme.name : '', profile: profileName(p.cfg.profile),
+      state, since: p._hudSince, lastWorkAt,
+      tool: state === 'work' && act ? act.tool : '', target: state === 'work' && act ? act.target : '',
+    };
+  }
+
   function collect() {
     const projects = new Map();
+    const hud = [];
     let pending = 0;
     for (const p of termPanes()) {
       const prompt = PA.promptOf(p);
@@ -57,6 +76,7 @@
       // 펫을 누르면 뜨는 세션 목록 — 고르면 허브에서 그 세션으로 간다
       const state = prompt ? 'ask' : working ? 'work' : p._doneAt ? 'done' : 'idle';
       proj.sessions.push({ ...base, state });
+      hud.push(hudItemOf(p, state, proj));
       if (prompt) {
         proj.questions.push({ ...base, sig: PA.signature(prompt), cwd: proj.name, prompt });
         pending++;
@@ -65,7 +85,7 @@
         pending++;
       }
     }
-    return { projects: [...projects.values()], pending };
+    return { projects: [...projects.values()], pending, hud };
   }
 
   /* ---------- 작업표시줄 배지 ---------- */
@@ -91,9 +111,14 @@
   }
 
   let lastJson = '';
+  let lastHudJson = '';
   function scan() {
-    const { projects, pending } = collect();
+    const { projects, pending, hud: hudItems } = collect();
     updateBadge(pending);
+    // HUD: 허브 안(public/hud.js)은 이벤트로, 바탕화면 HUD 는 바뀔 때만 main 으로
+    window.dispatchEvent(new CustomEvent('cth-status', { detail: hudItems }));
+    const hudJson = JSON.stringify(hudItems);
+    if (hub && hub.hudState && hudJson !== lastHudJson) { lastHudJson = hudJson; hub.hudState(hudItems); }
     if (!hasPet) return;
     const json = JSON.stringify(projects);
     if (json !== lastJson) { lastJson = json; hub.petState({ projects }); }

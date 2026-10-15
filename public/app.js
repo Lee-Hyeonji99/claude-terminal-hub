@@ -34,6 +34,7 @@ const ICON = {
   tool: ic('<path d="M4 17l6-6-6-6"/><path d="M12 19h8"/>'),
   paw: ic('<circle cx="7" cy="9" r="1.8"/><circle cx="12" cy="6.5" r="1.8"/><circle cx="17" cy="9" r="1.8"/><path d="M8 17.5c0-2.5 1.8-5 4-5s4 2.5 4 5c0 1.6-1.6 2-4 2s-4-.4-4-2z"/>'),
   more: ic('<circle cx="5" cy="12" r="1.3"/><circle cx="12" cy="12" r="1.3"/><circle cx="19" cy="12" r="1.3"/>'),
+  hud: ic('<rect x="2" y="7" width="20" height="10" rx="5"/><path d="M7 10v4M5 12h4M16 11h.01M18 13h.01"/>'),
   layout: ic('<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16M13 9h5M13 13h5"/>'),
 };
 function hydrateIcons(root) {
@@ -1783,6 +1784,8 @@ function addPane(cfg, placement) {
             return;
           }
           if (m.type === 'artifact') { onArtifact(m.path); return; }
+          // HUD — 지금 쓰는 도구 (public/hud-status.js 가 읽는다)
+          if (m.type === 'activity') { paneObj._activity = { tool: m.tool || '', target: m.target || '', at: m.at || Date.now() }; return; }
         } catch { /* 실제 출력 → write */ }
       }
       term.write(typeof ev.data === 'string' ? ev.data : new Uint8Array(ev.data));

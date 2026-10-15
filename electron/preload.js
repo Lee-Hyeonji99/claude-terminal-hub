@@ -22,4 +22,9 @@ contextBridge.exposeInMainWorld('claudeHub', {
   petToggle: () => ipcRenderer.send('pet:toggle'),
   petVisible: () => ipcRenderer.invoke('pet:visible'),
   onPetVisible: (cb) => ipcRenderer.on('pet:visible', (_e, v) => cb(v)),
+  // 바탕화면 작업 현황 HUD (electron/hud.js) — 데이터 보내기 · 켜기/끄기
+  hudState: (list) => ipcRenderer.send('hud:state', list),
+  hudSetVisible: (v) => ipcRenderer.send('hud:set-visible', !!v),
+  hudVisible: () => ipcRenderer.invoke('hud:visible'),
+  onHudVisible: (cb) => ipcRenderer.on('hud:visible', (_e, v) => cb(v)),
 });

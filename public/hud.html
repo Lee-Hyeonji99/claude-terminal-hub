@@ -1,0 +1,173 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>Claude 작업 현황</title>
+<link rel="stylesheet" href="/hud.css">
+<style>
+  html,body{margin:0;background:transparent;overflow:hidden}
+  /* 바탕화면 HUD 는 판 없이 글자·아이콘만 떠 있다. 밝은 배경화면에서도 읽히게 글자에 그림자.
+     마우스를 올리거나 끄는 동안만 옅은 판이 비친다(잡을 곳이 보이게). */
+  #hud{width:360px;margin:2px;cursor:grab;touch-action:none;
+    --hud-muted:#e3e7ef; --hud-text:#ffffff;
+    background:transparent;border-color:transparent;box-shadow:none;
+    /* 게임 자막처럼 글자 둘레에 검은 외곽선 — 밝은 배경화면에서도 읽힌다 */
+    text-shadow:1px 0 0 #000,-1px 0 0 #000,0 1px 0 #000,0 -1px 0 #000,1px 1px 0 #000,-1px -1px 0 #000,1px -1px 0 #000,-1px 1px 0 #000,0 2px 6px rgba(0,0,0,.7);
+    transition:background .15s,border-color .15s}
+  #hud:hover,#hud.dragging,#hud.pressing{background:rgba(10,12,18,.42);border-color:rgba(255,255,255,.12)}
+  #hud .hud-head{border-bottom-color:rgba(255,255,255,.16)}
+  #hud .hud-proj + .hud-proj{border-top-color:rgba(255,255,255,.1)}
+  #hud button{text-shadow:inherit}   /* 버튼은 기본으로 글자 그림자를 끈다 */
+  #hud .hud-face{text-shadow:none}
+  #hud .hud-face,#hud .hud-qi,#hud .hud-spin,#hud .hud-fold svg,#hud .hud-hbtn,#hud .lock{filter:drop-shadow(0 1px 2px rgba(0,0,0,.9))}
+  #hud.locked{cursor:default}
+  #hud.dragging{cursor:grabbing}
+  .grip{opacity:0;transition:opacity .15s}
+  #hud:hover .grip{opacity:1}
+  .lock{display:none;width:13px;height:13px;color:#f0b44c}
+  #hud.locked .lock{display:block}
+  .press{display:none;width:16px;height:16px}
+  #hud.pressing .press{display:block}
+  .press circle.run{animation:fill .6s linear forwards}
+  @keyframes fill{from{stroke-dashoffset:63}to{stroke-dashoffset:0}}
+  .grip{position:absolute;right:2px;bottom:2px;width:18px;height:18px;display:grid;place-items:center;cursor:nwse-resize;touch-action:none}
+  #hud.locked .grip{cursor:not-allowed}
+  #hud{position:relative}
+</style>
+</head>
+<body>
+<div class="hud" id="hud" role="group" aria-label="작업 현황 — 끌어서 옮기기, 꾹 누르면 이동 잠금">
+  <div class="hud-head">
+    <span class="hud-tag">PARTY</span><span class="hud-sum" id="sum"></span>
+    <svg class="press" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10" fill="none" stroke="#3a4560" stroke-width="2.5"/><circle class="run" cx="12" cy="12" r="10" fill="none" stroke="#7aa2ff" stroke-width="2.5" stroke-dasharray="63" stroke-dashoffset="63" transform="rotate(-90 12 12)"/></svg>
+    <svg class="lock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" role="img" aria-label="이동 잠금"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>
+    <button class="hud-hbtn" id="close" type="button" title="바탕화면 HUD 끄기 — 허브 헤더의 HUD 버튼으로 다시 켜요" aria-label="바탕화면 HUD 끄기">✕</button>
+  </div>
+  <div class="hud-list" id="list"></div>
+  <div class="grip" id="grip" title="끌어서 크기 조절 (비율 유지)" aria-label="크기 조절">
+    <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M11 4L4 11M11 8L8 11" stroke="#6b7590" stroke-width="1.5" stroke-linecap="round"/></svg>
+  </div>
+</div>
+<script src="/hud-view.js"></script>
+<script>
+'use strict';
+(function () {
+  const api = window.hudApi;
+  const HV = window.HudView;
+  const hud = document.getElementById('hud');
+  const sum = document.getElementById('sum');
+  const list = document.getElementById('list');
+  const BASE_W = 360;
+  const LONG_PRESS_MS = 600;
+  let items = [];
+  let scale = 1, locked = false;
+  let toastUntil = 0, toastText = '';
+  let folded = {};
+  try { folded = JSON.parse(localStorage.getItem('cth_hud_desk_folded') || '{}') || {}; } catch { folded = {}; }
+
+  const opts = {
+    isFolded: (k) => !!folded[k],
+    onToggle: (k) => {
+      const { [k]: was, ...rest } = folded;
+      folded = was ? rest : { ...rest, [k]: true };
+      try { localStorage.setItem('cth_hud_desk_folded', JSON.stringify(folded)); } catch { /* 저장 불가 */ }
+      draw();
+    },
+    onPickSession: (key) => api && api.focus(key),
+    onPickProject: (p) => { const s = p.sessions.find((x) => x.state === 'work') || p.sessions[0]; if (s && api) api.focus(s.key); },
+  };
+
+  let lastSize = '';
+  function fit() {
+    const r = hud.getBoundingClientRect();
+    const size = `${Math.ceil(r.width + 6)}x${Math.ceil(r.height + 6)}`;
+    if (api && size !== lastSize) { lastSize = size; api.resize(Math.ceil(r.width + 6), Math.ceil(r.height + 6)); }
+  }
+  function draw() {
+    hud.style.zoom = String(scale);
+    hud.classList.toggle('locked', locked);
+    sum.textContent = Date.now() < toastUntil ? toastText : HV.summary(items);
+    HV.renderList(list, items, opts);
+    requestAnimationFrame(fit);
+  }
+  function toast(text) { toastText = text; toastUntil = Date.now() + 1500; draw(); }
+
+  // ---- 끌기 · 꾹 누르기(이동 잠금) ----
+  let press = null, suppressClick = false;
+  hud.addEventListener('pointerdown', (e) => {
+    if (e.button !== 0 || e.target.closest('#grip, #close, .hud-fold')) return;
+    press = { x: e.screenX, y: e.screenY, moved: false, dragging: false };
+    hud.setPointerCapture(e.pointerId);
+    hud.classList.add('pressing');
+    press.timer = setTimeout(() => {
+      if (!press || press.moved) return;
+      locked = !locked;
+      if (api) api.setLock(locked);
+      suppressClick = true;
+      hud.classList.remove('pressing');
+      press = null;
+      toast(locked ? '이동 잠금 — 꾹 누르면 풀려요' : '잠금 해제 — 끌어서 옮겨요');
+    }, LONG_PRESS_MS);
+  });
+  hud.addEventListener('pointermove', (e) => {
+    if (!press) return;
+    if (!press.moved && Math.hypot(e.screenX - press.x, e.screenY - press.y) > 4) {
+      press.moved = true;
+      clearTimeout(press.timer);
+      hud.classList.remove('pressing');
+      if (locked) { toast('잠겨 있어요 — 꾹 눌러 풀어 주세요'); return; }
+      press.dragging = true;
+      hud.classList.add('dragging');
+      if (api) api.dragStart();
+    }
+    if (press.dragging && api) api.drag();
+  });
+  const endPress = () => {
+    if (!press) return;
+    clearTimeout(press.timer);
+    hud.classList.remove('pressing', 'dragging');
+    if (press.dragging && api) api.dragEnd();
+    if (press.moved) suppressClick = true;
+    press = null;
+  };
+  hud.addEventListener('pointerup', endPress);
+  hud.addEventListener('pointercancel', endPress);
+  // 끌거나 꾹 누른 뒤에 손을 떼면서 줄이 눌리지 않게
+  hud.addEventListener('click', (e) => {
+    if (!suppressClick) return;
+    suppressClick = false;
+    e.preventDefault(); e.stopPropagation();
+  }, true);
+
+  // ---- 비율 크기 조절 (오른쪽 아래 모서리) ----
+  const grip = document.getElementById('grip');
+  let rs = null;
+  grip.addEventListener('pointerdown', (e) => {
+    e.stopPropagation();
+    if (e.button !== 0) return;
+    if (locked) { toast('잠겨 있어요 — 꾹 눌러 풀어 주세요'); return; }
+    rs = { x: e.screenX, k: scale };
+    grip.setPointerCapture(e.pointerId);
+  });
+  grip.addEventListener('pointermove', (e) => {
+    if (!rs) return;
+    scale = Math.round(Math.min(1.6, Math.max(0.6, rs.k + (e.screenX - rs.x) / BASE_W)) * 100) / 100;
+    sum.textContent = Math.round(scale * 100) + '%';
+    hud.style.zoom = String(scale);
+    requestAnimationFrame(fit);
+  });
+  const endResize = () => { if (!rs) return; rs = null; if (api) api.setScale(scale); draw(); };
+  grip.addEventListener('pointerup', endResize);
+  grip.addEventListener('pointercancel', endResize);
+
+  document.getElementById('close').addEventListener('click', () => api && api.hide());
+  if (api) {
+    api.onState((l) => { items = Array.isArray(l) ? l : []; draw(); });
+    api.onSettings((s) => { scale = Number(s && s.scale) || 1; locked = !!(s && s.locked); draw(); });
+  }
+  setInterval(() => { if (!press && !rs) draw(); }, 1000);
+  draw();
+})();
+</script>
+</body>
+</html>
