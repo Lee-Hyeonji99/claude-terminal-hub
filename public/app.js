@@ -1768,7 +1768,20 @@ function addPane(cfg, placement) {
           if (m.type === 'pong') { missedPongs = 0; return; } // 하트비트 응답 → 살아있음
           if (m.type === 'changed') { onExternalChange(); return; }
           // 새 대화의 Claude 세션 ID — 레이아웃에 남겨 허브를 다시 켜면 이 대화로 이어간다.
-          if (m.type === 'session') { cfg.resumeId = m.id; saveLayoutDebounced(); return; }
+          // /clear 로 바뀐 세션이면(switched) 옛 대화 제목·기록을 걷어 낸다 — 새 제목은 제목 따라가기가 채운다.
+          if (m.type === 'session') {
+            const switched = m.switched && cfg.resumeId && cfg.resumeId !== m.id;
+            cfg.resumeId = m.id;
+            if (switched) {
+              cfg.title = undefined;
+              const ttl = pane.querySelector('.bar .ttl');
+              if (ttl) ttl.textContent = 'claude 새 대화';
+              if (paneObj._refreshLog) paneObj._refreshLog();
+              renderTabs();
+            }
+            saveLayoutDebounced();
+            return;
+          }
           if (m.type === 'artifact') { onArtifact(m.path); return; }
         } catch { /* 실제 출력 → write */ }
       }

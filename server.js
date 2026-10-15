@@ -20,6 +20,7 @@ const express = require('express');
 const { WebSocketServer } = require('ws');
 const petPack = require('./lib/pet-pack');
 const pastedImages = require('./lib/pasted-images');
+const claudeRegistry = require('./lib/claude-registry');
 let pty;
 try {
   pty = require('node-pty');
@@ -950,6 +951,72 @@ function buildClaudeCommand(msg, session) {
   return `claude --session-id ${session.resumeId}` + custom.slice(6);
 }
 
+// ---- /clear 따라가기 — 패널의 claude 가 지금 쓰는 세션 ID (lib/claude-registry.js) ----
+// /clear 하면 claude 가 새 세션 ID 로 바꾼다. 그걸 패널 레이아웃에 반영하지 않으면
+// 허브를 다시 켤 때 옛 대화가 --resume 된다.
+const TRACK_MS = 3000;
+const TREE_MIN_MS = 10000;   // 프로세스 트리 조회(PowerShell)는 이보다 자주 하지 않는다
+const TREE_MAX_TRIES = 6;    // 트리로 못 찾는 패널은 이만큼 해 보고 그만둔다(세션 ID 로는 계속 찾는다)
+let lastTreeAt = 0;
+let trackBusy = false;
+const registryWatchers = new Map();
+function sessionsDirFor(profile) {
+  return path.join(configDirFor(profile) || path.join(os.homedir(), '.claude'), 'sessions');
+}
+function watchRegistry(dir) {
+  if (registryWatchers.has(dir)) return;
+  registryWatchers.set(dir, null);
+  let t = null;
+  try {
+    const w = fs.watch(dir, () => { clearTimeout(t); t = setTimeout(trackSessions, 300); });
+    w.on('error', () => { /* 폴더가 사라지면 주기 확인만 한다 */ });
+    registryWatchers.set(dir, w);
+  } catch { /* 아직 폴더가 없다 — 주기 확인으로 */ }
+}
+function switchSessionId(session, id) {
+  session.resumeId = id;
+  stopWatch(session);
+  beginWatch(session, sessionFile(session.profile, session.cwd, id), false);
+  broadcastJson(session, { type: 'session', id, switched: true });
+}
+async function trackSessions() {
+  if (trackBusy) return;
+  trackBusy = true;
+  try {
+    const groups = new Map();
+    for (const s of ptyStore.values()) {
+      if (s.exited || !s.term || !s.claudeLaunched) continue;
+      const dir = sessionsDirFor(s.profile);
+      if (!groups.has(dir)) groups.set(dir, []);
+      groups.get(dir).push(s);
+    }
+    let tree = null;
+    for (const [dir, list] of groups) {
+      watchRegistry(dir);
+      const entries = claudeRegistry.readEntries(dir);
+      const view = () => list.map((s) => ({
+        key: s.key, shellPid: s.term.pid, cwd: s.cwd, resumeId: s.resumeId || '',
+        claudePid: s.claudePid || 0, noTree: (s.treeTries || 0) >= TREE_MAX_TRIES,
+      }));
+      let r = claudeRegistry.track(view(), entries, tree);
+      if (r.needTree && !tree && Date.now() - lastTreeAt >= TREE_MIN_MS) {
+        lastTreeAt = Date.now();
+        tree = await claudeRegistry.processTree();
+        if (tree) {
+          r = claudeRegistry.track(view(), entries, tree);
+          for (const s of list) if (!s.claudePid && !r.links.some((l) => l.key === s.key)) s.treeTries = (s.treeTries || 0) + 1;
+        }
+      }
+      const byKey = new Map(list.map((s) => [s.key, s]));
+      for (const l of r.links) { const s = byKey.get(l.key); if (s) s.claudePid = l.claudePid; }
+      for (const c of r.changes) { const s = byKey.get(c.key); if (s && !s.exited) switchSessionId(s, c.sessionId); }
+    }
+  } catch { /* 다음 주기에 */ } finally {
+    trackBusy = false;
+  }
+}
+setInterval(trackSessions, TRACK_MS).unref();
+
 // 세션이 끝났을 때(패널 X / 프로세스 exit) 붙잡고 있던 자원을 놓는다.
 // 같은 key 로 새 세션이 이미 들어와 있으면 그건 건드리지 않는다.
 function releaseSession(session) {
@@ -1010,6 +1077,8 @@ wss.on('connection', (ws) => {
         boundKey = key;
         existing.subs.add(ws);
         safeSend({ type: 'ready', pid: existing.term.pid, cwd: existing.cwd, reattached: true });
+        // 끊겨 있는 동안 /clear 로 세션이 바뀌었을 수 있다 — 지금 ID 를 알려 레이아웃에 남긴다
+        if (existing.resumeId) safeSend({ type: 'session', id: existing.resumeId });
         if (existing.buf) { try { ws.send(existing.buf); } catch {} } // 최근 화면 재생 → 재부착 클라이언트 상태 복원
         try { existing.term.resize(cols, rows); } catch {}
         return;
@@ -1034,6 +1103,8 @@ wss.on('connection', (ws) => {
       safeSend({ type: 'ready', pid: term.pid, cwd: session.cwd });
       // 살아 있던 tmux 세션에 붙은 것이면 claude 가 이미 그 안에서 돌고 있다 — 다시 치지 않는다.
       const cmd = term.tmuxReattached ? null : buildClaudeCommand(msg, session);
+      // claude 를 띄운(또는 살아 있는 tmux 안에서 돌던) 패널만 세션 ID 를 따라간다 — 맨 셸에서 직접 친 claude 는 제외
+      session.claudeLaunched = !!(cmd ? /^claude(\s|$)/.test(cmd) : (term.tmuxReattached && (msg.resumeId || msg.runClaude)));
       // 새 대화에 미리 정한 ID 를 클라이언트에 알려 레이아웃에 남긴다 → 허브를 다시 켜면 이 대화로 이어진다.
       if (session.freshId && !msg.resumeId) safeSend({ type: 'session', id: session.resumeId });
       // tmux 는 내부 로그인 셸이 뜨는 시간이 더 필요하다(400ms 면 입력이 삼켜짐).
