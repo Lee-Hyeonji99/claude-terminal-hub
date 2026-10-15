@@ -19,6 +19,7 @@ const { execFile, execFileSync } = require('child_process');
 const express = require('express');
 const { WebSocketServer } = require('ws');
 const petPack = require('./lib/pet-pack');
+const pastedImages = require('./lib/pasted-images');
 let pty;
 try {
   pty = require('node-pty');
@@ -176,6 +177,16 @@ app.post('/api/theme-assets', (req, res) => {
     res.json({ ok: true, file: safe });
   } catch (e) {
     res.status(500).json({ error: String((e && e.message) || e) });
+  }
+});
+
+// ---- 입력창에 붙여넣은 이미지 — 파일로 저장하고 경로를 돌려준다(Claude 가 경로로 읽는다) ----
+const PASTED_DIR = path.join(HUB_DATA_DIR, 'pasted');
+app.post('/api/paste-image', (req, res) => {
+  try {
+    res.json({ ok: true, path: pastedImages.savePasted(PASTED_DIR, (req.body || {}).dataUrl) });
+  } catch (e) {
+    res.status(400).json({ error: String((e && e.message) || e) });
   }
 });
 

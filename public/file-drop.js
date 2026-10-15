@@ -74,14 +74,23 @@
     markOver(p);
   });
   document.addEventListener('dragleave', (e) => { if (!e.relatedTarget) markOver(null); });
-  document.addEventListener('drop', (e) => {
+  document.addEventListener('drop', async (e) => {
     if (!hasFiles(e) || ownZone(e)) return;
     e.preventDefault();
     markOver(null);
     const p = paneOfElement(e.target);
     if (!p) return;
-    const { paths, count } = pathsOf(e);
+    let { paths, count } = pathsOf(e);
     if (!count) return;
+    // 경로가 없는 이미지(웹페이지에서 끈 그림, 브라우저 모드)는 붙여넣기처럼 파일로 저장해 그 경로를 쓴다
+    if (!paths.length && window.PasteImage) {
+      const images = Array.from(e.dataTransfer.files || []).filter((f) => /^image\//.test(f.type));
+      if (images.length) {
+        try { paths = await Promise.all(images.map((f) => window.PasteImage.save(f, { raw: true }))); }
+        catch (err) { toast((err && err.message) || '이미지를 넣지 못했어요'); return; }
+        count = paths.length;
+      }
+    }
     if (!paths.length) {
       // 앱인데 경로가 없으면 브라우저 다운로드 목록처럼 실제 파일이 아닌 곳에서 끈 것이다.
       toast(hub && hub.filePath ? '파일 경로를 알 수 없어요 — 탐색기에서 끌어다 놓아 주세요' : '파일 경로는 데스크톱 앱에서만 넣을 수 있어요');

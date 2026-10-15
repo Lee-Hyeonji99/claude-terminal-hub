@@ -1563,7 +1563,7 @@ function addPane(cfg, placement) {
         <button class="cbtn" data-act="esc" title="중단 (Esc)">Esc</button>
         <button class="cbtn" data-act="shifttab" title="모드 전환 (Shift+Tab)">모드</button>
         <button class="cbtn" data-act="clear" title="/clear 전송">/clear</button>
-        <button class="cbtn" data-act="image" title="이미지 파일 경로 추가">이미지</button>
+        <button class="cbtn" data-act="image" title="이미지 파일 경로 추가 — 클립보드 이미지는 입력창에 Ctrl+V">이미지</button>
         <button class="cbtn chatonly-btn" data-act="chatonly" title="터미널 접고 대화만 보기 / 되돌리기">대화만</button>
         <button class="cbtn deskonly" data-act="term" title="이 세션의 터미널 화면 펴기 / 접기">터미널</button>
         <span class="chint">터미널 단축키·붙여넣기는 그대로 사용 가능</span>
@@ -1855,6 +1855,8 @@ function addPane(cfg, placement) {
     };
     ta.addEventListener('focus', () => setActive(paneObj, false));
     ta.addEventListener('input', autoGrow);
+    // 클립보드 이미지(캡처 등) Ctrl+V → 파일로 저장하고 경로를 넣는다 (public/paste-image.js)
+    if (window.PasteImage) window.PasteImage.attach(ta, insertAtCursor);
     ta.addEventListener('keydown', (e) => {
       if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submit(); }
     });
