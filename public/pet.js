@@ -34,6 +34,17 @@
   };
   const current = () => list[Math.min(idx, list.length - 1)] || null;
 
+  // 말풍선(카드) 색 — 자동이면 윈도우 밝기 설정을 따른다. 모든 펫 공통.
+  const CARD_KEY = 'cth_pet_card';
+  const CARD_TONES = [['auto', '자동'], ['light', '밝게'], ['dark', '어둡게']];
+  function cardTone() { try { const v = localStorage.getItem(CARD_KEY); return v === 'light' || v === 'dark' ? v : 'auto'; } catch { return 'auto'; } }
+  function applyCardTone() {
+    const v = cardTone();
+    if (v === 'auto') document.documentElement.removeAttribute('data-card');
+    else document.documentElement.setAttribute('data-card', v);
+  }
+  applyCardTone();
+
   // 드롭다운처럼 — 사용자가 이 펫의 카드를 열면 다른 펫에 열려 있던 카드는 닫는다.
   // 펫 창들은 같은 주소라 localStorage 를 같이 쓰므로 storage 이벤트로 알린다(질문이 와서 저절로 열린 건 알리지 않음).
   const OPEN_KEY = 'cth_pet_open';
@@ -249,6 +260,14 @@
     }));
     box.append(choice('default', '기본 캐릭터', '프로젝트마다 색이 달라요', () => pickMode('default')));
     box.append(el('div', 'hint', '팁: 이미지 파일이나 펫 팩 폴더를 캐릭터 위에 끌어다 놓아도 바뀌어요.'));
+    box.append(el('div', 't', '말풍선 색 — 모든 펫'));
+    const tones = el('div', 'tones');
+    for (const [v, label] of CARD_TONES) {
+      const b = el('button', 'btn' + (cardTone() === v ? ' primary' : ''), label);
+      b.onclick = () => { try { localStorage.setItem(CARD_KEY, v); } catch { /* 저장 불가 */ } applyCardTone(); render(); };
+      tones.append(b);
+    }
+    box.append(tones);
     const foot = el('div', 'foot');
     foot.append(el('span', 'msg' + (msg.kind ? ' ' + msg.kind : ''), msg.text));
     const back = el('button', 'ib', list.length ? '질문으로' : '닫기');
@@ -455,6 +474,7 @@
   }
 
   function render() {
+    if (!open) view = 'questions';   // 접힌 카드는 다음에 열 때 처음 화면부터 — 알림이 와도 옛 설정 화면이 뜨지 않게
     if (idx >= list.length) idx = Math.max(0, list.length - 1);
     if (view === 'done' && !done.length) view = 'questions';
     const n = list.length + done.length;
@@ -540,6 +560,7 @@
   });
   // 허브에서 캐릭터 테마를 바꾸면(같은 주소라 localStorage 공유) 펫도 따라 바꾼다.
   window.addEventListener('storage', (e) => {
+    if (e.key === CARD_KEY) { applyCardTone(); return; }
     if (e.key === OPEN_KEY) {
       let who = null;
       try { who = JSON.parse(e.newValue || 'null'); } catch { /* 깨진 값 */ }
@@ -572,7 +593,7 @@
       freshDone.forEach((x) => seenDone.add(`${x.key}@${x.at}`));
       if (freshDone.length && !(open && view === 'questions' && current())) {
         open = true;
-        if (view !== 'settings') view = 'done';
+        if (!(open && view === 'settings')) view = 'done';   // 지금 설정을 보고 있을 때만 그대로 둔다
       }
       const next = d.questions;
       list = Array.isArray(next) ? next : [];

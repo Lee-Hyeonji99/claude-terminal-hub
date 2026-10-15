@@ -12,6 +12,12 @@
     :root{ --card:#ffffff; --line:#e1e4ea; --text:#1d2129; --muted:#68707f; --accent:#d9673a; --accent-ink:#fff;
       --opt:#f3f4f7; --opt-hover:#e8eaf0; }
   }
+  /* 펫 설정의 «말풍선 색» 이 자동이 아니면 윈도우 설정보다 우선한다 */
+  :root[data-card="light"]{ --card:#ffffff; --line:#e1e4ea; --text:#1d2129; --muted:#68707f; --accent:#d9673a; --accent-ink:#fff;
+    --opt:#f3f4f7; --opt-hover:#e8eaf0; }
+  :root[data-card="dark"]{ --card:#161a23; --line:#2a3040; --text:#e7e9ee; --muted:#9097a8; --accent:#e8875b; --accent-ink:#1a0f08;
+    --opt:#1e2330; --opt-hover:#272d3d; }
+  .tones{display:flex;gap:6px}
   html,body{margin:0;background:transparent;overflow:hidden;font:13px/1.45 'Pretendard','Segoe UI',system-ui,sans-serif;color:var(--text);user-select:none}
   /* 창은 «펫 + 카드» 크기 — 둘의 자리는 main(electron/pet-layout.js)이 정해 pet:layout 으로 알려준다.
      카드는 자리가 있는 쪽(위/아래·왼/오른)으로 펼쳐지고 펫은 제자리에 있다. */
