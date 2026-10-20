@@ -14,6 +14,7 @@ const path = require('path');
 const fs = require('fs');
 const { computeLayout, clampPet, PET_BOX } = require('./pet-layout');
 const { bringToFront } = require('./focus-main');
+const { keepOnTop } = require('./keep-on-top');
 
 const MAX_CARD = { w: 420, h: 640 };
 const SPACING = 12;
@@ -38,6 +39,7 @@ function initPet({ url, mainWin }) {
   delete st.anchor;
 
   const pets = new Map();   // projectId -> { id, win, card:{w,h}, data, sig, drag }
+  const anyCardOpen = () => [...pets.values()].some((p) => p.card);
   let projects = [];
 
   const persist = () => saveState(st);
@@ -82,8 +84,9 @@ function initPet({ url, mainWin }) {
       webPreferences: { contextIsolation: true, spellcheck: false, preload: path.join(__dirname, 'pet-preload.js') },
     });
     pet.win = win;
-    // 'screen-saver' 단계라야 다른 앱의 항상-위 창보다도 앞에 선다.
-    win.setAlwaysOnTop(true, 'screen-saver');
+    // 'screen-saver' 단계 + 주기적으로 다시 맨 위로(다른 앱의 항상-위 창에 가려지지 않게).
+    // 다른 펫이 카드를 펼쳐 둔 동안엔 그 카드 위로 올라가지 않는다.
+    keepOnTop(win, { canMove: () => !!pet.card || !anyCardOpen() });
     try { win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true }); } catch {}
     win.loadURL(`${url}/pet.html`);
     win.webContents.on('will-navigate', (e, to) => { if (!to.startsWith(url)) e.preventDefault(); });

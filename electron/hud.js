@@ -11,6 +11,7 @@ const { app, BrowserWindow, ipcMain, screen } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const { bringToFront } = require('./focus-main');
+const { keepOnTop } = require('./keep-on-top');
 
 const MARGIN = 16;
 const MIN = { w: 120, h: 40 }, MAX = { w: 900, h: 1100 };
@@ -45,7 +46,7 @@ function initHud({ url, mainWin }) {
       skipTaskbar: true, alwaysOnTop: true, show: false, title: 'Claude 작업 현황',
       webPreferences: { contextIsolation: true, spellcheck: false, preload: path.join(__dirname, 'hud-preload.js') },
     });
-    win.setAlwaysOnTop(true, 'floating');
+    keepOnTop(win);   // 다른 창 · 다른 앱의 항상-위 창에 가려지지 않게
     try { win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true }); } catch {}
     win.loadURL(`${url}/hud.html`);
     win.webContents.on('will-navigate', (e, to) => { if (!to.startsWith(url)) e.preventDefault(); });
