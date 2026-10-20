@@ -1,7 +1,7 @@
 'use strict';
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { groupProjects, summary, clock, sessionsOpen } = require('../public/hud-view.js');
+const { groupProjects, summary, clock, sessionsOpen, sessionToolText, subagentText } = require('../public/hud-view.js');
 
 const s = (o) => ({ key: o.key, title: o.key, project: o.project, projectKey: o.project, hue: 10, character: o.character || '', state: o.state, since: o.since || 0 });
 
@@ -48,4 +48,19 @@ test('세션 목록 펼침 — 기본은 작업 중만, showAll 이면 전부, �
   assert.equal(sessionsOpen(rest), false);
   assert.equal(sessionsOpen(rest, { showAll: true }), true);
   assert.equal(sessionsOpen(rest, { showAll: true, isFolded: (k) => k === 'q' }), false);
+});
+
+test('세션 도구 줄 — 서브에이전트가 돌면 개수, 아니면 지금 도구', () => {
+  const sub = (state) => ({ id: state, type: 'Explore', state });
+  assert.equal(sessionToolText({ state: 'work', tool: 'Agent', target: '찾기', subagents: [sub('work'), sub('work'), sub('done')] }), '에이전트 2개 실행 중');
+  assert.equal(sessionToolText({ state: 'work', tool: 'Edit', target: 'a.js', subagents: [sub('work')] }), 'Edit · a.js');
+  assert.equal(sessionToolText({ state: 'work', tool: 'Agent', target: '찾기', subagents: [sub('done')] }), 'Agent · 찾기');
+  assert.equal(sessionToolText({ state: 'idle', tool: 'Edit', subagents: [sub('work')] }), '');
+});
+
+test('서브에이전트 한 줄 — 종류 · 설명 / 도구, 끝나면 «완료»', () => {
+  assert.deepEqual(subagentText({ type: 'code-reviewer', desc: '변경 리뷰', state: 'work', tool: 'Read', target: 'a.js' }),
+    { type: 'code-reviewer', desc: '변경 리뷰', tool: 'Read · a.js' });
+  assert.deepEqual(subagentText({ type: 'planner', desc: '계획', state: 'done', tool: 'Read' }),
+    { type: 'planner', desc: '계획 · 완료', tool: '' });
 });

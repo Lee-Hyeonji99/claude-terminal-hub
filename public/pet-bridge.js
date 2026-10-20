@@ -55,6 +55,7 @@
       character: charTheme ? charTheme.name : '', profile: profileName(p.cfg.profile),
       state, since: p._hudSince, lastWorkAt,
       tool: state === 'work' && act ? act.tool : '', target: state === 'work' && act ? act.target : '',
+      subagents: p._subagents || [],   // 서버가 subagents 폴더에서 읽어 준다(lib/subagents.js)
     };
   }
 

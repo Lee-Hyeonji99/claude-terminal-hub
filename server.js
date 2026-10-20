@@ -22,6 +22,7 @@ const petPack = require('./lib/pet-pack');
 const pastedImages = require('./lib/pasted-images');
 const claudeRegistry = require('./lib/claude-registry');
 const activity = require('./lib/activity');
+const subagents = require('./lib/subagents');
 let pty;
 try {
   pty = require('node-pty');
@@ -885,10 +886,31 @@ function stopWatch(session) {
   const w = session.watch;
   if (w.file) { try { fs.unwatchFile(w.file); } catch {} w.file = null; }
   if (w.discoverIv) { clearInterval(w.discoverIv); w.discoverIv = null; }
+  if (w.subIv) { clearInterval(w.subIv); w.subIv = null; }
+  session.subagents = [];
+}
+// HUD 서브에이전트 — 세션 기록 옆 subagents 폴더를 주기적으로 훑어 바뀔 때만 보낸다
+const SUBAGENT_POLL_MS = 1500;
+function watchSubagents(session, jsonl) {
+  const w = session.watch;
+  if (w.subIv) clearInterval(w.subIv);
+  const cache = new Map();   // 파일이 그대로면 다시 읽지 않는다
+  let last = null;           // 처음 한 번은 꼭 보낸다(세션이 바뀌었거나 서버가 새로 떴을 때 옛 목록 지우기)
+  w.subIv = setInterval(() => {
+    try {
+      const list = subagents.scanSubagents(jsonl, { cache });
+      const json = JSON.stringify(list);
+      if (json === last) return;
+      last = json;
+      session.subagents = list;
+      broadcastJson(session, { type: 'subagents', list });
+    } catch { /* 파일 하나가 깨져도 다음 주기에 다시 */ }
+  }, SUBAGENT_POLL_MS);
 }
 function beginWatch(session, jsonl, isResume) {
   const w = session.watch;
   w.file = jsonl; w.isResume = isResume;
+  watchSubagents(session, jsonl);
   try { w.pos = fs.statSync(jsonl).size; } catch { w.pos = 0; }
   fs.watchFile(jsonl, { interval: 1200 }, (curr) => {
     if (curr.size <= w.pos) { w.pos = curr.size; return; }
@@ -1084,6 +1106,7 @@ wss.on('connection', (ws) => {
         // 끊겨 있는 동안 /clear 로 세션이 바뀌었을 수 있다 — 지금 ID 를 알려 레이아웃에 남긴다
         if (existing.resumeId) safeSend({ type: 'session', id: existing.resumeId });
         if (existing.activity) safeSend({ type: 'activity', ...existing.activity });
+        safeSend({ type: 'subagents', list: existing.subagents || [] });
         if (existing.buf) { try { ws.send(existing.buf); } catch {} } // 최근 화면 재생 → 재부착 클라이언트 상태 복원
         try { existing.term.resize(cols, rows); } catch {}
         return;
@@ -1095,7 +1118,7 @@ wss.on('connection', (ws) => {
       catch (err) { safeSend({ type: 'error', message: `PTY 생성 실패: ${err.message}` }); return; }
       const session = {
         key, term, cwd: cwd || os.homedir(), profile: msg.profile, resumeId: msg.resumeId,
-        buf: '', subs: new Set([ws]), exited: false, watch: { file: null, pos: 0, isResume: false, discoverIv: null },
+        buf: '', subs: new Set([ws]), exited: false, watch: { file: null, pos: 0, isResume: false, discoverIv: null, subIv: null },
       };
       ptyStore.set(key, session);
       boundKey = key;

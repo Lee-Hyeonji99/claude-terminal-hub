@@ -7,7 +7,8 @@
  * 표시는 두 가지만: 작업 중(금빛 테두리 · 도는 아이콘 · 몇 분째) / 질문 대기(보라 물음표).
  * 쉬는 중 · 완료는 아무 표시 없이 조금 흐리게.
  *
- * 세션 항목(pet-bridge.js): { key, title, project, projectKey, hue, character, profile, state: work|ask|done|idle, since, tool, target }
+ * 세션 항목(pet-bridge.js): { key, title, project, projectKey, hue, character, profile, state: work|ask|done|idle, since, tool, target, subagents }
+ * 서브에이전트(lib/subagents.js): { id, type, desc, state: work|done, tool, target, since } — 세션 밑에 한 단계 더 들여써서 보여준다.
  */
 (function (root) {
   const RANK = { work: 0, ask: 1, rest: 2 };
@@ -55,6 +56,23 @@
     return `프로젝트 ${wp}곳 · 세션 ${ws}개 작업 중`;
   }
 
+  const runningSubs = (s) => (s.subagents || []).filter((a) => a.state === 'work').length;
+  /** 세션 줄 아래 작은 글씨 — 서브에이전트가 돌면 «에이전트 N개 실행 중», 아니면 지금 도구 */
+  function sessionToolText(s) {
+    if (s.state !== 'work') return '';
+    const n = runningSubs(s);
+    if (n && (!s.tool || s.tool === 'Agent' || s.tool === 'Task')) return `에이전트 ${n}개 실행 중`;
+    return s.tool ? `${s.tool}${s.target ? ' · ' + s.target : ''}` : '';
+  }
+  /** 서브에이전트 한 줄의 글자 — 종류 · 설명 / 지금 도구 */
+  function subagentText(a) {
+    return {
+      type: a.type || 'agent',
+      desc: a.state === 'done' ? `${a.desc ? a.desc + ' · ' : ''}완료` : (a.desc || ''),
+      tool: a.state === 'work' && a.tool ? `${a.tool}${a.target ? ' · ' + a.target : ''}` : '',
+    };
+  }
+
   /** ▾ 접기 버튼을 둘지 — 작업 중인 프로젝트, showAll 이면 전부 */
   const canFold = (p, opts = {}) => p.state === 'work' || !!opts.showAll;
   /** 세션 목록을 펼칠지 — 접기 대상이고 사용자가 접어 두지 않았을 때 */
@@ -71,6 +89,7 @@
   const ICONS = {
     ask: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="11" fill="currentColor"/><path d="M9.3 9.2a2.8 2.8 0 0 1 5.4 1c0 1.9-2.7 2.4-2.7 4" stroke="#14101c" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" fill="none"/><circle cx="12" cy="17.6" r="1.35" fill="#14101c"/></svg>',
     spin: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-opacity=".25" stroke-width="3.5"/><path d="M12 3a9 9 0 0 1 9 9" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round"/></svg>',
+    check: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/></svg>',
     fold: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>',
   };
   function icon(name, cls, label) {
@@ -112,6 +131,26 @@
     }
     img._used = true;
     return img;
+  }
+
+  function subagentList(subs, now) {
+    const box = el('div', 'hud-subs');
+    for (const a of subs) {
+      const t = subagentText(a);
+      const row = el('div', `hud-sub is-${a.state}`);
+      const ic = el('span', 'hud-subic');
+      ic.append(a.state === 'work' ? icon('spin', 'hud-spin', '서브에이전트 실행 중') : icon('check', 'hud-check', '서브에이전트 완료'));
+      const text = el('span', 'hud-stext');
+      const head = el('span', 'hud-subhead');
+      head.append(el('b', 'hud-subtype', t.type));
+      if (t.desc) head.append(document.createTextNode(' ' + t.desc));
+      text.append(head);
+      if (t.tool) text.append(el('span', 'hud-stool', t.tool));
+      row.append(ic, text);
+      if (a.state === 'work') row.append(el('span', 'hud-subtimer', clock(now - (a.since || now))));
+      box.append(row);
+    }
+    return box;
   }
 
   /**
@@ -168,12 +207,13 @@
           // 제목 아래 줄에 지금 쓰는 도구 — 좁은 사이드바에서도 잘리지 않게 두 줄로
           const text = el('span', 'hud-stext');
           text.append(el('span', 'hud-stitle', s.title));
-          const tool = s.state === 'work' && s.tool ? `${s.tool}${s.target ? ' · ' + s.target : ''}` : '';
+          const tool = sessionToolText(s);
           if (tool) text.append(el('span', 'hud-stool', tool));
           b.append(ic, text);
           if (s.state === 'work') b.append(el('span', 'hud-stimer', clock(now - (s.since || now))));
           if (opts.onPickSession) b.addEventListener('click', () => opts.onPickSession(s.key));
           list.append(b);
+          if (s.subagents && s.subagents.length) list.append(subagentList(s.subagents, now));
         }
         wrap.append(list);
       }
@@ -183,7 +223,7 @@
     if (box._sprites) box._sprites.forEach((img, k) => { if (!img._used) box._sprites.delete(k); });
   }
 
-  const api = { renderList, summary, groupProjects, clock, sessionsOpen };
+  const api = { renderList, summary, groupProjects, clock, sessionsOpen, sessionToolText, subagentText };
   if (typeof module === 'object' && module.exports) module.exports = api;
   else root.HudView = api;
 })(typeof window !== 'undefined' ? window : globalThis);

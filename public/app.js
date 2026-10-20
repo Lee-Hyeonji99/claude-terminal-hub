@@ -1755,6 +1755,7 @@ function addPane(cfg, placement) {
           const m = JSON.parse(ev.data);
           if (m.type === 'ready') {
             pane.classList.remove('exited'); pane.classList.add('running');
+            paneObj._subagents = [];   // 재부착이면 서버가 곧 지금 목록을 다시 보낸다
             // 재부착이면 곧 서버가 최근 출력 버퍼를 재생 → 중복 방지 위해 화면 비우고 받는다
             if (m.reattached) { try { term.reset(); } catch {} }
             // claude 등 TUI 기동 후 한 번 더 크기 동기화 (입력줄 정렬)
@@ -1763,6 +1764,7 @@ function addPane(cfg, placement) {
           }
           if (m.type === 'exit') {
             pane.classList.remove('running'); pane.classList.add('exited');
+            paneObj._subagents = [];
             term.write(`\r\n\x1b[90m[프로세스 종료됨 (code ${m.code})]\x1b[0m\r\n`); return;
           }
           if (m.type === 'error') { term.write(`\r\n\x1b[31m${m.message}\x1b[0m\r\n`); return; }
@@ -1786,6 +1788,7 @@ function addPane(cfg, placement) {
           if (m.type === 'artifact') { onArtifact(m.path); return; }
           // HUD — 지금 쓰는 도구 (public/hud-status.js 가 읽는다)
           if (m.type === 'activity') { paneObj._activity = { tool: m.tool || '', target: m.target || '', at: m.at || Date.now() }; return; }
+          if (m.type === 'subagents') { paneObj._subagents = Array.isArray(m.list) ? m.list : []; return; }
         } catch { /* 실제 출력 → write */ }
       }
       term.write(typeof ev.data === 'string' ? ev.data : new Uint8Array(ev.data));

@@ -6,7 +6,7 @@
   --hud-text: var(--text, #e7e9ee);
   --hud-muted: var(--muted, #8f98ad);
   --hud-accent: var(--accent, #7aa2ff);
-  --hud-work: #f0b44c; --hud-ask: #c58bff;
+  --hud-work: #f0b44c; --hud-ask: #c58bff; --hud-sub: #9cc0ff; --hud-done: #9be3a8;
   font: 12px/1.4 var(--ui-font, 'Pretendard', 'Segoe UI', system-ui, sans-serif);
   color: var(--hud-text); background: var(--hud-bg);
   border: 1px solid var(--hud-line); border-radius: 12px; overflow: hidden; user-select: none;
@@ -50,6 +50,17 @@
 .hud-stitle{font-size:11.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--hud-muted)}
 .hud-s.is-work .hud-stitle{color:var(--hud-text)}
 .hud-stool{font-size:10.5px;color:var(--hud-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* 서브에이전트 — 세션 밑 한 단계 더 들여쓴 트리. 작업 중(금색)과 구분되게 파란색 */
+.hud-subs{display:flex;flex-direction:column;gap:1px;margin:0 0 2px 12px;padding-left:8px;border-left:1px solid color-mix(in srgb, var(--hud-text) 30%, transparent)}
+.hud-sub{display:flex;align-items:flex-start;gap:6px;padding:2px 6px;font-size:11px}
+.hud-sub.is-done{opacity:.7}
+.hud-subic{width:10px;height:10px;flex:none;margin-top:3px;display:grid;place-items:center}
+.hud-subic .hud-spin{width:10px;height:10px;color:var(--hud-sub)}
+.hud-check{width:10px;height:10px;color:var(--hud-done)}
+.hud-check svg{width:100%;height:100%;display:block}
+.hud-subhead{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--hud-muted)}
+.hud-subtype{color:color-mix(in srgb, var(--hud-sub) 70%, var(--hud-text))}
+.hud-subtimer{flex:none;font:700 10.5px/1 var(--mono-font, 'JetBrains Mono', Consolas, monospace);font-variant-numeric:tabular-nums;color:var(--hud-sub);margin-top:3px}
 .hud-stimer{flex:none;font:700 11px/1 var(--mono-font, 'JetBrains Mono', Consolas, monospace);font-variant-numeric:tabular-nums;color:var(--hud-work)}
 
 @keyframes hudglow{0%,100%{filter:drop-shadow(0 0 2px var(--hud-work)) drop-shadow(0 0 6px color-mix(in srgb, var(--hud-work) 55%, transparent))}50%{filter:drop-shadow(0 0 1px var(--hud-work)) drop-shadow(0 0 2px color-mix(in srgb, var(--hud-work) 25%, transparent))}}
