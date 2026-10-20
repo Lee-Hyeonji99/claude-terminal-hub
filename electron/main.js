@@ -13,6 +13,7 @@ const { spawn } = require('child_process');
 const { autoUpdater } = require('electron-updater');
 const { initPet } = require('./pet');
 const { initHud } = require('./hud');
+const { bringToFront } = require('./focus-main');
 
 // 작업표시줄(Windows)/Dock(macOS)/Alt-Tab이 패키징 안 된 electron 자체 정체성("Electron")으로
 // 뜨는 걸 막기 위해 앱 고유 이름/AppUserModelID를 지정
@@ -240,10 +241,31 @@ function initAutoUpdate(win) {
   autoUpdater.checkForUpdates().catch(() => {});
 }
 
+// 한 번만 실행 — 두 번째 실행은 떠 있는 허브 창을 앞으로 올리고 끝난다.
+// (여러 개가 뜨면 뒤에 뜬 앱은 레이아웃 저장소를 열지 못해 빈 화면으로 시작한다)
+const gotLock = app.requestSingleInstanceLock();
+if (!gotLock) app.quit();
+let mainWin = null;
+app.on('second-instance', () => {
+  if (!mainWin || mainWin.isDestroyed()) return;
+  if (mainWin.isMinimized()) mainWin.restore();
+  mainWin.show();
+  bringToFront(mainWin);
+});
+
 app.whenReady().then(async () => {
+  if (!gotLock) return;
   Menu.setApplicationMenu(null); // Ctrl+W/T/N 등 기본 accelerator 제거 → 키가 터미널로 전달
   const ok = await ensureServer();
   const win = createWindow(ok);
+  mainWin = win;
+  // 허브 창을 닫으면 앱 종료 — 펫 · HUD 창이 남아 있어도(전엔 그 창들 때문에 앱이 창 없이 남았다)
+  win.on('closed', () => { mainWin = null; app.quit(); });
+  // 화면이 죽으면(크래시 · 메모리) 다시 불러온다 — 세션은 서버에 살아 있어 그대로 다시 붙는다
+  win.webContents.on('render-process-gone', (_e, d) => {
+    if (d && d.reason === 'clean-exit') return;
+    setTimeout(() => { if (!win.isDestroyed()) win.reload(); }, 1000);
+  });
   initAutoUpdate(win);
   if (ok) initPet({ url: URL, mainWin: win }); // 바탕화면 펫 (질문 카드)
   if (ok) initHud({ url: URL, mainWin: win }); // 바탕화면 작업 현황 HUD (기본 꺼짐)
