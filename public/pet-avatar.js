@@ -17,6 +17,8 @@
   const KEY_FILE = 'cth_pet_image';
   const KEY_VER = 'cth_pet_ver';
   const KEY_PACK = 'cth_pet_pack';               // 모든 펫에 쓸 팩 id
+  // 작업실의 서브에이전트 꼬마 — 'auto'(이름이 mob 으로 시작하는 가져온 팩들) · 팩 id 하나 · 'parent'(부모 펫을 작게)
+  const KEY_MINION = 'cth_pet_minion';
   // 펫마다(프로젝트마다) 따로 — 표시 방식 · 내 이미지 · 팩. 없으면 위의 전체 값(옛 설정)을 따른다.
   const projectPackKey = (pid) => `cth_pet_pack@${pid}`;
   const projectModeKey = (pid) => `cth_pet_mode@${pid}`;
@@ -152,6 +154,15 @@
       keys.forEach(del);
     } catch { /* 저장 불가 환경 */ }
   }
+  /** 꼬마에 쓸 팩들 [{ id, name, actions:{동작:url} }] — 비면 부모 펫을 작게 그린다 */
+  function minionSetting() { return get(KEY_MINION) || 'auto'; }
+  function minionPacks() {
+    const s = minionSetting();
+    if (s === 'parent') return [];
+    const list = s === 'auto' ? packs.filter((p) => !p.themed && /^mob/i.test(p.id)) : [packById(s)].filter(Boolean);
+    return list.map((p) => ({ id: p.id, name: p.name, actions: packUrls(p) }));
+  }
+
   // 이 프로젝트 지정 해제 — 전체 설정을 따른다
   function clearProjectPack(projectId) { if (projectId) del(projectPackKey(projectId)); }
 
@@ -161,6 +172,8 @@
     themeDir: () => themeDir,
     projectPack: (pid) => (pid ? get(projectPackKey(pid)) || '' : ''),
     globalPack: () => get(KEY_PACK) || '',
+    minionSetting, minionPacks,
+    setMinion: (v) => set(KEY_MINION, String(v || 'auto')),
     setMode: (m, projectId) => { if (MODES.includes(m)) set(projectId ? projectModeKey(projectId) : KEY_MODE, m); },
     hasCustom: (projectId) => { const f = customFile(projectId); return !!(f && files.includes(f)); },
     isImage: (file) => !!(file && IMG_RE.test(file.name || '')),

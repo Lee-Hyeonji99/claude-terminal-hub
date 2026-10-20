@@ -234,9 +234,26 @@
     box.append(acts);
   }
 
+  // 작업실 서브에이전트 꼬마 — 자동(mob 팩들) · 부모 펫 작게 · 가져온 팩 하나
+  function renderMinionSection(box) {
+    box.append(el('div', 't', '작업실 꼬마 — 서브에이전트일 때'));
+    const cur = Avatar.minionSetting();
+    const row = el('div', 'row');
+    const choice = (value, label, title) => {
+      const b = el('button', 'btn' + (cur === value ? ' primary' : ''), label);
+      if (title) b.title = title;
+      b.onclick = () => { Avatar.setMinion(value); render(); };
+      row.append(b);
+    };
+    choice('auto', '자동', '이름이 mob 으로 시작하는 가져온 팩들을 번갈아 써요');
+    choice('parent', '부모 펫 작게');
+    for (const p of Avatar.packs()) if (!p.themed) choice(p.id, p.name);
+    box.append(row);
+  }
+
   function renderSettings() {
     const box = el('div', 'set');
-    if (Avatar) renderPackSection(box);
+    if (Avatar) { renderPackSection(box); renderMinionSection(box); }
     box.append(el('div', 't', '캐릭터 표시 방식 — 이 펫만'));
     const pid = project && project.id;
     const m = Avatar ? Avatar.mode(pid) : 'default';

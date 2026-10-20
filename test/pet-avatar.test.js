@@ -11,6 +11,7 @@ async function avatar(saved = {}) {
     id: `theme:${key}`, themed: true, theme: key, name: key, actions: { idle: 'idle.webp', walk: 'walk.webp' },
   }));
   packs.push({ id: 'mine', name: '내 팩', actions: { idle: 'custom.gif' } });
+  packs.push({ id: 'mob-gray', name: 'mob-gray', actions: { walk: 'walk.webp' } }, { id: 'mob-pajama', name: 'mob-pajama', actions: { walk: 'walk.webp' } });
   const ctx = vm.createContext({
     window: {},
     localStorage: {
@@ -92,4 +93,17 @@ test('한 펫에 넣은 팩은 그 펫에만, «모든 펫» 은 펫마다 고�
   assert.equal(a.resolve('/c', 'usagi').pack.id, 'theme:usagi');
   a.usePack('mine', 'all');
   for (const pid of ['/a', '/b', '/c']) assert.equal(a.resolve(pid, 'usagi').pack.id, 'mine');
+});
+
+test('서브에이전트 꼬마 팩 — 기본은 mob 팩들, 하나만 고르기, 부모 펫 작게', async () => {
+  const a = await avatar();
+  assert.equal(a.minionSetting(), 'auto');
+  assert.equal(a.minionPacks().map((p) => p.id).join(), 'mob-gray,mob-pajama');
+  assert.equal(a.minionPacks()[0].actions.walk, '/pet-packs/mob-gray/walk.webp');
+  a.setMinion('mine');
+  assert.equal(a.minionPacks().map((p) => p.id).join(), 'mine');
+  a.setMinion('parent');
+  assert.equal(a.minionPacks().length, 0);
+  a.setMinion('없는팩');
+  assert.equal(a.minionPacks().length, 0);
 });
