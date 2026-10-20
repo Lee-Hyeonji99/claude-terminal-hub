@@ -41,7 +41,20 @@
 
   /* ---------- HUD — 세션마다 상태 · 그 상태가 된 때 · 마지막 작업 때 · 지금 도구 ---------- */
   // 상태가 바뀐 때를 패널 객체에 남긴다(_hudState/_hudSince). 일하는 동안은 마지막 작업 때를 계속 갱신.
-  function hudItemOf(p, state, proj) {
+  // 작업실 질문 서류 — 권한 승인(도장 서류)인지 일반 질문인지, 질문과 선택지 몇 개
+  const PERMISSION_RE = /do you want to (proceed|make|create|run|allow|edit|write|delete|fetch)|don't ask again|허용/i;
+  function questionOf(prompt) {
+    if (!prompt) return null;
+    const labels = (prompt.options || []).map((o) => (o.isText ? '직접 입력' : o.label));
+    const permission = PERMISSION_RE.test(prompt.question || '') || labels.some((l) => PERMISSION_RE.test(l));
+    return {
+      kind: permission ? 'permission' : 'question',
+      text: String(prompt.question || prompt.body || '').slice(0, 140),
+      options: labels.slice(0, 4).map((l) => String(l).slice(0, 40)),
+    };
+  }
+
+  function hudItemOf(p, state, proj, prompt) {
     const now = Date.now();
     if (p._hudState !== state) { p._hudState = state; p._hudSince = now; }
     if (state === 'work') p._lastWorkAt = now;
@@ -56,6 +69,8 @@
       state, since: p._hudSince, lastWorkAt,
       tool: state === 'work' && act ? act.tool : '', target: state === 'work' && act ? act.target : '',
       subagents: p._subagents || [],   // 서버가 subagents 폴더에서 읽어 준다(lib/subagents.js)
+      question: state === 'ask' ? questionOf(prompt) : null,   // 작업실 질문 줄
+      doneAt: p._doneAt || 0,                                   // 작업실 결재함
     };
   }
 
@@ -78,7 +93,7 @@
       // 펫을 누르면 뜨는 세션 목록 — 고르면 허브에서 그 세션으로 간다
       const state = prompt ? 'ask' : working ? 'work' : p._doneAt ? 'done' : 'idle';
       proj.sessions.push({ ...base, state });
-      hud.push(hudItemOf(p, state, proj));
+      hud.push(hudItemOf(p, state, proj, prompt));
       if (prompt) {
         proj.questions.push({ ...base, sig: PA.signature(prompt), cwd: proj.name, prompt });
         pending++;

@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>Claude 작업실</title>
+<link rel="stylesheet" href="/room.css">
+</head>
+<body>
+<div id="stage">
+  <img class="abs" src="/room-assets/room-wall.png" alt="" style="left:0;top:0;width:1120px;height:300px">
+  <img class="abs" src="/room-assets/room-floor.png" alt="" style="left:0;top:300px;width:1120px;height:340px">
+  <div id="sky"></div>
+  <img class="abs" src="/room-assets/window-frame.png" alt="" style="left:170px;top:50px;width:200px;height:150px">
+  <img class="abs" id="door" src="/room-assets/door-closed.png" alt="" style="left:-6px;top:132px;width:100px;height:170px">
+  <img class="abs" src="/room-assets/whiteboard.png" alt="" style="left:430px;top:44px;width:260px;height:140px">
+  <div id="board"></div>
+  <div id="lampGlow" hidden></div>
+  <img class="abs" id="lamp" src="/room-assets/lamp-off.png" alt="" style="left:870px;top:184px;width:60px;height:120px">
+  <img class="abs" src="/room-assets/sofa.png" alt="" style="left:660px;top:250px;width:180px;height:90px">
+  <img class="abs" src="/room-assets/my-desk.png" alt="" style="left:896px;top:384px;width:210px;height:200px">
+  <div class="abs" style="left:966px;top:405px;width:70px;text-align:center;font-weight:800;font-size:12px;color:#3a2a1c">나</div>
+  <div id="inbox" class="abs click" title="결재함 — 끝난 일" style="left:1020px;top:336px;width:80px;height:52px">
+    <img class="abs" src="/room-assets/inbox-tray.png" alt="" style="left:0;top:12px;width:70px;height:40px">
+    <div id="inboxPapers"></div>
+    <div id="inboxBadge" class="badge" style="left:58px;top:0" hidden></div>
+  </div>
+  <div id="dyn"></div>
+  <div id="tint"></div>
+  <div id="empty" class="o" hidden>열린 Claude 세션이 없어요</div>
+</div>
+<div id="tools">
+  <button type="button" id="pin" title="항상 위에 두기">항상 위</button>
+  <button type="button" id="close" title="작업실 닫기 — 허브 헤더의 HUD 버튼으로 다시 켜요" aria-label="작업실 닫기">✕</button>
+</div>
+<script src="/themes.js"></script>
+<script src="/pet-avatar.js"></script>
+<script src="/hud-view.js"></script>
+<script src="/room-view.js"></script>
+<script src="/room.js"></script>
+</body>
+</html>

@@ -14,6 +14,7 @@ const { autoUpdater } = require('electron-updater');
 const { initPet } = require('./pet');
 const { initHud } = require('./hud');
 const { bringToFront } = require('./focus-main');
+const { initRoom } = require('./room');
 
 // 작업표시줄(Windows)/Dock(macOS)/Alt-Tab이 패키징 안 된 electron 자체 정체성("Electron")으로
 // 뜨는 걸 막기 위해 앱 고유 이름/AppUserModelID를 지정
@@ -269,6 +270,7 @@ app.whenReady().then(async () => {
   initAutoUpdate(win);
   if (ok) initPet({ url: URL, mainWin: win }); // 바탕화면 펫 (질문 카드)
   if (ok) initHud({ url: URL, mainWin: win }); // 바탕화면 작업 현황 HUD (기본 꺼짐)
+  if (ok) initRoom({ url: URL, mainWin: win }); // 작업실 창 — 펫들이 일하는 방 (기본 꺼짐)
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow(true);

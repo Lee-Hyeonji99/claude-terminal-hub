@@ -27,4 +27,8 @@ contextBridge.exposeInMainWorld('claudeHub', {
   hudSetVisible: (v) => ipcRenderer.send('hud:set-visible', !!v),
   hudVisible: () => ipcRenderer.invoke('hud:visible'),
   onHudVisible: (cb) => ipcRenderer.on('hud:visible', (_e, v) => cb(v)),
+  // 작업실 창 (electron/room.js) — 켜기/끄기. 데이터는 hudState 를 같이 쓴다
+  roomSetVisible: (v) => ipcRenderer.send('room:set-visible', !!v),
+  roomVisible: () => ipcRenderer.invoke('room:visible'),
+  onRoomVisible: (cb) => ipcRenderer.on('room:visible', (_e, v) => cb(v)),
 });

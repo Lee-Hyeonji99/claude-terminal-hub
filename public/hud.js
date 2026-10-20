@@ -70,6 +70,17 @@
     if (hub.onHudVisible) hub.onHudVisible((v) => mark(deskRow, v));
     deskRow.addEventListener('click', (e) => { const b = e.target.closest('button'); if (b) hub.hudSetVisible(b.dataset.v === 'on'); });
   }
+  // 작업실 창 켜기/끄기 (Electron 앱에서만)
+  const roomRow = document.getElementById('hudRoomRow');
+  const roomSep = document.getElementById('hudRoomSep');
+  const hasRoom = !!(hub && hub.roomSetVisible);
+  if (roomRow) roomRow.hidden = !hasRoom;
+  if (roomSep) roomSep.hidden = !hasRoom;
+  if (hasRoom) {
+    if (hub.roomVisible) hub.roomVisible().then((v) => mark(roomRow, v)).catch(() => {});
+    if (hub.onRoomVisible) hub.onRoomVisible((v) => mark(roomRow, v));
+    roomRow.addEventListener('click', (e) => { const b = e.target.closest('button'); if (b) hub.roomSetVisible(b.dataset.v === 'on'); });
+  }
   // 캐릭터 이미지 목록 — 펫 설정이나 캐릭터 테마가 바뀌면 다시 읽는다
   const Avatar = window.PetAvatar;
   if (Avatar) {
