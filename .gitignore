@@ -17,3 +17,5 @@ dist/
 *.png
 !electron/*.png
 !build/*.png
+# 작업실 게임용 원본 배경·가구·소품 (개발 스크린샷 제외)
+!public/room-assets/*.png
