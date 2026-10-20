@@ -72,6 +72,7 @@
   try { folded = JSON.parse(localStorage.getItem('cth_hud_desk_folded') || '{}') || {}; } catch { folded = {}; }
 
   const opts = {
+    showAll: true,   // 바탕화면 HUD 는 쉬는 프로젝트까지 열린 세션을 전부 보여준다
     isFolded: (k) => !!folded[k],
     onToggle: (k) => {
       const { [k]: was, ...rest } = folded;

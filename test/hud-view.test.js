@@ -1,7 +1,7 @@
 'use strict';
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { groupProjects, summary, clock } = require('../public/hud-view.js');
+const { groupProjects, summary, clock, sessionsOpen } = require('../public/hud-view.js');
 
 const s = (o) => ({ key: o.key, title: o.key, project: o.project, projectKey: o.project, hue: 10, character: o.character || '', state: o.state, since: o.since || 0 });
 
@@ -40,4 +40,12 @@ test('요약 한 줄', () => {
     '프로젝트 1곳 · 세션 2개 작업 중');
   assert.equal(summary([s({ key: 'c', project: 'q', state: 'ask' })]), '질문 1곳 기다리는 중');
   assert.equal(summary([s({ key: 'd', project: 'r', state: 'idle' })]), '모두 쉬는 중');
+});
+
+test('세션 목록 펼침 — 기본은 작업 중만, showAll 이면 전부, 접어 둔 건 접힘', () => {
+  const [work, rest] = groupProjects([s({ key: 'a', project: 'p', state: 'work' }), s({ key: 'b', project: 'q', state: 'idle' })]);
+  assert.equal(sessionsOpen(work), true);
+  assert.equal(sessionsOpen(rest), false);
+  assert.equal(sessionsOpen(rest, { showAll: true }), true);
+  assert.equal(sessionsOpen(rest, { showAll: true, isFolded: (k) => k === 'q' }), false);
 });

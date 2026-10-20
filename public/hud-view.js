@@ -3,6 +3,7 @@
  * 작업 현황 HUD 그리기 — 허브 안(사이드바 위, public/hud.js)과 바탕화면 창(public/hud.html)이 같이 쓴다.
  *
  * 한 줄 = 프로젝트(탭) 하나. 작업 중인 프로젝트만 ▾ 로 안의 세션 목록을 펼친다(들여쓰기).
+ * showAll(바탕화면 HUD)이면 쉬는 프로젝트도 펼쳐 열린 세션을 전부 보여준다.
  * 표시는 두 가지만: 작업 중(금빛 테두리 · 도는 아이콘 · 몇 분째) / 질문 대기(보라 물음표).
  * 쉬는 중 · 완료는 아무 표시 없이 조금 흐리게.
  *
@@ -53,6 +54,11 @@
     if (!wp) return asking ? `질문 ${asking}곳 기다리는 중` : '모두 쉬는 중';
     return `프로젝트 ${wp}곳 · 세션 ${ws}개 작업 중`;
   }
+
+  /** ▾ 접기 버튼을 둘지 — 작업 중인 프로젝트, showAll 이면 전부 */
+  const canFold = (p, opts = {}) => p.state === 'work' || !!opts.showAll;
+  /** 세션 목록을 펼칠지 — 접기 대상이고 사용자가 접어 두지 않았을 때 */
+  const sessionsOpen = (p, opts = {}) => canFold(p, opts) && !(opts.isFolded && opts.isFolded(p.key));
 
   // ---- DOM ----
   const el = (tag, cls, text) => {
@@ -110,7 +116,7 @@
 
   /**
    * @param box 그릴 자리(.hud-list)
-   * @param opts { isFolded(projectKey), onToggle(projectKey), onPickSession(sessionKey), onPickProject(project) }
+   * @param opts { showAll, isFolded(projectKey), onToggle(projectKey), onPickSession(sessionKey), onPickProject(project) }
    */
   function renderList(box, items, opts = {}, now = Date.now()) {
     box.textContent = '';
@@ -135,9 +141,10 @@
       if (opts.onPickProject) open.addEventListener('click', () => opts.onPickProject(p));
       row.append(open);
 
-      const folded = p.state === 'work' && opts.isFolded ? !!opts.isFolded(p.key) : false;
-      if (p.state === 'work') {
-        row.append(el('span', 'hud-timer', clock(now - p.since)));
+      const expanded = sessionsOpen(p, opts);
+      if (p.state === 'work') row.append(el('span', 'hud-timer', clock(now - p.since)));
+      if (canFold(p, opts)) {
+        const folded = !expanded;
         const fold = el('button', 'hud-fold' + (folded ? ' folded' : ''));
         fold.type = 'button';
         fold.innerHTML = ICONS.fold;
@@ -149,7 +156,7 @@
       }
       wrap.append(row);
 
-      if (p.state === 'work' && !folded) {
+      if (expanded) {
         const list = el('div', 'hud-sess');
         for (const s of p.sessions) {
           const b = el('button', `hud-s is-${s.state}`);
@@ -176,7 +183,7 @@
     if (box._sprites) box._sprites.forEach((img, k) => { if (!img._used) box._sprites.delete(k); });
   }
 
-  const api = { renderList, summary, groupProjects, clock };
+  const api = { renderList, summary, groupProjects, clock, sessionsOpen };
   if (typeof module === 'object' && module.exports) module.exports = api;
   else root.HudView = api;
 })(typeof window !== 'undefined' ? window : globalThis);
