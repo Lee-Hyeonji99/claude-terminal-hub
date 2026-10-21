@@ -57,6 +57,8 @@
   }
 
   const runningSubs = (s) => (s.subagents || []).filter((a) => a.state === 'work').length;
+  /** 서브에이전트가 하나라도 돌면 그 세션은 일하는 중 — 백그라운드 에이전트를 기다리는 동안 부모 화면은 조용하다 */
+  const hasRunningSubagents = (subs) => (subs || []).some((a) => a && a.state === 'work');
   /** 세션 줄 아래 작은 글씨 — 서브에이전트가 돌면 «에이전트 N개 실행 중», 아니면 지금 도구 */
   function sessionToolText(s) {
     if (s.state !== 'work') return '';
@@ -223,7 +225,7 @@
     if (box._sprites) box._sprites.forEach((img, k) => { if (!img._used) box._sprites.delete(k); });
   }
 
-  const api = { renderList, summary, groupProjects, clock, sessionsOpen, sessionToolText, subagentText };
+  const api = { renderList, summary, groupProjects, clock, sessionsOpen, sessionToolText, subagentText, hasRunningSubagents };
   if (typeof module === 'object' && module.exports) module.exports = api;
   else root.HudView = api;
 })(typeof window !== 'undefined' ? window : globalThis);

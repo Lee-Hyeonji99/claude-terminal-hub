@@ -1,7 +1,7 @@
 'use strict';
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { groupProjects, summary, clock, sessionsOpen, sessionToolText, subagentText } = require('../public/hud-view.js');
+const { groupProjects, summary, clock, sessionsOpen, sessionToolText, subagentText, hasRunningSubagents } = require('../public/hud-view.js');
 
 const s = (o) => ({ key: o.key, title: o.key, project: o.project, projectKey: o.project, hue: 10, character: o.character || '', state: o.state, since: o.since || 0 });
 
@@ -63,4 +63,10 @@ test('서브에이전트 한 줄 — 종류 · 설명 / 도구, 끝나면 «완�
     { type: 'code-reviewer', desc: '변경 리뷰', tool: 'Read · a.js' });
   assert.deepEqual(subagentText({ type: 'planner', desc: '계획', state: 'done', tool: 'Read' }),
     { type: 'planner', desc: '계획 · 완료', tool: '' });
+});
+
+test('서브에이전트가 돌고 있으면 그 세션은 일하는 중 — 부모 화면이 조용해도', () => {
+  assert.equal(hasRunningSubagents([{ state: 'work' }, { state: 'done' }]), true);
+  assert.equal(hasRunningSubagents([{ state: 'done' }]), false);
+  assert.equal(hasRunningSubagents(undefined), false);
 });

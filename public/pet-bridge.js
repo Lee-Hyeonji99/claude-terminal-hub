@@ -80,7 +80,9 @@
     let pending = 0;
     for (const p of termPanes()) {
       const prompt = PA.promptOf(p);
-      const working = !prompt && PA.isWorking(p);
+      // 화면이 «esc to interrupt» 를 보이거나, 서브에이전트가 아직 돌고 있으면 일하는 중
+      const subsBusy = !!(window.HudView && window.HudView.hasRunningSubagents(p._subagents));
+      const working = !prompt && (PA.isWorking(p) || subsBusy);
       trackWorking(p, working, !!prompt);
       const id = PK.projectId(p.cfg.cwd);
       if (!projects.has(id)) {
