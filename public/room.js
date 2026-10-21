@@ -3,16 +3,17 @@
  * 작업실 그리기 — 자리 배치는 public/room-view.js, 데이터는 허브(pet-bridge.js)가 main 을 거쳐 준다.
  * 배치가 바뀔 때만 캐릭터 층을 다시 만들고(움직이는 이미지가 처음부터 다시 돌지 않게),
  * 시계 · 하늘 · 타이머는 1초마다 글자와 위치만 바꾼다. 사용자 문자열은 textContent 로만 넣는다.
+ * 캐릭터(data-mover)는 자리가 바뀌면 걸어서 옮겨 간다 — 새로 생기면 문으로 들어오고, 사라지면 문으로 나간다.
  */
 (function () {
   const api = window.roomApi;
   const RV = window.RoomView;
   const HV = window.HudView;
   const Avatar = window.PetAvatar;
-  const BASE_W = 1120;
+  const BASE_W = RV.STAGE.w;
   const A = (f) => `/room-assets/${f}`;
   const $ = (id) => document.getElementById(id);
-  const stage = $('stage'), dyn = $('dyn');
+  const stage = $('stage'), dyn = $('dyn'), ghosts = $('ghosts');
 
   let items = [];
   let lastSig = '';
@@ -72,7 +73,7 @@
   function drawDesk(d, root) {
     const pet = el('div', 'type abs');
     pet.append(sprite(d, ['idle'], 104, 'glow'));
-    root.append(onPick(at(pet, d.x + 8, d.y - 90), d.sessionKey));
+    root.append(mover(onPick(at(pet, d.x + 8, d.y - 90), d.sessionKey), `p:${d.projectKey}`, d.projectKey));
     root.append(at(img(A('work-desk.png'), 'width:200px;height:110px', 'abs'), d.x, d.y));
     root.append(at(img(A('paper-stack-2.png'), 'width:36px;height:40px', 'abs'), d.x + 6, d.y - 38));
     root.append(at(img(A('monitor-on.png'), 'width:100px;height:70px', 'abs'), d.x + 98, d.y - 68));
@@ -93,16 +94,22 @@
       const tag = el('span', 'tag o', m.type);
       if (m.state === 'work') { const t = el('span', 'mono t-since'); t.dataset.since = String(m.since || 0); tag.append(' ', t); }
       w.append(tag);
-      root.append(onPick(at(w, m.x, m.y), d.sessionKey));
+      root.append(mover(onPick(at(w, m.x, m.y), d.sessionKey), `m:${m.id}`, d.projectKey, true));
     });
     if (d.extraMinions) root.append(at(el('div', 'more o abs', `+${d.extraMinions}`), d.x + 206, d.y + 170));
   }
 
-  function drawQueue(q, i, root) {
+  // crowded: 줄이 길어 촘촘하면 이름 · 대기 시간은 맨 앞만 글자로, 나머지는 마우스를 올리면(title)
+  function drawQueue(q, i, root, crowded) {
     const w = el('div', `pet ${i === 0 ? 'tap' : 'sway'}`);
-    const name = el('span', 'tag o', q.kind === 'permission' ? `${q.name} · 권한` : q.name);
-    name.style.color = q.kind === 'permission' ? '#ffd9a8' : '#e2c7ff';
-    w.append(name);
+    const label = q.kind === 'permission' ? `${q.name} · 권한` : q.name;
+    const quiet = crowded && i > 0;
+    w.title = `${label}\n${q.text || ''}`;
+    if (!quiet) {
+      const name = el('span', 'tag o', label);
+      name.style.color = q.kind === 'permission' ? '#ffd9a8' : '#e2c7ff';
+      w.append(name);
+    }
     const body = el('div');
     body.style.cssText = `position:relative;width:${q.size}px;height:${q.size}px`;
     body.append(sprite(q, ['pose', 'look-around', 'idle'], q.size));
@@ -111,11 +118,13 @@
       `position:absolute;left:${Math.round((q.size - docW) / 2)}px;top:${Math.round(q.size * 0.6)}px;width:${docW}px;height:${Math.round(docW * 0.53)}px;transform:rotate(${i % 2 ? 6 : -7}deg)`));
     if (i === 0) body.append(img(A('fx-sweat.png'), 'position:absolute;right:16px;top:20px;width:14px;height:18px', 'drop'));
     w.append(body);
-    const t = el('span', 'mono o t-wait');
-    t.dataset.since = String(q.since || 0);
-    t.style.color = '#e2c7ff';
-    w.append(t);
-    root.append(onPick(at(w, q.x, q.y - 18), q.key));
+    if (!quiet) {
+      const t = el('span', 'mono o t-wait');
+      t.dataset.since = String(q.since || 0);
+      t.style.color = '#e2c7ff';
+      w.append(t);
+    }
+    root.append(mover(onPick(at(w, q.x, q.y - (quiet ? 0 : 18)), q.key), `q:${q.key}`, q.projectKey));
   }
 
   function drawPaper(p, root) {
@@ -127,32 +136,113 @@
     txt.append(el('span', 'q', p.text));
     if (p.options.length) txt.append(el('span', 'opts', p.options.map((o, i) => `${i + 1} ${o}`).join(' · ')));
     box.append(txt);
-    root.append(onPick(at(box, 870, 286), p.key));
+    root.append(onPick(at(box, 1530, 598), p.key));
   }
 
-  function drawSofa(s, root) {
+  // 3명까지는 이름을 소파 아래에, 붙어 앉으면 이름은 마우스를 올리면(title)
+  function drawSofa(s, root, named) {
     const w = el('div', 'pet');
-    w.append(sprite(s, ['sleepy', 'idle'], 80));
-    root.append(onPick(at(w, s.x, s.y), s.sessionKey));
+    w.title = s.name;
+    w.append(sprite(s, ['sleepy', 'idle'], s.size));
+    root.append(mover(onPick(at(w, s.x, s.y), s.sessionKey), `p:${s.projectKey}`, s.projectKey));
+    if (!named) return;
     const n = el('span', 'tag o', s.name);
-    n.style.cssText = 'position:absolute;font-size:10.5px;color:#d5dbe5;width:80px;text-align:center;overflow:hidden;text-overflow:ellipsis';
+    n.style.cssText = `position:absolute;font-size:10.5px;color:#d5dbe5;width:${s.size}px;text-align:center;overflow:hidden;text-overflow:ellipsis`;
     root.append(at(n, s.x, 344));
   }
 
+  /* ---- 드나들기 — 그리기 전 자리를 기억했다가, 새 자리로 걸어가게 한다 ---- */
+  const WALK_PX_PER_S = 260;
+  let firstDraw = true;
+  let doorTimer = 0;
+  function mover(node, id, projectKey, small) {
+    node.dataset.mover = id;
+    node.dataset.project = projectKey || '';
+    if (small) node.dataset.small = '1';
+    return node;
+  }
+  const doorSpot = (small) => (small ? { x: RV.DOOR.x + 26, y: RV.DOOR.y + 50 } : RV.DOOR);
+  function openDoor(ms) {
+    $('door').src = A('door-open.png');
+    clearTimeout(doorTimer);
+    doorTimer = setTimeout(() => { $('door').src = A('door-closed.png'); }, ms + 500);
+  }
+  /** from → 지금 자리(style.left/top)로 걸어간다. 걸린 시간(ms)을 돌려준다 */
+  function walk(node, from, done) {
+    const to = { x: parseFloat(node.style.left) || 0, y: parseFloat(node.style.top) || 0 };
+    const dist = Math.hypot(to.x - from.x, to.y - from.y);
+    if (dist < 2) { if (done) done(); return 0; }
+    const ms = Math.round(Math.min(5000, Math.max(500, (dist / WALK_PX_PER_S) * 1000)));
+    node.classList.remove('moving');
+    at(node, from.x, from.y);
+    void node.offsetWidth;   // 시작 자리를 먼저 그리게
+    node.style.transitionDuration = `${ms}ms`;
+    node.classList.add('moving');
+    at(node, to.x, to.y);
+    setTimeout(() => { node.classList.remove('moving'); if (done) done(); }, ms + 50);
+    return ms;
+  }
+  /** 지금 화면의 캐릭터 자리 — 걷는 중이면 걷고 있는 그 자리 */
+  function snapshot() {
+    const pos = new Map(), nodes = new Map();
+    dyn.querySelectorAll('[data-mover]').forEach((n) => {
+      const cs = getComputedStyle(n);
+      pos.set(n.dataset.mover, { x: parseFloat(cs.left) || 0, y: parseFloat(cs.top) || 0 });
+      nodes.set(n.dataset.mover, n);
+    });
+    return { pos, nodes };
+  }
+  function animateMoves(before) {
+    const now = new Map();
+    dyn.querySelectorAll('[data-mover]').forEach((n) => now.set(n.dataset.mover, n));
+    // 처음 열 때(첫 데이터가 올 때까지)는 다들 이미 자리에 있다
+    if (firstDraw) { if (now.size) firstDraw = false; return; }
+    const projects = new Set([...now.values()].map((n) => n.dataset.project));
+    let doorMs = 0;
+    // 들어오기 · 자리 바꾸기
+    for (const [id, n] of now) {
+      let from = before.pos.get(id);
+      if (!from && id.startsWith('q:')) from = before.pos.get(`p:${n.dataset.project}`);   // 자리에서 일어나 줄 서러
+      if (!from) { from = doorSpot(!!n.dataset.small); doorMs = Math.max(doorMs, walk(n, from)); continue; }
+      walk(n, from);
+    }
+    // 나가기 — 프로젝트가 닫혔거나 서브에이전트가 끝났으면 문으로, 질문을 마쳤으면 제자리로
+    for (const [id, old] of before.nodes) {
+      if (now.has(id)) continue;
+      const ghost = old;
+      ghost.classList.remove('click');
+      ghosts.append(ghost);
+      at(ghost, before.pos.get(id).x, before.pos.get(id).y);
+      const back = id.startsWith('q:') && now.get(`p:${ghost.dataset.project}`);
+      const target = back ? { x: parseFloat(back.style.left), y: parseFloat(back.style.top) }
+        : (id.startsWith('m:') || !projects.has(ghost.dataset.project)) ? doorSpot(!!ghost.dataset.small) : null;
+      if (!target) { ghost.remove(); continue; }
+      const from = before.pos.get(id);
+      at(ghost, target.x, target.y);
+      const ms = walk(ghost, from, () => ghost.remove());
+      if (!back) doorMs = Math.max(doorMs, ms);
+    }
+    if (doorMs) openDoor(doorMs);
+  }
+
   function draw(layout) {
+    const before = snapshot();
     dyn.textContent = '';
     const root = document.createDocumentFragment();
     layout.desks.forEach((d) => drawDesk(d, root));
-    if (layout.extraWork) root.append(at(el('div', 'more o abs', `작업 중 +${layout.extraWork}곳`), 60, 560));
-    layout.sofa.forEach((s) => drawSofa(s, root));
-    if (layout.sofa.length) root.append(at(img(A('fx-zzz.png'), 'width:30px;height:30px', 'zz abs'), 820, 196));
-    if (layout.extraRest) root.append(at(el('div', 'more o abs', `+${layout.extraRest}`), 846, 312));
+    if (layout.extraWork) root.append(at(el('div', 'more o abs', `작업 중 +${layout.extraWork}곳`), 960, 560));
+    const named = layout.sofa.length <= 6;
+    layout.sofa.forEach((s) => drawSofa(s, root, named));
+    if (!named) root.append(at(el('div', 'tag o abs', `쉬는 중 ${layout.stats.rest}곳`), 1210, 344));
+    if (layout.sofa.length) root.append(at(img(A('fx-zzz.png'), 'width:30px;height:30px', 'zz abs'), 1410, 196));
+    if (layout.extraRest) root.append(at(el('div', 'more o abs', `+${layout.extraRest}`), 1436, 312));
     if (layout.paper) drawPaper(layout.paper, root);
-    layout.queue.forEach((q, i) => drawQueue(q, i, root));
-    if (layout.extraAsk) root.append(at(el('div', 'more o abs', `줄 +${layout.extraAsk}`), 380, 600));
+    const crowded = layout.queue.length > 7;
+    layout.queue.forEach((q, i) => drawQueue(q, i, root, crowded));
+    if (layout.extraAsk) root.append(at(el('div', 'more o abs', `줄 +${layout.extraAsk}`), 4, 840));
     dyn.append(root);
+    animateMoves(before);
 
-    $('door').src = A(layout.desks.some((d) => d.minions.some((m) => m.state === 'work')) ? 'door-open.png' : 'door-closed.png');
     const { count, firstKey } = layout.inbox;
     const papers = $('inboxPapers');
     papers.textContent = '';
@@ -220,9 +310,49 @@
     tick();
   }
 
-  // 창 크기에 맞춰 무대를 늘리고 줄인다(창은 비율이 고정돼 있다)
-  function fit() { stage.style.transform = `scale(${window.innerWidth / BASE_W})`; }
+  // 창 크기에 맞춰 무대를 늘리고 줄인다(창은 비율이 고정돼 있다) + 휠 확대
+  let view = { zoom: 1, ox: 0, oy: 0 };
+  const baseScale = () => window.innerWidth / BASE_W;
+  function fit() {
+    stage.style.transform = `scale(${baseScale() * view.zoom}) translate(${-view.ox}px, ${-view.oy}px)`;
+    const zoomed = view.zoom > 1.001;
+    // 확대 중에는 배경을 끌면 화면이 움직이고(창 옮기기 대신), 모서리에 배율 · 되돌리기 버튼
+    document.body.classList.toggle('zoomed', zoomed);
+    $('zoomReset').hidden = !zoomed;
+    $('zoomReset').textContent = `${Math.round(view.zoom * 100)}%`;
+  }
+  function setView(v) { view = v; fit(); }
   window.addEventListener('resize', fit);
+  window.addEventListener('wheel', (e) => {
+    e.preventDefault();
+    const k = baseScale();
+    setView(RV.zoomAt(view, e.clientX / k, e.clientY / k, e.deltaY < 0 ? 1.15 : 1 / 1.15));
+  }, { passive: false });
+  // 배경 끌기 — 확대 중이면 화면을 옮기고, 아니면 창을 옮긴다.
+  // 캐릭터 · 버튼을 누른 건 끌기가 아니다. 끌고 난 뒤의 클릭은 무시한다.
+  let pan = null, panned = false;
+  stage.addEventListener('pointerdown', (e) => {
+    if (e.button !== 0 || e.target.closest('.click')) return;
+    pan = { x: e.clientX, y: e.clientY, window: view.zoom <= 1.001 };
+    panned = false;
+    stage.setPointerCapture(e.pointerId);
+    if (pan.window && api && api.dragStart) api.dragStart();
+  });
+  stage.addEventListener('pointermove', (e) => {
+    if (!pan) return;
+    const dx = e.clientX - pan.x, dy = e.clientY - pan.y;
+    if (Math.abs(dx) + Math.abs(dy) > 3) panned = true;
+    if (pan.window) { if (api && api.drag) api.drag(); return; }   // 창이 따라 움직이므로 기준점은 그대로
+    pan = { ...pan, x: e.clientX, y: e.clientY };
+    const k = baseScale();
+    setView(RV.panBy(view, dx / k, dy / k));
+  });
+  const endPan = () => { if (pan && pan.window && api && api.dragEnd) api.dragEnd(); pan = null; };
+  stage.addEventListener('pointerup', endPan);
+  stage.addEventListener('pointercancel', endPan);
+  stage.addEventListener('click', (e) => { if (panned) { e.stopPropagation(); panned = false; } }, true);
+  stage.addEventListener('dblclick', (e) => { if (!e.target.closest('.click')) setView({ zoom: 1, ox: 0, oy: 0 }); });
+  $('zoomReset').addEventListener('click', () => setView({ zoom: 1, ox: 0, oy: 0 }));
 
   // ---- 모서리 도구 ----
   const pin = $('pin');

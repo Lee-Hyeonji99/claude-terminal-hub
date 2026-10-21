@@ -1,22 +1,48 @@
 'use strict';
 /**
- * 작업실 — 누가 어디에 있을지 정한다(그리기는 public/room.js). 기준 무대 1120×640.
- *   작업 중 프로젝트 → 책상(최대 3)에서 타자, 그 서브에이전트는 책상 옆 꼬마(최대 4)
- *   질문·권한 대기 세션 → 내 자리 앞 줄(오래 기다린 순, 최대 4) · 맨 앞 서류는 내 책상 위에 펼침
- *   쉬는 프로젝트 → 소파(최대 3) · 끝난 세션 → 결재함
+ * 작업실 — 누가 어디에 있을지 정한다(그리기는 public/room.js). 기준 무대 1800×960(휠로 확대해서 본다).
+ *   작업 중 프로젝트 → 책상(4개씩 2줄, 최대 8)에서 타자, 그 서브에이전트는 책상 옆 꼬마(최대 4)
+ *   질문·권한 대기 세션 → 맨 앞은 내 자리 앞, 나머지는 바닥 줄(오래 기다린 순, 많으면 촘촘히 · 최대 40)
+ *     맨 앞 서류는 내 책상 위에 펼침
+ *   쉬는 프로젝트 → 소파 두 개(3명 넘으면 작게 붙어 앉음, 최대 16) · 끝난 세션 → 결재함
+ *   드나드는 문 — 새 프로젝트 · 서브에이전트는 문으로 들어오고, 닫히면 문으로 나간다(DOOR)
  * 입력은 HUD 항목(public/pet-bridge.js) — LLM 없이 화면·기록 파일에서 읽은 값뿐.
  */
 (function (root) {
   const HV = typeof module === 'object' && module.exports ? require('./hud-view.js') : root.HudView;
 
-  const DESKS = [{ x: 60 }, { x: 290 }, { x: 520 }];
-  const DESK_Y = 290;
+  const STAGE = { w: 1800, h: 960 };
+  const DOOR = { x: 18, y: 210 };                     // 문 앞(캐릭터 왼쪽 위 기준)
+  const DESKS = [290, 600].flatMap((y) => [40, 270, 500, 730].map((x) => ({ x, y })));   // 4개씩 2줄
   const MAX_MINIONS = 4;
-  const QUEUE = [
-    { x: 770, y: 452, size: 104 }, { x: 652, y: 482, size: 88 },
-    { x: 548, y: 506, size: 76 }, { x: 456, y: 524, size: 66 },
-  ];
-  const SOFA = [{ x: 676 }, { x: 738 }, { x: 800 }];
+  const QUEUE_FRONT = { x: 1430, y: 740, size: 104 };
+  const QUEUE_ROW = { y: 860, right: 1330, left: 20, gap: 70, minGap: 34 };   // 바닥 줄 — 오른쪽(앞)에서 왼쪽으로
+  const MAX_QUEUE = 1 + Math.floor((QUEUE_ROW.right - QUEUE_ROW.left) / QUEUE_ROW.minGap) + 1;
+  const SOFAS = [{ left: 1066, right: 1234 }, { left: 1256, right: 1424 }], MAX_PER_SOFA = 8;
+
+  /** 줄 선 자리 n 개 — 많을수록 촘촘하고 작게 */
+  function queueSlots(n) {
+    const slots = n ? [QUEUE_FRONT] : [];
+    const k = Math.max(0, Math.min(n, MAX_QUEUE) - 1);
+    const size = k > 10 ? 60 : 70;
+    const gap = k > 1 ? Math.min(QUEUE_ROW.gap, (QUEUE_ROW.right - QUEUE_ROW.left) / (k - 1)) : 0;
+    for (let i = 0; i < k; i++) slots.push({ x: Math.round(QUEUE_ROW.right - i * gap), y: QUEUE_ROW.y, size });
+    return slots;
+  }
+  /** 소파 하나에 n 명 — 3명까지는 넉넉히, 넘으면 작게 붙어 앉는다 */
+  function seatsOn(span, n, size) {
+    const room = span.right - span.left - size;
+    const gap = n > 1 ? Math.min(62, room / (n - 1)) : 0;
+    const start = n <= 3 ? span.left + 10 : span.left;
+    return Array.from({ length: n }, (_, i) => ({ x: Math.round(start + i * gap), y: 214 + (80 - size), size }));
+  }
+  /** 소파 두 개에 나눠 앉힌다(앞 소파부터 반씩) */
+  function sofaSlots(n) {
+    const total = Math.min(n, SOFAS.length * MAX_PER_SOFA);
+    const first = Math.ceil(total / 2);
+    const size = first <= 3 ? 80 : 64;
+    return [...seatsOn(SOFAS[0], first, size), ...seatsOn(SOFAS[1], total - first, size)];
+  }
 
   const workSince = (sessions) => Math.min(...sessions.map((x) => x.since || Infinity));
 
@@ -28,9 +54,9 @@
       const ordered = [...subs.filter((a) => a.state === 'work'), ...subs.filter((a) => a.state !== 'work')];
       return {
         projectKey: p.key, projectId: p.projectId, theme: p.theme, hue: p.hue, name: p.name, sub: p.sub,
-        x: DESKS[i].x, y: DESK_Y,
+        x: DESKS[i].x, y: DESKS[i].y,
         sessionKey: lead.key, title: lead.title, tool: HV.sessionToolText(lead), since: p.since,
-        minions: ordered.slice(0, MAX_MINIONS).map((a, j) => ({ ...a, x: DESKS[i].x + j * 56, y: 420 + (j % 2) * 56 })),
+        minions: ordered.slice(0, MAX_MINIONS).map((a, j) => ({ ...a, x: DESKS[i].x + j * 56, y: DESKS[i].y + 130 + (j % 2) * 40 })),
         extraMinions: Math.max(0, ordered.length - MAX_MINIONS),
       };
     });
@@ -40,15 +66,16 @@
   function queueOf(projects) {
     const asking = projects.flatMap((p) => p.sessions.filter((x) => x.state === 'ask').map((x) => ({ x, p })))
       .sort((a, b) => (a.x.since || 0) - (b.x.since || 0));
-    const queue = asking.slice(0, QUEUE.length).map(({ x, p }, i) => ({
+    const slots = queueSlots(asking.length);
+    const queue = asking.slice(0, slots.length).map(({ x, p }, i) => ({
       key: x.key, projectKey: p.key, projectId: p.projectId, theme: p.theme, hue: p.hue, name: p.name,
       since: x.since || 0,
       kind: (x.question && x.question.kind) || 'question',
       text: (x.question && x.question.text) || x.title,
       options: (x.question && x.question.options) || [],
-      ...QUEUE[i],
+      ...slots[i],
     }));
-    return { queue, extraAsk: Math.max(0, asking.length - QUEUE.length) };
+    return { queue, extraAsk: Math.max(0, asking.length - slots.length) };
   }
 
   function layoutRoom(items, now = Date.now()) {
@@ -57,16 +84,17 @@
     const { desks, extraWork } = desksOf(projects);
     const { queue, extraAsk } = queueOf(projects);
     const resting = projects.filter((p) => p.state === 'rest');
-    const sofa = resting.slice(0, SOFA.length).map((p, i) => ({
+    const seats = sofaSlots(resting.length);
+    const sofa = resting.slice(0, seats.length).map((p, i) => ({
       projectKey: p.key, projectId: p.projectId, theme: p.theme, hue: p.hue, name: p.name,
-      sessionKey: p.sessions[0].key, count: p.sessions.length, x: SOFA[i].x, y: 214,
+      sessionKey: p.sessions[0].key, count: p.sessions.length, ...seats[i],
     }));
     const done = list.filter((x) => x.state === 'done').sort((a, b) => (a.doneAt || 0) - (b.doneAt || 0));
     const subs = desks.reduce((n, d) => n + d.minions.filter((a) => a.state === 'work').length, 0);
     return {
       now, desks, extraWork, queue, extraAsk,
       paper: queue[0] ? { key: queue[0].key, name: queue[0].name, kind: queue[0].kind, text: queue[0].text, options: queue[0].options } : null,
-      sofa, extraRest: Math.max(0, resting.length - SOFA.length),
+      sofa, extraRest: Math.max(0, resting.length - sofa.length),
       inbox: { count: done.length, firstKey: done[0] ? done[0].key : '' },
       stats: { work: projects.filter((p) => p.state === 'work').length, ask: queue.length + extraAsk, rest: resting.length, subs, done: done.length },
     };
@@ -115,7 +143,24 @@
     return packs[h % packs.length];
   }
 
-  const api = { layoutRoom, skyAt, minionPick };
+  /* ---- 휠 확대 — view: { zoom, ox, oy } (ox, oy = 화면 왼쪽 위에 보이는 무대 좌표) ---- */
+  const STAGE_W = STAGE.w, STAGE_H = STAGE.h, MIN_ZOOM = 1, MAX_ZOOM = 5;
+  const clampNum = (v, lo, hi) => Math.min(Math.max(v, lo), hi);
+  const clampView = (zoom, ox, oy) => ({
+    zoom,
+    ox: clampNum(ox, 0, STAGE_W - STAGE_W / zoom),
+    oy: clampNum(oy, 0, STAGE_H - STAGE_H / zoom),
+  });
+  /** 커서(cx, cy — 창 안 위치를 무대 기준 px 로)를 중심으로 factor 배 확대 · 축소 */
+  function zoomAt(view, cx, cy, factor) {
+    const zoom = clampNum(view.zoom * factor, MIN_ZOOM, MAX_ZOOM);
+    const bx = view.ox + cx / view.zoom, by = view.oy + cy / view.zoom;   // 커서 아래 무대 좌표
+    return clampView(zoom, bx - cx / zoom, by - cy / zoom);
+  }
+  /** 확대 중 끌기 — 끈 만큼(무대 기준 px) 화면을 옮긴다 */
+  function panBy(view, dx, dy) { return clampView(view.zoom, view.ox - dx / view.zoom, view.oy - dy / view.zoom); }
+
+  const api = { layoutRoom, skyAt, minionPick, zoomAt, panBy, STAGE, DOOR };
   if (typeof module === 'object' && module.exports) module.exports = api;
   else root.RoomView = api;
 })(typeof window !== 'undefined' ? window : globalThis);

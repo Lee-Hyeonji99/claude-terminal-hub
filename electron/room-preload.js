@@ -9,4 +9,7 @@ contextBridge.exposeInMainWorld('roomApi', {
   focus: (key) => ipcRenderer.send('room:focus', key),
   setTop: (v) => ipcRenderer.send('room:set-top', !!v),
   hide: () => ipcRenderer.send('room:hide'),
+  dragStart: () => ipcRenderer.send('room:drag-start'),
+  drag: () => ipcRenderer.send('room:drag'),
+  dragEnd: () => ipcRenderer.send('room:drag-end'),
 });

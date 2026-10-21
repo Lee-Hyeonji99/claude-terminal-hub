@@ -1,7 +1,7 @@
-/* 작업실 — 기준 무대 1120×640 을 창 크기에 맞춰 늘리고 줄인다(public/room.js). */
+/* 작업실 — 기준 무대 1800×960 을 창 크기에 맞춰 늘리고 줄인다(public/room.js). 휠로 확대. */
 html,body{margin:0;height:100%;overflow:hidden;background:#1c2130;user-select:none}
-body{font:12px/1.35 'Pretendard','Segoe UI',system-ui,sans-serif;color:#fff;-webkit-app-region:drag}
-#stage{position:absolute;left:0;top:0;width:1120px;height:640px;transform-origin:0 0;overflow:hidden}
+body{font:12px/1.35 'Pretendard','Segoe UI',system-ui,sans-serif;color:#fff;cursor:move}
+#stage{position:absolute;left:0;top:0;width:1800px;height:960px;transform-origin:0 0;overflow:hidden}
 #stage img{-webkit-user-drag:none;display:block}
 .abs{position:absolute}
 .click{cursor:pointer;-webkit-app-region:no-drag}
@@ -13,7 +13,7 @@ body{font:12px/1.35 'Pretendard','Segoe UI',system-ui,sans-serif;color:#fff;-web
 #sky .star{position:absolute;width:8px;height:8px;animation:twk 2s ease-in-out infinite}
 #sky .cloud{position:absolute;animation:drift 90s linear infinite}
 #tint{position:absolute;inset:0;pointer-events:none;transition:background 2s}
-#lampGlow{position:absolute;left:790px;top:120px;width:150px;height:150px;border-radius:50%;background:radial-gradient(rgba(255,214,140,.6),transparent 65%);pointer-events:none}
+#lampGlow{position:absolute;left:1395px;top:120px;width:150px;height:150px;border-radius:50%;background:radial-gradient(rgba(255,214,140,.6),transparent 65%);pointer-events:none}
 
 /* 칠판 */
 #board{position:absolute;left:456px;top:62px;width:210px;display:flex;flex-direction:column;gap:3px;color:#1d2433}
@@ -33,6 +33,11 @@ body{font:12px/1.35 'Pretendard','Segoe UI',system-ui,sans-serif;color:#fff;-web
 .drop{animation:dr 1.6s ease-in-out infinite}
 .sm1{animation:s1 1.8s steps(1) infinite}.sm2{animation:s2 1.8s steps(1) infinite}.sm3{animation:s3 1.8s steps(1) infinite}
 .blob svg{width:100%;height:100%;display:block}
+/* 걸어서 옮겨 가기 — 문으로 드나들기 · 자리 바꾸기 */
+.moving{transition-property:left,top;transition-timing-function:linear}
+.moving>img,.moving>span,.moving>div{animation:hop .32s ease-in-out infinite alternate}
+#ghosts .pet{pointer-events:none}
+@keyframes hop{from{transform:translateY(0)}to{transform:translateY(-5px)}}
 
 .bubble{padding:2px 8px;border-radius:10px;background:#f4f6fb;color:#1d2433;font-size:10.5px;white-space:nowrap;max-width:160px;overflow:hidden;text-overflow:ellipsis}
 .minion .tag{color:#cfe0ff;font-size:10.5px}
@@ -52,7 +57,14 @@ body{font:12px/1.35 'Pretendard','Segoe UI',system-ui,sans-serif;color:#fff;-web
 body:hover #tools{opacity:1}
 #tools button{border:0;border-radius:6px;background:rgba(10,12,18,.6);color:#e3e7ef;font:inherit;font-size:11px;padding:3px 8px;cursor:pointer}
 #tools button.on{background:#f0b44c;color:#1d2433}
-#empty{position:absolute;left:0;right:0;top:600px;text-align:center;font-size:12px;color:#e3e7ef}
+/* 휠 확대 중 — 배경을 끌면 화면이 움직인다(창 옮기기 대신). 배율 버튼은 늘 보인다 */
+body.zoomed #stage{cursor:grab}
+body.zoomed #stage:active{cursor:grabbing}
+body.zoomed #tools{opacity:1}
+#tools button[hidden]{display:none}
+/* display 를 준 요소도 hidden 이면 숨긴다(빈 결재함에 0 이 보이던 문제) */
+#stage [hidden]{display:none!important}
+#empty{position:absolute;left:0;right:0;top:920px;text-align:center;font-size:12px;color:#e3e7ef}
 
 @keyframes gl{0%,100%{filter:drop-shadow(0 0 3px #f0b44c) drop-shadow(0 0 10px rgba(240,180,76,.5))}50%{filter:drop-shadow(0 0 1px #f0b44c)}}
 @keyframes ty{from{transform:translateY(0)}to{transform:translateY(-3px)}}

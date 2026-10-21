@@ -12,8 +12,8 @@ const fs = require('fs');
 const { bringToFront } = require('./focus-main');
 const { keepOnTop } = require('./keep-on-top');
 
-const RATIO = 1120 / 640;
-const MIN_W = 448, DEFAULT_W = 672;
+const RATIO = 1800 / 960;   // public/room-view.js 의 STAGE
+const MIN_W = 480, DEFAULT_W = 900;   // 무대가 커서 처음엔 작게 보인다 — 휠로 확대
 const statePath = () => path.join(app.getPath('userData'), 'room.json');
 function loadState() { try { return JSON.parse(fs.readFileSync(statePath(), 'utf8')) || {}; } catch { return {}; } }
 function saveState(st) { try { fs.writeFileSync(statePath(), JSON.stringify(st)); } catch { /* 자리 기억 실패는 무시 */ } }
@@ -36,7 +36,8 @@ function initRoom({ url, mainWin }) {
       const a = d.workArea;
       return b.x >= a.x - b.width + 80 && b.x <= a.x + a.width - 80 && b.y >= a.y - 10 && b.y <= a.y + a.height - 60;
     });
-    return onScreen ? b : fallback;
+    // 비율이 바뀐 옛 저장값(1.25.0 은 1120:640)도 지금 비율에 맞춘다
+    return onScreen ? { ...b, height: Math.round(b.width / RATIO) } : fallback;
   }
 
   function applyTop() {
@@ -112,6 +113,25 @@ function initRoom({ url, mainWin }) {
     applyTop();
   });
   ipcMain.on('room:hide', (e) => { if (fromRoom(e)) setVisible(false); });
+  // 창 옮기기 — 끌기 영역(app-region)은 휠을 못 받아서, HUD 처럼 OS 커서 위치로 직접 옮긴다
+  let drag = null;
+  ipcMain.on('room:drag-start', (e) => {
+    if (!fromRoom(e)) return;
+    const b = win.getBounds();
+    drag = { cursor: screen.getCursorScreenPoint(), x: b.x, y: b.y, width: b.width, height: b.height };
+  });
+  ipcMain.on('room:drag', (e) => {
+    if (!fromRoom(e) || !drag) return;
+    const c = screen.getCursorScreenPoint();
+    // setPosition 은 배율이 다른 모니터에서 크기가 바뀔 수 있어 크기까지 같이 준다
+    win.setBounds({ x: Math.round(drag.x + c.x - drag.cursor.x), y: Math.round(drag.y + c.y - drag.cursor.y), width: drag.width, height: drag.height });
+  });
+  ipcMain.on('room:drag-end', (e) => {
+    if (!fromRoom(e) || !drag) return;
+    drag = null;
+    st.bounds = win.getBounds();   // 직접 옮긴 자리도 기억
+    saveState(st);
+  });
 
   if (st.visible) create();
 }
