@@ -105,7 +105,7 @@
     /* 아이콘 (SVG, currentColor) */
     svg{display:block}
     [data-icon],.i{display:inline-flex;align-items:center}
-    header button,#tabs button,.sesactions button,#pickHere,.mhead button,#changeFolder{display:inline-flex;align-items:center;gap:6px}
+    header button,.sesactions button,#pickHere,.mhead button,#changeFolder{display:inline-flex;align-items:center;gap:6px}
     button [data-icon]{pointer-events:none}
     .icon-btn{padding:6px 8px !important;line-height:0}
     .fontsize-group{display:flex;align-items:center;gap:2px;border:1px solid var(--border);border-radius:6px;padding:2px}
@@ -114,12 +114,6 @@
     .recent-item .rf svg,.fsitem .ico svg,.pane .bar .cwd svg{color:var(--muted)}
     .sesitem .ico svg{color:var(--accent);width:18px;height:18px}
     .pane .bar button svg{width:15px;height:15px}
-    .pane .bar button.artifact{position:relative;display:inline-flex !important;align-items:center;gap:4px;color:var(--accent);border:1px solid var(--accent);border-radius:10px;font-size:11px;padding:1px 8px;max-width:180px}
-    .pane .bar button.artifact[style*="none"]{display:none !important}
-    .pane .bar button.artifact .alabel{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-    .artifact-dropdown{min-width:220px;max-width:320px;cursor:default}
-    .artifact-dropdown .popover-item{justify-content:flex-start}
-    .artifact-dropdown .popover-item svg{flex:none;width:14px;height:14px}
     /* 작업 완료(벨) 표시 — 비활성 세션이 끝났을 때 어느 세션인지 보이게 (초록 테두리+점 펄스) */
     .pane.done{box-shadow:0 0 0 2px var(--ok)}
     .pane.done .bar .dot{background:var(--ok);animation:cthpulse 1.1s infinite}
@@ -127,13 +121,30 @@
     .lnb-search{position:relative}
     .lnb-search .search-ico{position:absolute;left:14px;top:50%;transform:translateY(-50%);color:var(--muted);pointer-events:none}
 
-    #tabs{display:flex;align-items:center;gap:4px;padding:4px 8px;background:var(--bg);border-bottom:1px solid var(--border);flex:none;overflow-x:auto}
-    #tabList{display:flex;gap:4px}
-    .tab{display:flex;align-items:center;gap:6px;padding:5px 12px;border:1px solid var(--border);border-radius:7px 7px 0 0;background:var(--panel);color:var(--muted);cursor:pointer;font-size:12px;white-space:nowrap}
-    .tab.active{color:var(--text);background:var(--head);border-color:var(--active);border-bottom-color:var(--head)}
-    .tab .cnt{color:var(--accent);font-size:10px}
-    .tab .tclose{border:none;background:transparent;color:var(--muted);padding:0 2px;font-size:12px;line-height:1}
-    .tab .tclose:hover{color:var(--danger)}
+    /* 계정 — 색 점 · 머리줄 계정 버튼 · 패널 계정 칩 · 메뉴 · 안내 줄 (public/account-ui.js) */
+    .adot{display:inline-block;width:8px;height:8px;border-radius:50%;flex:none;background:hsl(var(--hue,210) 62% 60%)}
+    .adot-main{background:var(--accent)}
+    .acct-btn{display:inline-flex;align-items:center;gap:6px;font-size:12px;white-space:nowrap}
+    .acct-btn .car,.pane .bar .acct .car{opacity:.6;font-size:9px}
+    .pane .bar button.acct{display:inline-flex;align-items:center;gap:5px;border:1px solid var(--border);border-radius:10px;font-size:11px;padding:1px 8px 1px 6px;max-width:150px;color:var(--text)}
+    .pane .bar button.acct:hover{border-color:var(--muted)}
+    .pane .bar button.acct .an{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .pane .bar button.acct.busy{opacity:.6;pointer-events:none}
+    .acct-menu{position:fixed;z-index:80;min-width:250px;max-width:340px;background:var(--panel);border:1px solid var(--border);border-radius:8px;box-shadow:0 12px 32px rgba(0,0,0,.35);padding:6px}
+    .acct-menu .am-sep{font-size:10.5px;color:var(--muted);font-weight:700;padding:8px 10px 4px;letter-spacing:.3px}
+    .acct-menu .am-item{display:flex;align-items:center;gap:8px;width:100%;padding:7px 10px;border:none;border-radius:6px;background:transparent;color:var(--text);font-size:12px;text-align:left;cursor:pointer}
+    .acct-menu .am-item:hover{background:var(--head)}
+    .acct-menu .am-item.current{color:var(--muted);cursor:default}
+    .acct-menu .am-item.current:hover{background:transparent}
+    .acct-menu .am-label{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .acct-menu .am-sub{margin-left:auto;padding-left:10px;font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:55%}
+    .acct-menu .am-foot{border-top:1px solid var(--border);margin-top:4px;padding:8px 10px 4px;font-size:11px;color:var(--muted);line-height:1.5}
+    .acct-bar{display:flex;align-items:center;flex-wrap:wrap;gap:8px;padding:6px 10px;font-size:12px;background:color-mix(in srgb,#d29922 14%,var(--head));border-bottom:1px solid color-mix(in srgb,#d29922 45%,var(--border));flex:none}
+    .acct-bar .ab-msg{flex:1;min-width:180px}
+    .acct-bar .ab-btn{display:inline-flex;align-items:center;gap:6px;padding:3px 10px;font-size:12px;border:1px solid var(--border);border-radius:6px;background:var(--panel);color:var(--text);cursor:pointer}
+    .acct-bar .ab-btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+    .acct-bar .ab-close{border:none;background:transparent;color:var(--muted);cursor:pointer;font-size:12px}
+    .acct-toast{position:fixed;right:16px;bottom:16px;z-index:90;max-width:420px;background:var(--panel);border:1px solid var(--border);border-left:3px solid var(--ok);border-radius:8px;padding:9px 12px;font-size:12px;color:var(--text);box-shadow:0 8px 24px rgba(0,0,0,.35)}
     #addProfile{padding:4px 10px;font-size:12px}
     #main{flex:1;display:flex;min-height:0;overflow:hidden}
     #lnb{width:260px;flex:none;display:flex;flex-direction:column;background:var(--panel);border-right:1px solid var(--border);transition:width .15s ease}
@@ -152,9 +163,9 @@
     .recent-item .rt svg,.recent-item .rf svg{flex:none}
     .recent-item .rt span,.recent-item .rf span{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
     .recent-item .rs{color:var(--muted);font-size:10px;margin-top:2px}
-    .recent-item .rs .rprof{color:var(--accent)}
-    .recent-item .rcont{display:block;width:100%;margin-top:6px;padding:4px 8px;font-size:11px;color:var(--accent);background:transparent;border:1px solid var(--accent);border-radius:6px;cursor:pointer}
-    .recent-item .rcont:hover{background:var(--accent);color:#fff}
+    .recent-item .rs{display:flex;align-items:center;flex-wrap:wrap;gap:4px 6px}
+    .recent-item .rchip{display:inline-flex;align-items:center;gap:4px;border:1px solid var(--border);border-radius:9px;padding:0 6px;color:var(--text)}
+    .recent-item .rchip.open{border-color:var(--ok);color:var(--ok)}
     .recent-empty{color:var(--muted);font-size:12px;padding:14px;text-align:center}
     .lnb-head-btns{display:flex;align-items:center;gap:4px;flex:none}
     .lnb-alltoggle{font-size:10px;color:var(--muted);background:transparent;border:1px solid var(--border);border-radius:10px;padding:2px 8px;cursor:pointer;white-space:nowrap}
@@ -564,17 +575,11 @@
         <div class="popover-sep">세션을 열 셸</div>
         <div class="popover-item" data-shell="powershell"><span class="swatch" style="background:#012456"></span><span id="shellLabelDefault">PowerShell</span></div>
         <div class="popover-item" data-shell="tmux"><span class="swatch" style="background:#1bb91f"></span>tmux</div>
-        <div class="popover-item" data-shell="wsl-tmux"><span class="swatch" style="background:#e95420"></span>WSL tmux <span style="opacity:.6;font-size:11px">— 외부 도구 연동</span></div>
-        <div class="popover-sep" id="wslDistroSep">WSL 배포판</div>
-        <div class="knob-row" id="wslDistroRow">
-          <select id="wslDistro" style="width:100%;font-size:11px"></select>
-        </div>
         <div class="popover-sep">안내</div>
         <div style="padding:4px 8px 8px;font-size:11px;color:var(--muted);line-height:1.5">
-          바꾸면 <b>다음에 여는 세션부터</b> 적용됩니다.<br>
-          tmux 는 허브를 껐다 켜도 세션이 살아 있고, 같은 패널로 다시 붙습니다.<br>
-          <b>WSL tmux</b> 는 <code>wsl.exe -e tmux</code> 로 화면을 읽는 외부 위젯·도구가 세션을 볼 수 있습니다.<br>
-          떼어내기 <b>Ctrl+B</b> 후 <b>D</b>.
+          바꾸면 <b>다음에 여는 세션부터</b> 적용됩니다.
+          <span id="tmuxNote"><br>tmux 는 허브를 껐다 켜도 세션이 살아 있고, 같은 패널로 다시 붙습니다.<br>
+          떼어내기 <b>Ctrl+B</b> 후 <b>D</b>.</span>
         </div>
       </div>
     </div>
@@ -640,13 +645,11 @@
     </div>
     </div>
     <button id="helpBtn" class="ghost icon-btn" title="단축키 · 명령어 도움말 (?)"><span data-icon="help"></span></button>
+    <!-- 계정: 새 패널을 열 계정 + 계정 관리 (app.js renderAccountButton) -->
+    <button id="acctBtn" class="ghost acct-btn" title="계정 — 새 패널을 열 계정 · 계정 추가/관리"></button>
   </header>
 
-  <div id="tabs">
-    <div id="tabList"></div>
-    <button id="addProfile" class="ghost" title="새 계정(프로필) 추가"><span data-icon="plus"></span> 프로필</button>
-  </div>
-  <!-- 프로젝트 탭: 계정 안에서 세션을 작업 경로별로 묶는다 (app.js renderProjectTabs) -->
+  <!-- 프로젝트 탭: 세션을 작업 경로별로 묶는다 (app.js renderProjectTabs). 계정은 패널마다 따로 정한다 -->
   <div id="projTabs" style="display:none"></div>
 
   <!-- 최소화 트레이 (최소화된 세션이 있을 때만 표시) -->
@@ -663,7 +666,6 @@
         <span id="lnbTitle">최근 세션</span>
         <div class="lnb-head-btns">
           <button id="lnbAllSessionsToggle" class="lnb-alltoggle" title="닫혔지만 기록은 남아있는 세션까지 전부 보기">모든 세션</button>
-          <button id="lnbAllToggle" class="lnb-alltoggle" title="모든 계정의 세션을 함께 보기 (다른 계정 대화 이어가기)">모든 계정</button>
           <button id="lnbRefresh" class="ghost icon-btn" title="새로고침"><span data-icon="refresh"></span></button>
         </div>
       </div>
@@ -793,6 +795,7 @@
   <script src="/project-key.js"></script>
   <script src="/md-lite.js"></script>
   <script src="/paste-image.js"></script>
+  <script src="/account-ui.js"></script>
   <script src="/app.js"></script>
   <script src="/prompt-scan.js"></script>
   <script src="/prompt-answer.js"></script>

@@ -135,8 +135,9 @@
       const { project } = PK.parseWorkspaceKey(k);
       w.columns.forEach((c) => c.panes.forEach((p) => add(project, projectCwd[k] || project, p)));
     }
+    // 계정은 패널마다 다를 뿐 화면은 하나 — 최소화된 패널도 계정과 상관없이 모은다
     minimized.forEach((p) => {
-      if (p.cfg && (p.cfg.profile || 'default') === activeProfileId) add(PK.projectId(p.cfg.cwd), p.cfg.cwd, p);
+      if (p.cfg) add(PK.projectId(p.cfg.cwd), p.cfg.cwd, p);
     });
     return [...map.values()];
   }

@@ -304,14 +304,19 @@ function applyChatMode(m) {
   applyChatLayout(chatLayout());   // 배치(터미널+대화 / 대화만)까지 반영
 }
 
-/* ---------- 계정 프로필 / 탭 ---------- */
+/* ---------- 계정 ----------
+ * 계정은 «이 패널을 어느 로그인으로 돌리나» 만 정한다. 설정·에이전트·대화 기록은 모든 계정이 같이 쓰고
+ * (server.js ensureShared), 화면도 하나다 — 패널마다 계정 칩으로 바꾸고, 머리줄 계정 버튼은 새 패널의 기본 계정을 고른다. */
 let profiles = [{ id: 'default', name: '기본' }]; // 서버 /api/state 에서 로드됨
 function saveProfiles() {
   fetch('/api/profiles', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ profiles }) }).catch(() => {});
 }
-let activeProfileId = localStorage.getItem('cth_active_profile') || 'default';
-/* ---------- 워크스페이스 = 계정(프로필) › 프로젝트(작업 경로) ----------
- * 키는 `<프로필>::<프로젝트 id>` (public/project-key.js). 지금 보이는 워크스페이스의 columns 는
+// 새 패널을 열 계정. 예전엔 지금 보던 계정 탭(cth_active_profile)이 그 역할이었다.
+let newPaneProfile = localStorage.getItem('cth_new_pane_profile') || localStorage.getItem('cth_active_profile') || 'default';
+// 워크스페이스 키의 프로필 자리 — 화면이 계정과 상관없이 하나라 항상 'default'
+let activeProfileId = 'default';
+/* ---------- 워크스페이스 = 프로젝트(작업 경로) ----------
+ * 키는 `default::<프로젝트 id>` (public/project-key.js — 예전엔 계정마다 따로였다). 지금 보이는 워크스페이스의 columns 는
  * 전역 `columns` 와 같은 배열이다(splice/push 로만 바꾸므로 참조가 유지된다).
  * 숨겨진 워크스페이스의 DOM 은 wsStash 에 붙여 두어 term/ws 가 살아 있다. */
 const PK = window.ProjectKey;
@@ -335,50 +340,38 @@ function setGroupProjects(on) {
   location.reload();
 }
 workspaces[currentWsKey()] = { columns, activePane: null, columnSizes: null };
-const accountCache = {}; // id -> 계정 라벨 (탭 호버 툴팁)
+const accountCache = {}; // id -> 로그인한 이메일 또는 안내 (계정 메뉴)
 function fetchAccount(id) {
-  accountCache[id] = '계정 확인 중…';
+  accountCache[id] = '확인 중…';
   fetch(`/api/account?profile=${encodeURIComponent(id)}`).then((r) => r.json()).then((a) => {
-    accountCache[id] = a.loggedIn ? `계정: ${a.email}` : '로그인 안 됨 — 첫 세션에서 /login 하세요';
-    renderTabs();
-  }).catch(() => { accountCache[id] = '계정 정보 없음'; renderTabs(); });
+    accountCache[id] = a.loggedIn ? a.email : '로그인 안 됨';
+  }).catch(() => { accountCache[id] = '계정 정보 없음'; });
 }
 const wsStash = document.createElement('div');
 wsStash.style.display = 'none';
 document.body.appendChild(wsStash);
-const profileQ = () => `profile=${encodeURIComponent(activeProfileId)}`;
-// LNB(최근/검색)에서 "모든 계정" 보기 토글 — 켜면 모든 프로필 세션을 함께 나열
-let lnbAllProfiles = localStorage.getItem('cth_lnb_all_profiles') === '1';
 // LNB "모든 세션" 보기 토글 — 켜면 개수 제한 없이(서버 상한 500) 닫힌 세션까지 전부 나열 + 입력 시각 표시
 let lnbAllSessions = localStorage.getItem('cth_lnb_all_sessions') === '1';
-const lnbProfileQ = () => (lnbAllProfiles ? 'profile=__all__' : profileQ());
-function profileName(id) { const p = profiles.find((x) => x.id === id); return p ? p.name : (id || '기본'); }
+function profileName(id) { const p = profiles.find((x) => x.id === id); return p ? p.name : (!id || id === 'default' ? '기본' : id); }
+const knownProfile = (id) => profiles.some((p) => p.id === id);
 
-// 세션 열기: 다른 계정 소속이면 그 계정 탭으로 전환 후 열기(원 계정으로 이어가기 = 방식 A)
+// 세션 열기: 이미 패널에 열려 있으면 그리로 가고, 아니면 새 패널 기본 계정으로 연다
 function openSession(s, placement) {
-  const known = s.profile && profiles.find((p) => p.id === s.profile);
-  addPane({ cwd: s.cwd, resumeId: s.id, title: s.title, profile: known ? s.profile : activeProfileId }, placement || 'column');
+  const open = findPaneByResumeId(s.id);
+  if (open) { revealPane(open); return; }
+  addPane({ cwd: s.cwd, resumeId: s.id, title: s.title, profile: newPaneProfile }, placement || 'column');
 }
-
-// 다른 계정 대화를 현재 활성 계정으로 복사해서 이어가기(방식 B). 원본은 그대로 유지.
-async function continueHere(s) {
-  const target = activeProfileId;
-  const r = await fetch('/api/session/copy', {
-    method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ id: s.id, cwd: s.cwd, fromProfile: s.profile || 'default', toProfile: target }),
-  }).then((x) => x.json()).catch(() => ({ error: '요청 실패' }));
-  if (!r || r.error) { await uiConfirm((r && r.error) || '복사에 실패했습니다.', '이어가기 실패'); return; }
-  addPane({ cwd: s.cwd, resumeId: s.id, title: s.title, profile: target }, 'column');
+function findPaneByResumeId(id) {
+  return id ? allWorkspacePanes().find((p) => p.cfg && p.cfg.resumeId === id && !p.cfg.viewer && p.term) || null : null;
 }
 
 const wsPaneCount = (w) => (w ? w.columns.reduce((a, c) => a + c.panes.length, 0) : 0);
 function workspaceEntriesOf(profileId) {
   return Object.entries(workspaces).filter(([k]) => { const p = PK.parseWorkspaceKey(k); return p && p.profile === profileId; });
 }
-// 최소화(트레이) 패널도 센다 — 안 세면 최소화 세션만 남은 계정을 지울 수 있다
+// 이 계정으로 돌고 있는 패널 수(최소화 포함) — 안 세면 쓰고 있는 계정을 지울 수 있다
 function paneCountOf(id) {
-  const minCount = minimized.filter((p) => p.cfg && (p.cfg.profile || 'default') === id).length;
-  return workspaceEntriesOf(id).reduce((a, [, w]) => a + wsPaneCount(w), 0) + minCount;
+  return allWorkspacePanes().filter((p) => p.term && p.cfg && (p.cfg.profile || 'default') === id).length;
 }
 // 모든 워크스페이스(숨겨진 프로젝트·계정 포함) + 최소화 트레이의 패널
 function allWorkspacePanes() {
@@ -411,7 +404,6 @@ function enterWorkspace(profile, project) {
   columns.forEach((c) => wsStash.appendChild(c.el));
   activeProfileId = profile;
   activeProject = project;
-  localStorage.setItem('cth_active_profile', profile);
   if (!workspaces[currentWsKey()]) pinNewTabTheme(currentWsKey());
   const w = workspaces[currentWsKey()] || (workspaces[currentWsKey()] = { columns: [], activePane: null, columnSizes: null });
   columns = w.columns;
@@ -426,32 +418,23 @@ function enterWorkspace(profile, project) {
 
 // 사용자가 보는 전환 — 탭·상태·최근 목록까지 갱신
 function switchWorkspace(profile, project) {
-  const profileChanged = profile !== activeProfileId;
-  if (!profileChanged && project === activeProject) { renderTabs(); return; }
+  if (profile === activeProfileId && project === activeProject) { renderTabs(); return; }
   enterWorkspace(profile, project);
-  if (profileChanged && !layoutRestoreAttempted.has(profile)) restoreLayoutForProfile(profile);
   if (!restoringLayout) saveLastProject();
-  if (profileChanged) {
-    delete accountCache[profile]; // 전환 시 계정 정보 재조회 (로그인 변경 반영)
-    const si = document.getElementById('lnbSearch');
-    if (si) { si.value = ''; document.getElementById('lnbSearchClear').style.display = 'none'; }
-    loadRecent();
-  }
   updateStatus();
   if (activePane) setActive(activePane);
   updateThemeScopeRow();
 }
 
-// 패널 cfg 의 (계정, 작업 경로)에 맞는 워크스페이스로 옮겨 간다. 경로가 없는 패널(미리보기)은 지금 자리.
+// 패널 cfg 의 작업 경로에 맞는 워크스페이스(프로젝트 탭)로 옮겨 간다. 경로가 없는 패널(미리보기)은 지금 자리.
+// 계정은 화면을 나누지 않는다 — 지워진 계정 소속이면 새 패널 기본 계정으로 돌린다.
 function routeToWorkspaceFor(cfg) {
   if (!cfg || !cfg.cwd) return;
-  // 지워진 계정 소속이면 지금 계정으로 — 아니면 어느 탭에서도 안 보이는 세션이 된다
-  const profile = profiles.some((x) => x.id === cfg.profile) ? cfg.profile : activeProfileId;
-  cfg.profile = profile;
+  if (!knownProfile(cfg.profile)) cfg.profile = knownProfile(newPaneProfile) ? newPaneProfile : 'default';
   const project = projectOfCwd(cfg.cwd);
-  const key = PK.workspaceKey(profile, project);
+  const key = PK.workspaceKey(activeProfileId, project);
   if (project && !projectCwd[key]) projectCwd[key] = cfg.cwd;
-  if (profile !== activeProfileId || project !== activeProject) switchWorkspace(profile, project);
+  if (project !== activeProject) switchWorkspace(activeProfileId, project);
 }
 
 // 계정의 어떤 프로젝트를 보여줄지 — 마지막으로 본 것 → 패널이 있는 첫 프로젝트 → 빈 화면
@@ -460,12 +443,6 @@ function preferredProjectOf(profileId) {
   const last = lastProjectOf[profileId];
   if (last != null && entries.some(([k]) => PK.parseWorkspaceKey(k).project === last)) return last;
   return entries.length ? PK.parseWorkspaceKey(entries[0][0]).project : (last || '');
-}
-
-function switchProfile(id) {
-  if (id === activeProfileId) { renderTabs(); return; }
-  if (!layoutRestoreAttempted.has(id)) restoreLayoutForProfile(id); // 그 계정의 프로젝트 탭을 먼저 만든다
-  switchWorkspace(id, preferredProjectOf(id));
 }
 
 // 다른 프로젝트 패널을 보여줄 때 — 펫·데스크톱 뷰에서 «보기» 를 누르면 여기로 온다.
@@ -566,55 +543,74 @@ function renderProjectTabs() {
 
 function renderTabs() {
   renderProjectTabs();
-  const list = document.getElementById('tabList');
-  if (!list) return;
-  list.innerHTML = '';
-  profiles.forEach((p) => {
-    const t = document.createElement('div');
-    t.className = 'tab' + (p.id === activeProfileId ? ' active' : '');
-    const n = paneCountOf(p.id);
-    t.innerHTML = `<span class="tname">${escapeHtml(p.name)}</span>` +
-      (n ? `<span class="cnt">${n}</span>` : '') +
-      (p.id !== 'default' ? `<button class="tclose" title="프로필 삭제">${ICON.x}</button>` : '');
-    if (!(p.id in accountCache)) fetchAccount(p.id);
-    const acct = accountCache[p.id] || '계정 확인 중…';
-    t.title = acct + (p.id !== 'default' ? '\n더블클릭 = 이름 변경' : '');
-    t.addEventListener('click', () => switchProfile(p.id));
-    if (p.id !== 'default') {
-      t.addEventListener('dblclick', (e) => { e.stopPropagation(); renameProfile(p.id); });
-    }
-    const cb = t.querySelector('.tclose');
-    if (cb) cb.addEventListener('click', (e) => { e.stopPropagation(); deleteProfile(p.id); });
-    list.appendChild(t);
-  });
+  renderAccountButton();
 }
 
+/* ---------- 계정 메뉴 (머리줄 계정 버튼) — 새 패널을 열 계정 + 계정 추가 · 이름 · 삭제 ---------- */
+const acctBtn = document.getElementById('acctBtn');
+function renderAccountButton() {
+  if (!acctBtn) return;
+  if (!knownProfile(newPaneProfile)) newPaneProfile = 'default';
+  acctBtn.innerHTML = `${AccountUI.dotHtml(newPaneProfile)}<span class="lbl">${escapeHtml(profileName(newPaneProfile))}</span><span class="car">▼</span>`;
+}
+function setNewPaneProfile(id) {
+  newPaneProfile = id;
+  try { localStorage.setItem('cth_new_pane_profile', id); } catch { /* 저장 못 하면 이번 실행만 */ }
+  renderAccountButton();
+  refreshLnb(); // 세션 목록 툴팁의 «○○ 계정으로 열기»
+}
+function accountSub(id) {
+  if (!(id in accountCache)) fetchAccount(id);
+  const n = paneCountOf(id);
+  return accountCache[id] + (n ? ` · 패널 ${n}` : '');
+}
+function openAccountMenu() {
+  AccountUI.openMenu(acctBtn, [
+    { title: '새 패널을 열 계정', items: profiles.map((p) => ({ id: p.id, label: p.name, sub: accountSub(p.id), current: p.id === newPaneProfile, onClick: () => setNewPaneProfile(p.id) })) },
+    { title: '관리', items: [
+      { label: '+ 계정 추가', sub: '새 패널에서 /login', onClick: addProfile },
+      ...(profiles.length > 1 ? [
+        { label: '이름 바꾸기…', onClick: () => pickAccountThen('이름을 바꿀 계정', renameProfile) },
+        { label: '계정 삭제…', onClick: () => pickAccountThen('삭제할 계정', deleteProfile) },
+      ] : []),
+    ] },
+  ], '설정 · 에이전트 · 스킬 · 대화 기록은 모든 계정이 같이 씁니다. 계정마다 다른 건 로그인과 사용량뿐입니다. 열린 패널의 계정은 패널 머리줄의 계정 칩으로 바꿉니다.');
+}
+// 이름 바꾸기·삭제할 계정 고르기 (기본 계정은 이름 고정 · 삭제 불가)
+function pickAccountThen(title, fn) {
+  setTimeout(() => AccountUI.openMenu(acctBtn, [
+    { title, items: profiles.filter((p) => p.id !== 'default').map((p) => ({ id: p.id, label: p.name, sub: accountSub(p.id), onClick: () => fn(p.id) })) },
+  ]), 0);
+}
+if (acctBtn) acctBtn.addEventListener('click', (e) => { e.stopPropagation(); closePopovers(); openAccountMenu(); });
+
 async function addProfile() {
-  const name = await uiPrompt('새 계정(프로필) 추가', '', '예: 회사, 개인 — 첫 세션에서 /login 으로 그 계정에 로그인하세요.');
+  const name = await uiPrompt('계정 추가', '', '예: 회사, 개인 — 이 계정으로 새 패널을 열고 /login 으로 로그인하세요.');
   if (!name || !name.trim()) return;
   const id = 'p_' + Math.abs(Date.now()).toString(36);
   profiles.push({ id, name: name.trim() });
   saveProfiles();
-  switchProfile(id);
+  setNewPaneProfile(id);
+  AccountUI.toast(`새 패널은 ${name.trim()} 계정으로 열립니다 — 처음 한 번 /login 하세요`);
 }
 
 async function renameProfile(id) {
-  if (id === 'default') return; // 기본 프로필은 이름 고정
+  if (id === 'default') return; // 기본 계정은 이름 고정
   const p = profiles.find((x) => x.id === id);
   if (!p) return;
-  const v = await uiPrompt('프로필 이름 변경', p.name);
+  const v = await uiPrompt('계정 이름 바꾸기', p.name);
   if (v === null || !v.trim()) return;
   p.name = v.trim();
   saveProfiles();
   renderTabs();
+  allWorkspacePanes().forEach((x) => { if (x._renderAcct) x._renderAcct(); });
 }
 
 async function deleteProfile(id) {
-  if (paneCountOf(id) > 0) { await uiConfirm('이 프로필에 열린 세션이 있습니다. 먼저 닫아주세요.', '삭제 불가'); return; }
-  if (!(await uiConfirm('계정 로그인 폴더(~/.claude-hub-profiles)는 남습니다.', '이 프로필 탭을 삭제할까요?'))) return;
-  if (activeProfileId === id) switchProfile('default');
+  if (paneCountOf(id) > 0) { await uiConfirm('이 계정으로 돌고 있는 패널이 있습니다. 먼저 닫거나 다른 계정으로 바꿔 주세요.', '삭제 불가'); return; }
+  if (!(await uiConfirm('로그인 폴더(~/.claude-hub-profiles)는 남습니다. 대화 기록은 모든 계정이 같이 쓰므로 그대로입니다.', `${profileName(id)} 계정을 목록에서 뺄까요?`))) return;
   profiles = profiles.filter((p) => p.id !== id);
-  workspaceEntriesOf(id).forEach(([k]) => delete workspaces[k]);
+  if (newPaneProfile === id) setNewPaneProfile('default');
   saveProfiles();
   renderTabs();
 }
@@ -680,38 +676,18 @@ function renderShellPopover() {
   if (lbl) lbl.textContent = isWin ? 'PowerShell' : '기본 셸 ($SHELL)';
   document.querySelectorAll('#shellPopover .popover-item[data-shell]').forEach((el) => {
     el.classList.toggle('active', el.dataset.shell === shellSettings.shell);
-    // Windows 는 WSL tmux 만, macOS/Linux 는 시스템 tmux 만 보인다.
-    if (el.dataset.shell === 'wsl-tmux') el.style.display = isWin ? '' : 'none';
+    // tmux 는 macOS/Linux 에서만 — Windows 는 PowerShell 로만 연다
     if (el.dataset.shell === 'tmux') el.style.display = isWin ? 'none' : '';
   });
-  // 배포판 선택은 WSL tmux 를 골랐을 때만 보여준다.
-  const showWsl = isWin && shellSettings.shell === 'wsl-tmux';
-  const vis = (id, on) => { const e = document.getElementById(id); if (e) e.style.display = on ? '' : 'none'; };
-  vis('wslDistroSep', showWsl); vis('wslDistroRow', showWsl);
-  if (showWsl) loadWslDistros();
+  const tmuxNote = document.getElementById('tmuxNote');
+  if (tmuxNote) tmuxNote.style.display = isWin ? 'none' : '';
 
   const btn = document.getElementById('shellBtn');
   if (btn) {
     btn.classList.toggle('on', shellSettings.shell !== 'powershell');
-    const label = { 'wsl-tmux': 'WSL tmux', tmux: 'tmux' }[shellSettings.shell]
-      || (isWin ? 'PowerShell' : '기본 셸');
+    const label = shellSettings.shell === 'tmux' ? 'tmux' : (isWin ? 'PowerShell' : '기본 셸');
     btn.title = '터미널 셸 — 현재: ' + label;
   }
-}
-
-// 설치된 WSL 배포판 목록 (서버가 wsl.exe --list 로 조회). 한 번만 받아 캐시한다.
-let wslDistrosLoaded = false;
-async function loadWslDistros() {
-  const sel = document.getElementById('wslDistro');
-  if (!sel || wslDistrosLoaded) { if (sel) sel.value = shellSettings.wslDistro || ''; return; }
-  try {
-    const r = await fetch('/api/wsl-distros').then((x) => x.json());
-    const list = Array.isArray(r.distros) ? r.distros : [];
-    sel.innerHTML = '<option value="">기본 배포판</option>'
-      + list.map((n) => `<option value="${n.replace(/"/g, '&quot;')}">${n}</option>`).join('');
-    wslDistrosLoaded = true;
-    sel.value = shellSettings.wslDistro || '';
-  } catch {}
 }
 
 async function saveShellSettings(patch) {
@@ -741,9 +717,6 @@ document.getElementById('shellPopover').addEventListener('click', (e) => {
   const item = e.target.closest('.popover-item[data-shell]');
   if (!item) return;
   saveShellSettings({ shell: item.dataset.shell });
-});
-document.getElementById('wslDistro').addEventListener('change', (e) => {
-  saveShellSettings({ wslDistro: e.target.value });
 });
 
 /* ================= 캐릭터 테마 =================
@@ -1386,17 +1359,12 @@ function collectWorkspaceSnapshot(cols) {
 function readSavedLayout() {
   try { return JSON.parse(localStorage.getItem('cth_layout') || '{}') || {}; } catch { return {}; }
 }
-const savedProfileOf = (k) => { const p = PK.parseWorkspaceKey(k); return p ? p.profile : k; };
-// 키: `<프로필>::<프로젝트>` 마다 { columns, columnSizes, cwd }. 옛 형식은 프로필 id 를 키로 썼다.
+// 키: `default::<프로젝트>` 마다 { columns, columnSizes, cwd }. 패널마다 제 계정(profile)을 들고 있다.
+// 예전 형식(계정마다 `<프로필>::<프로젝트>`, 더 예전엔 프로필 id 만)은 복원할 때 한 화면으로 합쳐지고 다음 저장에서 사라진다.
 function saveLayout() {
-  if (restoringLayout) return;
+  if (restoringLayout || !layoutRestored) return; // 복원 전에 저장하면 옛 레이아웃을 지운다
   try {
-    const prev = readSavedLayout();
     const out = {};
-    // 이번 실행에서 아직 열어 보지 않은 계정의 레이아웃은 그대로 둔다(덮어쓰면 사라진다).
-    for (const [k, v] of Object.entries(prev)) {
-      if (k !== '__minimized' && !layoutRestoreAttempted.has(savedProfileOf(k))) out[k] = v;
-    }
     const cur = currentWsKey();
     for (const [k, w] of Object.entries(workspaces)) {
       const snap = collectWorkspaceSnapshot(w.columns);
@@ -1412,27 +1380,31 @@ function saveLayout() {
 }
 const saveLayoutDebounced = debounce(saveLayout, 400);
 
-const layoutRestoreAttempted = new Set();
+let layoutRestored = false;
 let restoringLayout = false;
-// 계정의 저장된 워크스페이스(프로젝트 탭)를 모두 되살린다. 끝나면 원래 보던 워크스페이스로 돌아온다.
-function restoreLayoutForProfile(pid) {
-  layoutRestoreAttempted.add(pid);
+// 저장된 워크스페이스(프로젝트 탭)를 모두 되살린다 — 예전에 계정마다 따로였던 것도 같은 프로젝트 탭으로 모은다.
+// 끝나면 원래 보던 워크스페이스로 돌아온다.
+function restoreAllLayouts() {
   const saved = readSavedLayout();
   const back = { profile: activeProfileId, project: activeProject };
   const wasRestoring = restoringLayout;
   restoringLayout = true;
   try {
     for (const [k, ws] of Object.entries(saved)) {
-      if (k === '__minimized' || savedProfileOf(k) !== pid || !ws || !Array.isArray(ws.columns)) continue;
+      if (k === '__minimized' || !ws || !Array.isArray(ws.columns)) continue;
       const parsed = PK.parseWorkspaceKey(k);
-      if (parsed && ws.cwd) projectCwd[k] = ws.cwd;
       // 옛 형식은 빈 프로젝트로 들어가 패널마다 제 프로젝트 탭으로 갈라진다(addPane 의 경로 라우팅).
       // 프로젝트 탭을 끈 상태면 모두 빈 프로젝트(탭 하나)로 모은다
-      enterWorkspace(pid, parsed && groupProjects() ? parsed.project : '');
-      restoreWorkspaceSnapshot(ws, !!parsed); // 옛 형식은 패널이 여러 탭으로 갈라져 비율이 안 맞는다
+      const project = parsed && groupProjects() ? parsed.project : '';
+      const key = PK.workspaceKey(activeProfileId, project);
+      if (parsed && ws.cwd && !projectCwd[key]) projectCwd[key] = ws.cwd;
+      const merging = wsPaneCount(workspaces[key]) > 0; // 다른 계정 탭에 있던 같은 프로젝트를 덧붙이는 중
+      enterWorkspace(activeProfileId, project);
+      restoreWorkspaceSnapshot(ws, !!parsed && !merging); // 덧붙이거나 옛 형식이면 비율이 안 맞는다
     }
   } finally {
     restoringLayout = wasRestoring;
+    layoutRestored = true;
   }
   enterWorkspace(back.profile, back.project);
 }
@@ -1578,7 +1550,7 @@ function addPane(cfg, placement) {
       <span class="label" title="${escapeHtml(cfg.cwd)}">
         <span class="ttl">${escapeHtml(title)}</span><span class="cwd">${ICON.folder}<span>${escapeHtml(shortCwd)}</span></span>
       </span>
-      <button class="artifact" title="Claude 아티팩트 미리보기" style="display:none"></button>
+      <button class="acct" title="이 패널을 돌리는 계정 — 눌러서 다른 계정으로 이어가기"></button>
       <button class="reload" title="새로고침 (세션 다시 불러오기)">${ICON.refresh}</button>
       <button class="split" title="아래로 분할">${ICON.split}</button>
       <button class="min" title="최소화 (숨김 — claude 는 계속 실행)">${ICON.minimize}</button>
@@ -1733,6 +1705,15 @@ function addPane(cfg, placement) {
     reconnectTimer = setTimeout(() => { reconnectTimer = null; connect(true); }, delay);
   }
 
+  // fork: 다른 곳에서 열려 있는 대화를 갈라서 연다(중복 열기 안내에서 고른 경우 한 번만)
+  function sendInit(fork) {
+    if (!ws || ws.readyState !== WebSocket.OPEN) return;
+    ws.send(JSON.stringify({
+      type: 'init', key: cfg.key, cwd: cfg.cwd, runClaude: cfg.runClaude, command: cfg.command,
+      resumeId: cfg.resumeId, profile: cfg.profile, fork: !!fork, cols: term.cols || 80, rows: term.rows || 24,
+    }));
+  }
+
   function connect(isReconnect) {
     ws = new WebSocket(`${proto}://${location.host}/pty`);
     ws.binaryType = 'arraybuffer';
@@ -1744,10 +1725,7 @@ function addPane(cfg, placement) {
       startHeartbeat();
       if (isReconnect) term.write('\r\n\x1b[90m[재연결됨]\x1b[0m\r\n');
       paneObj.fit();
-      ws.send(JSON.stringify({
-        type: 'init', key: cfg.key, cwd: cfg.cwd, runClaude: cfg.runClaude, command: cfg.command,
-        resumeId: cfg.resumeId, profile: cfg.profile, cols: term.cols || 80, rows: term.rows || 24,
-      }));
+      sendInit();
     };
     ws.onmessage = (ev) => {
       if (typeof ev.data === 'string' && ev.data.startsWith('{')) {
@@ -1767,7 +1745,14 @@ function addPane(cfg, placement) {
             paneObj._subagents = [];
             term.write(`\r\n\x1b[90m[프로세스 종료됨 (code ${m.code})]\x1b[0m\r\n`); return;
           }
-          if (m.type === 'error') { term.write(`\r\n\x1b[31m${m.message}\x1b[0m\r\n`); return; }
+          if (m.type === 'error') { setAcctBusy(false); term.write(`\r\n\x1b[31m${m.message}\x1b[0m\r\n`); return; }
+          if (m.type === 'busy') { onSessionBusy(m); return; }
+          if (m.type === 'limit') { onUsageLimit(m.profile); return; }
+          if (m.type === 'switching') {
+            term.write(`\r\n\x1b[90m[${profileName(m.from)} 계정 claude 종료 중 → ${profileName(m.to)} 계정으로 같은 대화를 다시 엽니다…]\x1b[0m\r\n`);
+            return;
+          }
+          if (m.type === 'account') { onAccountSwitched(m.profile); return; }
           if (m.type === 'pong') { missedPongs = 0; return; } // 하트비트 응답 → 살아있음
           if (m.type === 'changed') { onExternalChange(); return; }
           // 새 대화의 Claude 세션 ID — 레이아웃에 남겨 허브를 다시 켜면 이 대화로 이어간다.
@@ -1785,7 +1770,6 @@ function addPane(cfg, placement) {
             saveLayoutDebounced();
             return;
           }
-          if (m.type === 'artifact') { onArtifact(m.path); return; }
           // HUD — 지금 쓰는 도구 (public/hud-status.js 가 읽는다)
           if (m.type === 'activity') { paneObj._activity = { tool: m.tool || '', target: m.target || '', at: m.at || Date.now() }; return; }
           if (m.type === 'subagents') { paneObj._subagents = Array.isArray(m.list) ? m.list : []; return; }
@@ -1840,7 +1824,7 @@ function addPane(cfg, placement) {
       try { window.removeEventListener('focus', onWake); } catch {}
       try { document.removeEventListener('visibilitychange', onVisible); } catch {}
       try { ro.disconnect(); } catch {}
-      closeArtifactDropdown();
+      AccountUI.closeMenu();
       // 서버 pty 를 실제로 종료(패널 닫기 = 세션 종료). ws close 만으로는 이제 pty 가 안 죽음.
       try { if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: 'kill' })); } catch {}
       try { if (ws) ws.close(); } catch {}
@@ -2029,7 +2013,7 @@ function addPane(cfg, placement) {
   pane.querySelector('.split').addEventListener('click', (e) => {
     e.stopPropagation();
     setActive(paneObj);
-    addPane({ cwd: cfg.cwd, runClaude: true, command: 'claude', title: 'claude 새 대화' }, 'row');
+    addPane({ cwd: cfg.cwd, runClaude: true, command: 'claude', title: 'claude 새 대화', profile: cfg.profile }, 'row'); // 나눈 패널은 같은 계정으로
   });
   pane.querySelector('.reload').addEventListener('click', (e) => {
     e.stopPropagation();
@@ -2038,46 +2022,57 @@ function addPane(cfg, placement) {
   });
   const reloadBtn = pane.querySelector('.reload');
 
-  // Claude 아티팩트(세션 중 만들거나 고친 파일) 감지 → 칩에 개수 표시, 클릭하면 전체 목록을 드롭다운으로
-  const artifactBtn = pane.querySelector('.artifact');
-  const artifactSeen = new Set(); // 배지 카운트용(서버가 최종 목록의 authoritative source)
-  let artifactDropdown = null;
-  function closeArtifactDropdown() {
-    if (artifactDropdown) { artifactDropdown.remove(); artifactDropdown = null; }
-    document.removeEventListener('mousedown', onDocMouseDownForArtifact, true);
+  // ---- 계정 칩 — 이 패널을 돌리는 계정. 눌러서 같은 대화를 다른 계정으로 이어간다(server.js switchAccount) ----
+  const acctChip = pane.querySelector('.acct');
+  function renderAcct() {
+    acctChip.innerHTML = `${AccountUI.dotHtml(cfg.profile)}<span class="an">${escapeHtml(profileName(cfg.profile))}</span><span class="car">▼</span>`;
   }
-  function onDocMouseDownForArtifact(e) {
-    if (artifactDropdown && !artifactDropdown.contains(e.target) && e.target !== artifactBtn) closeArtifactDropdown();
+  paneObj._renderAcct = renderAcct;
+  renderAcct();
+  function setAcctBusy(on) { acctChip.classList.toggle('busy', !!on); }
+  function switchPaneAccount(id) {
+    if (id === cfg.profile) return;
+    if (!cfg.resumeId) { AccountUI.toast('claude 대화가 열린 패널만 계정을 바꿀 수 있습니다'); return; }
+    if (!ws || ws.readyState !== WebSocket.OPEN) { AccountUI.toast('서버와 다시 연결된 뒤에 바꿔 주세요'); return; }
+    setAcctBusy(true);
+    ws.send(JSON.stringify({ type: 'switchAccount', profile: id }));
   }
-  async function openArtifactDropdown() {
-    if (artifactDropdown) { closeArtifactDropdown(); return; }
-    const dd = document.createElement('div');
-    dd.className = 'popover open artifact-dropdown';
-    dd.innerHTML = '<div class="popover-item" style="cursor:default;color:var(--muted)">불러오는 중…</div>';
-    artifactBtn.appendChild(dd);
-    artifactDropdown = dd;
-    setTimeout(() => document.addEventListener('mousedown', onDocMouseDownForArtifact, true), 0);
-    const r = await fetch(`/api/artifacts?key=${encodeURIComponent(cfg.key)}`).then((x) => x.json()).catch(() => ({ files: [] }));
-    if (artifactDropdown !== dd) return; // 그 사이 닫혔으면 무시
-    const files = r.files || [];
-    if (!files.length) { dd.innerHTML = '<div class="popover-item" style="cursor:default;color:var(--muted)">아직 만들거나 고친 파일이 없습니다.</div>'; return; }
-    dd.innerHTML = '';
-    files.forEach((f) => {
-      const base = f.path.split(/[\\/]/).filter(Boolean).pop() || f.path;
-      const item = document.createElement('div');
-      item.className = 'popover-item';
-      item.title = f.path;
-      item.innerHTML = `${ICON.file}<span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(base)}</span><span style="margin-left:auto;color:var(--muted);font-size:10px">${escapeHtml(f.tool || '')}</span>`;
-      item.addEventListener('click', () => { closeArtifactDropdown(); addFilePreview(f.path, 'column'); });
-      dd.appendChild(item);
-    });
+  acctChip.addEventListener('click', (e) => {
+    e.stopPropagation();
+    AccountUI.openMenu(acctChip, [{
+      title: '이 대화를 이어갈 계정',
+      items: profiles.map((p) => ({
+        id: p.id, label: p.id === cfg.profile ? p.name : `${p.name}로 이어가기`,
+        sub: p.id === cfg.profile ? '지금 계정' : accountSub(p.id), current: p.id === cfg.profile,
+        onClick: () => switchPaneAccount(p.id),
+      })),
+    }], '지금 claude 를 정상 종료한 뒤 같은 대화를 그 계정으로 다시 엽니다. 진행 중인 답변이 있으면 끝난 뒤에 바꾸세요.');
+  });
+  function onAccountSwitched(id) {
+    setAcctBusy(false);
+    pane.querySelectorAll('.acct-bar').forEach((b) => b.remove());
+    cfg.profile = id;
+    renderAcct();
+    saveLayoutDebounced();
+    AccountUI.toast(`${profileName(id)} 계정으로 이어갑니다`);
   }
-  artifactBtn.addEventListener('click', (e) => { e.stopPropagation(); openArtifactDropdown(); });
-  function onArtifact(p) {
-    artifactSeen.add(p);
-    artifactBtn.innerHTML = `${ICON.eye}<span class="alabel">파일 ${artifactSeen.size}개</span>`;
-    artifactBtn.title = '이 세션에서 만들거나 고친 파일 보기';
-    artifactBtn.style.display = '';
+  // 사용 한도 — 남은 계정으로 이어가기를 제안한다(자동으로 넘기지는 않는다)
+  function onUsageLimit(profile) {
+    const others = profiles.filter((p) => p.id !== (profile || cfg.profile));
+    if (!others.length) return;
+    AccountUI.showBar(pane, `<b>${escapeHtml(profileName(profile || cfg.profile))}</b> 계정 사용 한도에 도달했습니다. 다른 계정으로 이 대화를 이어갈까요?`,
+      others.map((p) => ({ id: p.id, label: `${p.name}로 이어가기`, onClick: () => switchPaneAccount(p.id) })));
+  }
+  // 같은 대화가 이미 다른 곳에서 열려 있다 — 서버가 pty 를 만들지 않고 알려 온다
+  function onSessionBusy(m) {
+    const other = m.where === 'hub' ? allWorkspacePanes().find((p) => p.cfg && p.cfg.key === m.key) : null;
+    const where = other ? `다른 패널(${profileName(m.profile)} 계정)` : `허브 밖 터미널(${profileName(m.profile)} 계정)`;
+    term.write(`\r\n\x1b[33m[이 대화는 이미 ${where}에서 열려 있습니다]\x1b[0m\r\n`);
+    const actions = [];
+    if (other) actions.push({ label: '그 패널로 이동', primary: true, onClick: () => { paneObj.dispose(); revealPane(other); } });
+    actions.push({ label: '갈라서 새로 열기', onClick: () => { term.write('\x1b[90m[지금까지의 대화를 복사한 새 대화로 엽니다]\x1b[0m\r\n'); sendInit(true); } });
+    actions.push({ label: '닫기', onClick: () => paneObj.dispose() });
+    AccountUI.showBar(pane, `같은 대화를 두 곳에서 동시에 쓰면 기록이 뒤섞입니다. ${escapeHtml(where)}에서 열려 있습니다.`, actions);
   }
 
   enablePaneDrag(paneObj, pane.querySelector('.bar'));
@@ -2335,7 +2330,7 @@ document.getElementById('add').addEventListener('click', startNewSession);
 async function loadRecentPaths() {
   const box = document.getElementById('recentPaths');
   box.innerHTML = '<div class="fsnote">불러오는 중…</div>';
-  const res = await fetch(`/api/recent-paths?limit=25&${profileQ()}`).then((r) => r.json()).catch(() => ({ paths: [] }));
+  const res = await fetch(`/api/recent-paths?limit=25`).then((r) => r.json()).catch(() => ({ paths: [] }));
   box.innerHTML = '';
   if (!res.paths || res.paths.length === 0) {
     box.innerHTML = '<div class="fsnote">최근 작업 경로가 없습니다. 위에 경로를 직접 입력하거나 폴더 선택기를 쓰세요.</div>';
@@ -2361,7 +2356,7 @@ async function loadRecentPaths() {
 async function choosePath(p) {
   p = (p || '').trim();
   if (!p) return;
-  const res = await fetch(`/api/fs/list?path=${encodeURIComponent(p)}&${profileQ()}`).then((r) => r.json()).catch(() => ({ error: '경로 조회 실패' }));
+  const res = await fetch(`/api/fs/list?path=${encodeURIComponent(p)}`).then((r) => r.json()).catch(() => ({ error: '경로 조회 실패' }));
   if (res.error) { document.getElementById('fsnote').textContent = res.error; return; }
   localStorage.setItem('cth_last_path', res.path);
   openSessionPicker(res.path);
@@ -2401,7 +2396,7 @@ async function openSessionPicker(p) {
   document.getElementById('sesCwd').textContent = p;
   document.getElementById('seslist').innerHTML = '<div class="sesempty">불러오는 중…</div>';
   openOverlay('session');
-  const res = await fetch(`/api/sessions?path=${encodeURIComponent(p)}&${profileQ()}`).then((r) => r.json()).catch(() => ({ sessions: [] }));
+  const res = await fetch(`/api/sessions?path=${encodeURIComponent(p)}`).then((r) => r.json()).catch(() => ({ sessions: [] }));
   const list = document.getElementById('seslist');
   document.getElementById('sesCount').textContent = res.total ? `(${res.sessions.length}/${res.total})` : '(0)';
   list.innerHTML = '';
@@ -2473,29 +2468,29 @@ function renderSessionList(sessions, emptyMsg, showTimes) {
   }
   sessions.forEach((s) => {
     const folder = s.cwd.split(/[\\/]/).filter(Boolean).pop() || s.cwd;
-    const other = s.profile && s.profile !== activeProfileId; // 다른 계정 소속 세션
+    // 대화는 계정끼리 공유 — 계정 칩은 «마지막으로 돌린 계정», 열림 칩은 지금 허브 패널에서 열려 있다는 뜻
+    const open = !!findPaneByResumeId(s.id);
+    const chips = (s.profile ? `<span class="rchip" title="마지막으로 돌린 계정">${AccountUI.dotHtml(s.profile)}${escapeHtml(profileName(s.profile))}</span>` : '')
+      + (open ? '<span class="rchip open">열림</span>' : '');
     const it = document.createElement('div');
     it.className = 'recent-item';
-    it.title = `${s.title}\n${s.cwd}` + (other ? `\n계정: ${profileName(s.profile)}` : '') + `\n클릭 = 열기`;
+    it.title = `${s.title}\n${s.cwd}` + (s.profile ? `\n마지막 계정: ${profileName(s.profile)}` : '')
+      + (open ? '\n클릭 = 열려 있는 패널로 이동' : `\n클릭 = ${profileName(newPaneProfile)} 계정으로 열기`);
     it.innerHTML = `
       <div class="rt">${ICON.chat}<span>${escapeHtml(s.title)}</span></div>
       <div class="rf">${ICON.folder}<span>${escapeHtml(folder)}</span></div>
       ${showTimes
-        ? `<div class="rs">최초 ${isoTime(s.firstInputAt)} · 마지막 ${isoTime(s.lastInputAt)}${other ? ` · <span class="rprof">${escapeHtml(profileName(s.profile))}</span>` : ''}</div>`
-        : `<div class="rs">${relTime(s.mtime)}${other ? ` · <span class="rprof">${escapeHtml(profileName(s.profile))}</span>` : ''}</div>`}
-      ${other ? `<button class="rcont" title="이 대화를 현재 계정(${escapeHtml(profileName(activeProfileId))})으로 복사해 이어가기">${escapeHtml(profileName(activeProfileId))} 계정으로 이어가기</button>` : ''}`;
+        ? `<div class="rs"><span>최초 ${isoTime(s.firstInputAt)} · 마지막 ${isoTime(s.lastInputAt)}</span>${chips}</div>`
+        : `<div class="rs"><span>${relTime(s.mtime)}</span>${chips}</div>`}`;
     it.onclick = () => openSession(s);
-    const cont = it.querySelector('.rcont');
-    if (cont) cont.addEventListener('click', (e) => { e.stopPropagation(); continueHere(s); });
     box.appendChild(it);
   });
 }
 
 async function loadRecent() {
-  const titleBits = [lnbAllSessions ? '모든 세션' : '최근 세션', lnbAllProfiles ? '모든 계정' : null].filter(Boolean);
-  document.getElementById('lnbTitle').textContent = titleBits.join(' · ');
+  document.getElementById('lnbTitle').textContent = lnbAllSessions ? '모든 세션' : '최근 세션';
   document.getElementById('recentList').innerHTML = '<div class="recent-empty">불러오는 중…</div>';
-  const q = lnbAllSessions ? `all=1&${lnbProfileQ()}` : `limit=${lnbAllProfiles ? 40 : 15}&${lnbProfileQ()}`;
+  const q = lnbAllSessions ? 'all=1' : 'limit=20';
   const res = await fetch(`/api/recent?${q}`).then((r) => r.json()).catch(() => ({ sessions: [] }));
   renderSessionList(res.sessions, '세션이 없습니다.', lnbAllSessions);
 }
@@ -2503,7 +2498,7 @@ async function loadRecent() {
 async function searchSessions(q) {
   document.getElementById('lnbTitle').textContent = '검색 중…';
   document.getElementById('recentList').innerHTML = '<div class="recent-empty">검색 중…</div>';
-  const res = await fetch(`/api/search?q=${encodeURIComponent(q)}&limit=60&${lnbProfileQ()}`).then((r) => r.json()).catch(() => ({ sessions: [] }));
+  const res = await fetch(`/api/search?q=${encodeURIComponent(q)}&limit=60`).then((r) => r.json()).catch(() => ({ sessions: [] }));
   document.getElementById('lnbTitle').textContent = `검색 결과 (${res.sessions.length})`;
   renderSessionList(res.sessions, `"${q}" 와 일치하는 세션이 없습니다.`);
 }
@@ -2536,15 +2531,6 @@ document.getElementById('lnbToggle').addEventListener('click', () => {
   setLnb(!document.body.classList.contains('lnb-collapsed'));
 });
 document.getElementById('lnbRefresh').addEventListener('click', refreshLnb);
-function setLnbAll(on) {
-  lnbAllProfiles = on;
-  localStorage.setItem('cth_lnb_all_profiles', on ? '1' : '0');
-  const b = document.getElementById('lnbAllToggle');
-  if (b) b.classList.toggle('on', on);
-  refreshLnb();
-}
-document.getElementById('lnbAllToggle').addEventListener('click', () => setLnbAll(!lnbAllProfiles));
-document.getElementById('lnbAllToggle').classList.toggle('on', lnbAllProfiles);
 function setLnbAllSessions(on) {
   lnbAllSessions = on;
   localStorage.setItem('cth_lnb_all_sessions', on ? '1' : '0');
@@ -2554,7 +2540,6 @@ function setLnbAllSessions(on) {
 }
 document.getElementById('lnbAllSessionsToggle').addEventListener('click', () => setLnbAllSessions(!lnbAllSessions));
 document.getElementById('lnbAllSessionsToggle').classList.toggle('on', lnbAllSessions);
-document.getElementById('addProfile').addEventListener('click', addProfile);
 document.querySelectorAll('#themePopover .popover-item').forEach((el) => {
   el.addEventListener('click', () => { applyTheme(el.dataset.theme); closePopovers(); });
 });
@@ -2914,19 +2899,30 @@ fetch('/health').then((r) => r.json()).then((d) => {
 
 // 서버 전역 상태(프로필) 로드
 async function initState() {
+  let merge = null;
   try {
     const s = await fetch('/api/state').then((r) => r.json());
     if (Array.isArray(s.profiles) && s.profiles.length) profiles = s.profiles;
     if (s.settings) { shellSettings = { ...shellSettings, ...s.settings }; renderShellPopover(); }
+    merge = s.merge || null;
   } catch {}
   if (!profiles.find((p) => p.id === 'default')) profiles.unshift({ id: 'default', name: '기본' });
-  if (!profiles.find((p) => p.id === activeProfileId)) enterWorkspace('default', '');
-  restoreLayoutForProfile(activeProfileId); // 마지막으로 열려있던 패널 레이아웃 복원(프로젝트 탭 전부)
+  renderAccountButton();
+  profiles.forEach((p) => fetchAccount(p.id)); // 계정 메뉴에 로그인 이메일을 바로 보이게
+  restoreAllLayouts(); // 마지막으로 열려있던 패널 레이아웃 복원(프로젝트 탭 전부)
   restoreMinimized(); // 최소화(트레이)돼 있던 패널도 복원
   enterWorkspace(activeProfileId, preferredProjectOf(activeProfileId));
   saveLastProject();
   updateStatus();
   loadRecent();
+  if (merge) showMergeReport(merge);
+}
+// 서버가 계정별로 흩어진 대화를 한 곳으로 합쳤으면 한 번 알린다 (server.js ensureShared)
+function showMergeReport(m) {
+  const n = (m.conflicts || []).length;
+  const msg = `계정별로 흩어진 대화와 설정 ${m.moved}개를 한 곳으로 합쳤습니다`
+    + (n ? ` · 양쪽에서 따로 이어진 ${n}개는 ${m.backups && m.backups[0] ? m.backups[0] : '백업 폴더'} 에 남겼습니다` : '');
+  AccountUI.toast(msg, n ? 12000 : 6000);
 }
 initState();
 // 로드 시 모달을 자동으로 열지 않는다 — 모달이 LNB(최근 세션) 클릭을 가리기 때문.

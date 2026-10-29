@@ -23,6 +23,8 @@ const pastedImages = require('./lib/pasted-images');
 const claudeRegistry = require('./lib/claude-registry');
 const activity = require('./lib/activity');
 const subagents = require('./lib/subagents');
+const sharedConfig = require('./lib/shared-config');
+const usageLimit = require('./lib/usage-limit');
 let pty;
 try {
   pty = require('node-pty');
@@ -34,10 +36,13 @@ try {
 
 const PORT = Number(process.env.CLAUDE_HUB_PORT || 4778);
 const IS_WIN = process.platform === 'win32';
-const PROJECTS_DIR = path.join(os.homedir(), '.claude', 'projects');
+// 메인 계정 폴더 — 설정·에이전트·스킬·대화 기록은 모든 계정이 이것 하나를 같이 쓴다(lib/shared-config.js).
+const MAIN_CONFIG_DIR = path.join(os.homedir(), '.claude');
+const PROJECTS_DIR = path.join(MAIN_CONFIG_DIR, 'projects');
 const PROFILES_ROOT = path.join(os.homedir(), '.claude-hub-profiles');
 
 // 프로필(계정)별 CLAUDE_CONFIG_DIR. 'default'/빈값이면 기본 ~/.claude 사용(null 반환).
+// 계정 폴더에 남는 것은 로그인(.credentials.json · .claude.json)과 실행 중 세션 등록부(sessions/)뿐이다.
 function configDirFor(profileId) {
   if (!profileId || profileId === 'default') return null;
   const safe = String(profileId).replace(/[^a-zA-Z0-9_-]/g, '_');
@@ -45,10 +50,9 @@ function configDirFor(profileId) {
   try { fs.mkdirSync(dir, { recursive: true }); } catch {}
   return dir;
 }
-// 프로필별 projects 디렉터리 (세션 기록 위치)
-function projectsDirFor(profileId) {
-  const cfg = configDirFor(profileId);
-  return cfg ? path.join(cfg, 'projects') : PROJECTS_DIR;
+// 대화 기록은 계정과 무관하게 한 곳 — 어느 계정으로 --resume 해도 같은 파일에 이어 쌓인다
+function projectsDirFor() {
+  return PROJECTS_DIR;
 }
 // 프로필별 .claude.json (계정 정보 위치)
 function accountFileFor(profileId) {
@@ -63,18 +67,95 @@ function allProfileIds() {
   if (Array.isArray(s.profiles)) for (const p of s.profiles) if (p && p.id && !ids.includes(p.id)) ids.push(p.id);
   return ids;
 }
-// profile 파라미터 해석: '__all__' 이면 모든 프로필, 아니면 단일 → [{id, dir}]
-function resolveProfileScope(profileParam) {
-  if (profileParam === '__all__') return allProfileIds().map((id) => ({ id, dir: projectsDirFor(id) }));
-  return [{ id: profileParam || 'default', dir: projectsDirFor(profileParam) }];
+// 모든 세션(최신순). profile 은 «마지막으로 이 대화를 돌린 계정» — 허브에서 연 적 없으면 null.
+function listSessionsScoped() {
+  const last = readState().sessionAccounts || {};
+  return listAllSessions(PROJECTS_DIR)
+    .map((s) => ({ ...s, profile: last[s.id] || null }))
+    .sort((a, b) => b.mtime - a.mtime);
 }
-// 여러 프로필의 세션을 profile 태그와 함께 수집(최신순)
-function listSessionsScoped(profileParam) {
-  const all = [];
-  for (const sc of resolveProfileScope(profileParam)) {
-    for (const s of listAllSessions(sc.dir)) { s.profile = sc.id; all.push(s); }
+// 대화를 어느 계정으로 돌렸는지 남긴다(세션 목록의 계정 칩). 오래된 것부터 잘라 상한을 둔다.
+const SESSION_ACCOUNTS_MAX = 2000;
+function rememberSessionAccount(id, profile) {
+  if (!id) return;
+  const s = readState();
+  const map = s.sessionAccounts || {};
+  const p = profile || 'default';
+  if (map[id] === p) return;
+  delete map[id];
+  map[id] = p;
+  const keys = Object.keys(map);
+  for (const k of keys.slice(0, Math.max(0, keys.length - SESSION_ACCOUNTS_MAX))) delete map[k];
+  s.sessionAccounts = map;
+  writeState(s);
+}
+
+// ---- 계정 폴더를 공유 구조로 맞추기 (lib/shared-config.js) ----
+// 계정 폴더 안의 projects·agents·skills… 를 메인으로 가는 연결로 바꾸고, 이미 쌓인 내용은 메인으로 합친다.
+// 그 계정의 claude 가 돌고 있으면 파일을 옮기는 도중에 쓰일 수 있으므로 건너뛰고 다음 기회에 한다.
+const MERGE_BACKUP_DIR = path.join(os.homedir(), '.claude-terminal-hub', 'merge-backup');
+const sharedReady = new Set();
+let pendingMergeReport = null; // 첫 화면에서 한 번 알린다(/api/state)
+function pidAlive(pid) {
+  try { process.kill(pid, 0); return true; } catch (e) { return e.code === 'EPERM'; }
+}
+// 등록부의 pid 가 아직 claude 인가. 강제 종료된 claude 는 등록부 파일을 못 지우고, Windows 는 pid 를 금방 다시 쓴다 —
+// 살아 있기만 하면 엉뚱한 프로세스를 claude 로 볼 수 있어 실행 파일 이름까지 확인한다.
+function isClaudeProcess(pid) {
+  if (!pidAlive(pid)) return false;
+  try {
+    const out = IS_WIN
+      ? execFileSync('tasklist', ['/FI', `PID eq ${pid}`, '/FO', 'CSV', '/NH'], { timeout: 4000, windowsHide: true, encoding: 'utf8' })
+      : execFileSync('ps', ['-p', String(pid), '-o', 'comm='], { timeout: 4000, encoding: 'utf8' });
+    return /claude|node|bun/i.test(out);
+  } catch { return false; }
+}
+function liveClaudeIn(sessionsDir) {
+  return claudeRegistry.readEntries(sessionsDir).filter((e) => isClaudeProcess(e.pid));
+}
+function ensureShared(profileId) {
+  const dir = configDirFor(profileId);
+  if (!dir || sharedReady.has(profileId)) return true;
+  if (liveClaudeIn(path.join(dir, 'sessions')).length) return false;
+  const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+  const r = sharedConfig.linkProfile(dir, MAIN_CONFIG_DIR, path.join(MERGE_BACKUP_DIR, `${path.basename(dir)}-${stamp}`));
+  if (r.errors.length) console.error(`[공유] ${profileId} 연결 실패:`, r.errors.join(' / '));
+  else sharedReady.add(profileId);
+  if (r.moved || r.conflicts.length) {
+    const prev = pendingMergeReport || { moved: 0, conflicts: [], backups: [] };
+    pendingMergeReport = {
+      moved: prev.moved + r.moved,
+      conflicts: [...prev.conflicts, ...r.conflicts],
+      backups: r.backup ? [...prev.backups, r.backup] : prev.backups,
+    };
   }
-  return all.sort((a, b) => b.mtime - a.mtime);
+  return !r.errors.length;
+}
+
+// 계정 쪽 claude 에 메인 settings·MCP 를 같이 넘기는 플래그. settings.json · .claude.json 은
+// 파일이라 폴더 연결로 공유되지 않는다(.claude.json 은 로그인 정보와 한 파일이라 연결하면 안 된다).
+const SHARED_MCP_FILE = path.join(os.homedir(), '.claude-terminal-hub', 'shared-mcp.json');
+function quoteArg(s) {
+  return IS_WIN ? `'${String(s).replace(/'/g, "''")}'` : `'${String(s).replace(/'/g, `'\\''`)}'`;
+}
+function sharedClaudeFlags(profileId) {
+  if (!configDirFor(profileId)) return '';
+  const flags = [];
+  const settings = path.join(MAIN_CONFIG_DIR, 'settings.json');
+  if (fs.existsSync(settings)) flags.push('--settings', quoteArg(settings));
+  const mcp = sharedConfig.readUserMcpServers(path.join(os.homedir(), '.claude.json'));
+  if (mcp) {
+    try {
+      fs.mkdirSync(path.dirname(SHARED_MCP_FILE), { recursive: true });
+      fs.writeFileSync(SHARED_MCP_FILE, JSON.stringify({ mcpServers: mcp }, null, 2), { mode: 0o600 });
+      flags.push('--mcp-config', quoteArg(SHARED_MCP_FILE));
+    } catch (e) { console.error('[공유] MCP 설정 파일 저장 실패:', e.message); }
+  }
+  return flags.join(' ');
+}
+function withSharedFlags(cmd, profileId) {
+  const flags = sharedClaudeFlags(profileId);
+  return flags ? cmd.replace(/^claude(?=\s|$)/, `claude ${flags}`) : cmd;
 }
 
 const app = express();
@@ -96,34 +177,12 @@ function writeState(s) {
 }
 
 // ---- 터미널 셸 설정 ----
-// Windows: 'powershell'(기본) | 'wsl-tmux'   macOS/Linux: 'powershell'(=$SHELL, 기본) | 'tmux'
-// Windows 의 tmux 는 WSL 것만 쓴다(MSYS2 tmux 는 v1.18.0 에서 제거 — 외부 도구에 안 보여 쓸모가 없었다).
-const BSLASH = String.fromCharCode(92); // '\' — 소스에 직접 쓰지 않고 상수로 둔다
-const SHELL_KINDS = IS_WIN ? ['powershell', 'wsl-tmux'] : ['powershell', 'tmux'];
+// Windows: 'powershell' 만   macOS/Linux: 'powershell'(=$SHELL, 기본) | 'tmux'
+// Windows 의 tmux 는 v1.18.0 에서 MSYS2 것을, v1.27.0 에서 WSL 것까지 뺐다 — 예전 설정은 PowerShell 로 연다.
+const SHELL_KINDS = IS_WIN ? ['powershell'] : ['powershell', 'tmux'];
 function readShellSettings() {
   const st = readState().settings || {};
-  // 예전에 MSYS2 tmux('tmux')를 골라뒀던 Windows 설정은 WSL tmux 로 넘긴다.
-  const saved = (IS_WIN && st.shell === 'tmux') ? 'wsl-tmux' : st.shell;
-  return {
-    shell: SHELL_KINDS.includes(saved) ? saved : 'powershell',
-    // 빈 값이면 WSL 기본 배포판을 쓴다(-d 를 붙이지 않음).
-    wslDistro: (typeof st.wslDistro === 'string' && st.wslDistro.trim()) ? st.wslDistro.trim() : '',
-  };
-}
-// Windows 경로 -> WSL 경로. 예: C:\Users\me -> /mnt/c/Users/me
-function toWslPath(p) {
-  const s = String(p || '').split(BSLASH).join('/');
-  const m = /^([A-Za-z]):\/(.*)$/.exec(s);
-  return m ? '/mnt/' + m[1].toLowerCase() + '/' + m[2] : s;
-}
-// 설치된 WSL 배포판 목록. wsl.exe 출력은 UTF-16LE 라 그대로 읽으면 깨진다.
-function listWslDistros(cb) {
-  if (!IS_WIN) return cb([]);
-  execFile('wsl.exe', ['--list', '--quiet'], { timeout: 5000, encoding: 'buffer' }, (err, stdout) => {
-    if (err) return cb([]);
-    const text = Buffer.from(stdout).toString('utf16le');
-    cb(text.split(/\r?\n/).map((s) => s.trim()).filter((s) => s && s.length <= 256));
-  });
+  return { shell: SHELL_KINDS.includes(st.shell) ? st.shell : 'powershell' };
 }
 // 패널 key -> tmux 세션 이름. 같은 key 로 다시 열면 -A 가 그 세션에 재부착한다.
 function tmuxSessionName(key) {
@@ -137,13 +196,18 @@ function tmuxHasSession(name) {
     return true;
   } catch { return false; }
 }
-function wslTmuxHasSession(name, distro) {
-  try {
-    const d = distro ? ['-d', distro] : [];
-    execFileSync('wsl.exe', [...d, '-e', 'tmux', 'has-session', '-t', name], { timeout: 6000, stdio: 'ignore' });
-    return true;
-  } catch { return false; }
+
+// ---- 요청 출처 검사 ----
+// 서버는 127.0.0.1 에만 열리지만, 브라우저로 연 아무 웹페이지나 localhost 로 요청을 보낼 수 있다.
+// 허브 화면(같은 출처)과 Origin 을 안 붙이는 도구(curl·Electron 내부 요청)만 받는다.
+const ALLOWED_ORIGINS = new Set([`http://localhost:${PORT}`, `http://127.0.0.1:${PORT}`]);
+function originAllowed(origin) {
+  return !origin || ALLOWED_ORIGINS.has(String(origin));
 }
+app.use((req, res, next) => {
+  if (originAllowed(req.headers.origin)) return next();
+  res.status(403).json({ error: '허용되지 않은 출처' });
+});
 
 app.use(express.static(path.join(__dirname, 'public'), {
   etag: false,
@@ -241,23 +305,26 @@ app.get('/api/state', (_req, res) => {
     names: s.names || {},
     profiles: (s.profiles && s.profiles.length) ? s.profiles : [{ id: 'default', name: '기본' }],
     settings: { ...readShellSettings(), platform: process.platform },
+    merge: takeMergeReport(),
   });
 });
+// 계정 폴더를 합친 결과 — 한 번만 알린다
+function takeMergeReport() {
+  const r = pendingMergeReport;
+  pendingMergeReport = null;
+  return r;
+}
 // 터미널 셸 설정 저장 — 다음에 여는 세션부터 적용된다(이미 떠 있는 세션은 그대로).
 app.post('/api/settings', (req, res) => {
-  const { shell, wslDistro } = req.body || {};
+  const { shell } = req.body || {};
   if (shell && !SHELL_KINDS.includes(shell)) {
     return res.status(400).json({ error: 'shell 은 ' + SHELL_KINDS.join(' / ') + ' 중 하나여야 합니다' });
   }
   const s = readState(); s.settings = s.settings || {};
   if (shell) s.settings.shell = shell;
-  if (typeof wslDistro === 'string') s.settings.wslDistro = wslDistro.trim();
+  delete s.settings.wslDistro;
   writeState(s);
   res.json({ ok: true, settings: readShellSettings() });
-});
-// 설치된 WSL 배포판 — 셸 팝오버의 배포판 선택에 쓴다.
-app.get('/api/wsl-distros', (_req, res) => {
-  listWslDistros((names) => res.json({ distros: names }));
 });
 
 app.post('/api/name', (req, res) => {
@@ -364,7 +431,7 @@ app.get('/api/fs/list', (req, res) => {
     path: target,
     parent: parent === target ? null : parent,
     dirs,
-    hasSessions: fs.existsSync(path.join(projectsDirFor(req.query.profile), encodeProjectPath(target))),
+    hasSessions: fs.existsSync(path.join(projectsDirFor(), encodeProjectPath(target))),
   });
 });
 
@@ -476,7 +543,7 @@ function listAllSessions(projectsDir) {
 app.get('/api/recent', async (req, res) => {
   const isAll = req.query.all === '1';
   const limit = Math.min(isAll ? 500 : 30, Math.max(1, parseInt(req.query.limit, 10) || 12));
-  const all = listSessionsScoped(req.query.profile);
+  const all = listSessionsScoped();
   const top = all.slice(0, limit);
   const sessions = await Promise.all(top.map(async (s) => {
     const meta = await getMeta(s.full, s.mtime);
@@ -491,7 +558,7 @@ app.get('/api/recent', async (req, res) => {
 // ---- 최근 작업 경로 (distinct cwd, 폴더 선택 추천용) ----
 app.get('/api/recent-paths', async (req, res) => {
   const limit = Math.min(40, Math.max(1, parseInt(req.query.limit, 10) || 25));
-  const all = listAllSessions(projectsDirFor(req.query.profile)).sort((a, b) => b.mtime - a.mtime);
+  const all = listAllSessions(projectsDirFor()).sort((a, b) => b.mtime - a.mtime);
   const seen = new Set();
   const out = [];
   for (const s of all) {
@@ -511,7 +578,7 @@ app.get('/api/search', async (req, res) => {
   const q = (req.query.q || '').toString().trim().toLowerCase();
   const limit = Math.min(100, Math.max(1, parseInt(req.query.limit, 10) || 50));
   if (!q) return res.json({ sessions: [], total: 0 });
-  const all = listSessionsScoped(req.query.profile);
+  const all = listSessionsScoped();
   const out = [];
   for (const s of all) {
     const meta = await getMeta(s.full, s.mtime);
@@ -568,7 +635,7 @@ app.get('/api/changelog', async (req, res) => {
 app.get('/api/sessions', async (req, res) => {
   const target = (req.query.path || '').toString().trim();
   if (!target) return res.status(400).json({ error: 'path 필요' });
-  const dir = path.join(projectsDirFor(req.query.profile), encodeProjectPath(target));
+  const dir = path.join(projectsDirFor(), encodeProjectPath(target));
   let files;
   try {
     files = fs.readdirSync(dir).filter((f) => f.endsWith('.jsonl'));
@@ -597,8 +664,8 @@ app.get('/api/sessions', async (req, res) => {
 
 // Claude 세션 ID 는 UUID 다. 셸에 그대로 치는 값이라 형식이 맞는 것만 받는다.
 const SESSION_ID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-function sessionFile(profile, cwd, id) {
-  return path.join(projectsDirFor(profile), encodeProjectPath(cwd || os.homedir()), id + '.jsonl');
+function sessionFile(cwd, id) {
+  return path.join(projectsDirFor(), encodeProjectPath(cwd || os.homedir()), id + '.jsonl');
 }
 
 // ---- 패널 제목 갱신용: 세션 하나의 지금 제목 ----
@@ -609,42 +676,15 @@ app.get('/api/session-title', async (req, res) => {
   if (!SESSION_ID_RE.test(id) || !cwd) return res.status(400).json({ error: 'id(UUID), cwd 필요' });
   const named = (readState().names || {})[id];
   if (named) return res.json({ id, title: named, exists: true });
-  const file = sessionFile(req.query.profile, cwd, id);
+  const file = sessionFile(cwd, id);
   let st; try { st = fs.statSync(file); } catch { return res.json({ id, title: null, exists: false }); }
   // 패널마다 5초 간격으로 불린다 — 파일이 그대로면 캐시로 답해 큰 대화 파일을 매번 다시 읽지 않는다.
   const meta = await getMeta(file, st.mtimeMs);
   res.json({ id, title: meta.customTitle || meta.aiTitle || meta.summary || meta.title || null, exists: true });
 });
 
-// ---- 세션 트랜스크립트를 다른 프로필로 복사 (계정 간 이어가기) ----
-// 대화 .jsonl 은 재생 파일이라 대상 프로필로 복사만 하면 해당 계정으로 resume 가능.
-// 원본 유지 정책: 원본은 남기고, 대상에 이미 같은 id 가 있으면 덮어쓰지 않는다.
-app.post('/api/session/copy', (req, res) => {
-  const b = req.body || {};
-  const id = (b.id || '').toString();
-  const cwd = (b.cwd || '').toString();
-  const fromProfile = (b.fromProfile || 'default').toString();
-  const toProfile = (b.toProfile || 'default').toString();
-  if (!id || !cwd) return res.status(400).json({ error: 'id, cwd 필요' });
-  if (!/^[a-zA-Z0-9_.-]+$/.test(id)) return res.status(400).json({ error: '잘못된 세션 id' });
-  const enc = encodeProjectPath(cwd);
-  const src = path.join(projectsDirFor(fromProfile), enc, id + '.jsonl');
-  const dstDir = path.join(projectsDirFor(toProfile), enc);
-  const dst = path.join(dstDir, id + '.jsonl');
-  if (!fs.existsSync(src)) return res.status(404).json({ error: '원본 세션을 찾을 수 없습니다.' });
-  if (path.resolve(src) === path.resolve(dst)) return res.json({ ok: true, already: true, id, cwd, profile: toProfile });
-  try {
-    fs.mkdirSync(dstDir, { recursive: true });
-    const exists = fs.existsSync(dst);
-    if (!exists) fs.copyFileSync(src, dst); // 원본 유지: 이미 있으면 그대로 이어감
-    res.json({ ok: true, copied: !exists, already: exists, id, cwd, profile: toProfile });
-  } catch (e) {
-    res.status(500).json({ error: '복사 실패: ' + (e.message || 'unknown') });
-  }
-});
-
-// ---- 로컬 파일 미리보기 서빙 + 아티팩트 판별 ----
-// 일반 브라우저처럼 폭넓은 형식을 인라인 렌더. 아티팩트 칩(자동 미리보기)은 아래 ARTIFACT_EXT 만 대상.
+// ---- 로컬 파일 미리보기 서빙 ----
+// 일반 브라우저처럼 폭넓은 형식을 인라인 렌더.
 const PREVIEW_EXT = {
   // 문서/마크업
   '.html': 'text/html; charset=utf-8', '.htm': 'text/html; charset=utf-8', '.xhtml': 'application/xhtml+xml',
@@ -667,9 +707,6 @@ const PREVIEW_EXT = {
   '.java': 'text/plain; charset=utf-8', '.c': 'text/plain; charset=utf-8', '.h': 'text/plain; charset=utf-8',
   '.cpp': 'text/plain; charset=utf-8', '.sql': 'text/plain; charset=utf-8', '.conf': 'text/plain; charset=utf-8',
 };
-// 아티팩트 자동 미리보기(칩) 대상 — Claude 산출물로 열어볼 만한 형식만
-const ARTIFACT_EXT = new Set(['.html', '.htm', '.md', '.txt', '.png', '.jpg', '.jpeg', '.gif', '.svg', '.webp', '.pdf', '.json', '.css', '.js']);
-function isPreviewable(p) { return ARTIFACT_EXT.has(path.extname(String(p)).toLowerCase()); }
 
 // 확장자 매핑에 없으면 앞부분을 읽어 텍스트인지 판별 → 텍스트면 그대로 표시, 아니면 다운로드
 function sniffContentType(p) {
@@ -699,25 +736,6 @@ app.get('/api/file', (req, res) => {
   res.setHeader('Cache-Control', 'no-store');
   fs.createReadStream(p).on('error', () => { try { res.end(); } catch {} }).pipe(res);
 });
-
-// 세션 jsonl delta 에서 Claude 가 만든/본 미리보기 가능 파일(아티팩트) 추출
-function extractArtifacts(text) {
-  const out = []; const seen = new Set();
-  for (const line of text.split('\n')) {
-    if (!line || line.indexOf('tool_use') < 0) continue;
-    let obj; try { obj = JSON.parse(line); } catch { continue; }
-    const content = obj.message && obj.message.content;
-    if (!Array.isArray(content)) continue;
-    for (const it of content) {
-      if (it.type !== 'tool_use' || !it.input) continue;
-      const fp = it.input.file_path || it.input.path || it.input.notebook_path;
-      if (!fp || !isPreviewable(fp) || seen.has(fp)) continue;
-      seen.add(fp);
-      out.push({ path: String(fp), tool: it.name || '' });
-    }
-  }
-  return out;
-}
 
 // ---- 세션 뷰어: jsonl 트랜스크립트 파싱 ----
 function toolPreview(name, input) {
@@ -776,19 +794,6 @@ app.get('/api/transcript', (req, res) => {
   catch (e) { res.json({ ready: false, items: [], error: String((e && e.message) || e) }); }
 });
 
-// 세션 전체에서 Claude 가 만들고/고친 파일(아티팩트) 목록 — 마지막 것만이 아니라 전부
-app.get('/api/artifacts', (req, res) => {
-  const key = String(req.query.key || '');
-  const s = ptyStore.get(key);
-  if (!s || !s.watch || !s.watch.file || !fs.existsSync(s.watch.file)) return res.json({ ready: false, files: [] });
-  try {
-    const text = fs.readFileSync(s.watch.file, 'utf8');
-    res.json({ ready: true, files: extractArtifacts(text).reverse() }); // 최근에 손댄 파일이 위로
-  } catch (e) {
-    res.json({ ready: false, files: [], error: String((e && e.message) || e) });
-  }
-});
-
 // ---- 사용량 (/status 스크레이프, 요청 시 1회) ----
 function stripAnsi(s) {
   let c = s.replace(/\x1b\[[0-9;?]*[ -/]*[@-~]/g, '').replace(/\x1b[\]P][\s\S]*?(\x07|\x1b\\)/g, '');
@@ -811,7 +816,8 @@ function extractUsageLines(clean) {
 
 // ---- PTY WebSocket ----
 const server = http.createServer(app);
-const wss = new WebSocketServer({ server, path: '/pty' });
+// 다른 웹페이지가 터미널에 붙지 못하게 — 허브 화면에서 온 연결만 받는다
+const wss = new WebSocketServer({ server, path: '/pty', verifyClient: (info) => originAllowed(info.origin) });
 
 // 허브가 claude 세션 안에서 실행되더라도 spawn 되는 claude 가 '중첩 자식 세션'으로
 // 오작동하지 않도록 CLAUDE_CODE_* 마커를 제거한 깨끗한 env 를 만든다.
@@ -821,6 +827,8 @@ function cleanEnv(profileId) {
   for (const k of Object.keys(env)) {
     if (/^CLAUDE_CODE/i.test(k) || k === 'CLAUDECODE') delete env[k];
   }
+  // 허브를 띄운 셸의 계정 폴더 지정을 물려받지 않는다 — 기본 계정은 항상 ~/.claude
+  delete env.CLAUDE_CONFIG_DIR;
   const cfgDir = configDirFor(profileId);
   if (cfgDir) env.CLAUDE_CONFIG_DIR = cfgDir; // 프로필(계정)별 로그인/설정 분리
   return env;
@@ -829,19 +837,10 @@ function cleanEnv(profileId) {
 function spawnShell(cwd, cols, rows, profileId, key) {
   const env = cleanEnv(profileId);
   const workdir = cwd && cwd.trim() ? cwd : os.homedir();
-  const { shell: pref, wslDistro } = readShellSettings();
+  const { shell: pref } = readShellSettings();
   let shell, args, reattachedTmux = false;
 
-  if (pref === 'wsl-tmux') {
-    // WSL 안의 tmux. claude-widget 계열 도구가 `wsl.exe -e tmux list-panes` 로
-    // 화면을 읽으므로, 그 도구와 붙이려면 반드시 이 경로여야 한다.
-    const name = tmuxSessionName(key);
-    reattachedTmux = wslTmuxHasSession(name, wslDistro);
-    const distroArgs = wslDistro ? ['-d', wslDistro] : [];
-    shell = 'wsl.exe';
-    args = [...distroArgs, '-e', 'tmux', '-u', 'new-session', '-A', '-s', name,
-      '-c', toWslPath(workdir), '-e', 'LANG=C.UTF-8', '-e', 'LC_ALL=C.UTF-8'];
-  } else if (pref === 'tmux') {
+  if (pref === 'tmux') {
     // macOS/Linux 의 시스템 tmux. -A: 같은 이름의 세션이 있으면 붙는다(허브 재시작 후에도 세션 생존).
     // -u: LANG 에서 UTF-8 을 못 보면 한글이 '_' 로 바뀌는 것을 막는다.
     const name = tmuxSessionName(key);
@@ -864,9 +863,8 @@ function spawnShell(cwd, cols, rows, profileId, key) {
     useConpty: IS_WIN ? true : undefined,
   });
   // 패널을 X 로 닫을 때 tmux 세션까지 정리하기 위해 이름을 들고 있는다(§killSession).
-  if (pref === 'tmux' || pref === 'wsl-tmux') {
+  if (pref === 'tmux') {
     term.tmuxName = tmuxSessionName(key);
-    term.tmuxKind = pref;
     // 살아 있던 tmux 세션에 붙은 것이면 claude 가 이미 그 안에서 돌고 있다.
     // 여기서 또 'claude' 를 타이핑하면 실행 중인 TUI 에 글자가 박힌다.
     term.tmuxReattached = reattachedTmux;
@@ -925,14 +923,13 @@ function beginWatch(session, jsonl, isResume) {
     } catch { w.pos = curr.size; return; }
     w.pos = curr.size;
     if (w.isResume) broadcastJson(session, { type: 'changed' });
-    for (const a of extractArtifacts(delta)) broadcastJson(session, { type: 'artifact', path: a.path, tool: a.tool });
     // HUD «무슨 일 하는 중» — 마지막 도구 사용(또는 새 턴 시작)
     const act = activity.lastActivity(delta);
     if (act) { session.activity = { ...act, at: Date.now() }; broadcastJson(session, { type: 'activity', ...session.activity }); }
   });
 }
 function startWatch(session) {
-  const dir = path.join(projectsDirFor(session.profile), encodeProjectPath(session.cwd || os.homedir()));
+  const dir = path.join(projectsDirFor(), encodeProjectPath(session.cwd || os.homedir()));
   if (session.resumeId) {
     const jf = path.join(dir, session.resumeId + '.jsonl');
     // --session-id 로 연 세션은 첫 메시지 전엔 파일이 없다. watchFile 은 없는 파일도 생기면 잡는다.
@@ -959,11 +956,21 @@ function startWatch(session) {
 // 세션에서 칠 claude 명령. 새 대화도 ID 를 미리 정해(--session-id) 나중에 --resume 으로 이어갈 수 있게 한다.
 // session.resumeId / session.freshId 를 채운다(감시 대상 파일을 정하는 데 쓴다).
 const CLAUDE_SESSION_FLAG_RE = /\s(-r|--resume|-c|--continue|--session-id|-p|--print)(\s|=|$)/;
+// 계정 쪽이면 메인 settings·MCP 플래그를 붙인다
 function buildClaudeCommand(msg, session) {
+  const cmd = buildBaseCommand(msg, session);
+  return cmd ? withSharedFlags(cmd, session.profile) : cmd;
+}
+function buildBaseCommand(msg, session) {
   const id = msg.resumeId ? String(msg.resumeId) : '';
   if (id && SESSION_ID_RE.test(id)) {
+    const exists = fs.existsSync(sessionFile(session.cwd, id));
+    // 다른 곳에서 열려 있는 대화를 갈라서 연다 — 지금까지의 대화를 복사한 새 세션 ID 가 생긴다(등록부로 따라감)
+    if (msg.fork && exists) { session.forkOf = id; return `claude --resume ${id} --fork-session`; }
+    // 갈라 열려는데 아직 대화가 한 줄도 없다 — 복사할 게 없으니 새 ID 의 빈 대화로 연다(같은 ID 를 두 곳에서 쓰지 않게)
+    if (msg.fork) { session.resumeId = crypto.randomUUID(); session.freshId = true; return `claude --session-id ${session.resumeId}`; }
     // 대화가 한 번도 오가지 않은 세션은 기록 파일이 없어 --resume 이 실패한다 — 같은 ID 로 새로 연다.
-    if (fs.existsSync(sessionFile(session.profile, session.cwd, id))) return `claude --resume ${id}`;
+    if (exists) return `claude --resume ${id}`;
     session.freshId = true;
     return `claude --session-id ${id}`;
   }
@@ -1001,8 +1008,10 @@ function watchRegistry(dir) {
 }
 function switchSessionId(session, id) {
   session.resumeId = id;
+  session.forkOf = null; // 갈라 연 대화가 새 ID 를 받았다 — 이제 원본과 별개
+  rememberSessionAccount(id, session.profile);
   stopWatch(session);
-  beginWatch(session, sessionFile(session.profile, session.cwd, id), false);
+  beginWatch(session, sessionFile(session.cwd, id), false);
   broadcastJson(session, { type: 'session', id, switched: true });
 }
 async function trackSessions() {
@@ -1046,6 +1055,9 @@ setInterval(trackSessions, TRACK_MS).unref();
 // 세션이 끝났을 때(패널 X / 프로세스 exit) 붙잡고 있던 자원을 놓는다.
 // 같은 key 로 새 세션이 이미 들어와 있으면 그건 건드리지 않는다.
 function releaseSession(session) {
+  // 방금 놓은 claude 는 강제 종료가 끝날 때까지 잠깐 살아 있다 — 같은 대화를 바로 다시 열 때(새로고침) 막지 않게 적어 둔다
+  if (session.claudePid) retiredClaudePids.set(session.claudePid, Date.now());
+  if (session.resumeId) retiredSessionIds.set(session.resumeId, Date.now());
   stopWatch(session);
   session.subs.clear();
   session.buf = '';
@@ -1064,21 +1076,147 @@ function killPtyTree(term) {
 function killSession(key) {
   const s = ptyStore.get(key);
   if (!s) return;
+  s.exited = true; // 계정 전환이 기다리는 중이면 이걸 보고 멈춘다
   const tmuxName = s.term && s.term.tmuxName;
   killPtyTree(s.term);
   // pty 를 죽여도 tmux 세션은 데몬에 남는다. 패널을 명시적으로 닫은 것이므로 세션도 정리한다.
   if (tmuxName) {
-    try {
-      const { wslDistro } = readShellSettings();
-      if (s.term.tmuxKind === 'wsl-tmux') {
-        const d = wslDistro ? ['-d', wslDistro] : [];
-        execFile('wsl.exe', [...d, '-e', 'tmux', 'kill-session', '-t', tmuxName], { timeout: 6000 }, () => {});
-      } else {
-        execFile('tmux', ['kill-session', '-t', tmuxName], { timeout: 5000 }, () => {});
-      }
-    } catch {}
+    try { execFile('tmux', ['kill-session', '-t', tmuxName], { timeout: 5000 }, () => {}); } catch {}
   }
   releaseSession(s);
+}
+
+// pty 출력·종료를 세션에 잇는다. 계정 전환으로 pty 를 갈아 끼우면 옛 pty 의 출력·종료는 무시한다(gen).
+function attachTerm(session, term) {
+  const gen = (session.gen || 0) + 1;
+  session.gen = gen;
+  session.term = term;
+  session.limitTail = '';
+  term.onData((data) => {
+    if (session.gen !== gen) return;
+    session.buf += data;
+    if (session.buf.length > MAX_BUF) session.buf = session.buf.slice(-MAX_BUF);
+    broadcast(session, data);
+    watchUsageLimit(session, data);
+  });
+  term.onExit(({ exitCode }) => {
+    if (session.gen !== gen) return;
+    session.exited = true;
+    broadcastJson(session, { type: 'exit', code: exitCode });
+    releaseSession(session);
+  });
+}
+
+// 사용 한도 문구가 보이면 패널에 «다른 계정으로 이어가기» 를 제안한다(같은 패널엔 1분에 한 번)
+// claude 를 띄운 직후는 --resume 이 지난 대화(옛 한도 문구 포함)를 다시 그리는 중이라 보지 않는다.
+const LIMIT_NOTIFY_GAP_MS = 60000;
+const LIMIT_LAUNCH_GRACE_MS = 15000;
+function watchUsageLimit(session, data) {
+  if (!session.claudeLaunched || Date.now() - (session.launchedAt || 0) < LIMIT_LAUNCH_GRACE_MS) return;
+  const r = usageLimit.scan(session.limitTail, data);
+  session.limitTail = r.tail;
+  if (!r.hit || Date.now() - (session.limitAt || 0) < LIMIT_NOTIFY_GAP_MS) return;
+  session.limitAt = Date.now();
+  broadcastJson(session, { type: 'limit', profile: session.profile || 'default' });
+}
+
+// 셸에 claude 명령을 친다. tmux 는 내부 로그인 셸이 뜨는 시간이 더 필요하다(400ms 면 입력이 삼켜짐).
+function launchClaude(session, msg) {
+  const term = session.term;
+  // 살아 있던 tmux 세션에 붙은 것이면 claude 가 이미 그 안에서 돌고 있다 — 다시 치지 않는다.
+  const cmd = term.tmuxReattached ? null : buildClaudeCommand(msg, session);
+  // claude 를 띄운(또는 살아 있는 tmux 안에서 돌던) 패널만 세션 ID 를 따라간다 — 맨 셸에서 직접 친 claude 는 제외
+  session.claudeLaunched = !!(cmd ? /^claude(\s|$)/.test(cmd) : (term.tmuxReattached && (msg.resumeId || msg.runClaude)));
+  if (session.claudeLaunched && session.resumeId && !session.forkOf) rememberSessionAccount(session.resumeId, session.profile);
+  session.launchedAt = Date.now();
+  const bootDelay = readShellSettings().shell === 'tmux' ? 1200 : 400;
+  if (cmd) setTimeout(() => { try { if (session.term === term) term.write(`${cmd}\r`); } catch {} }, bootDelay);
+}
+
+// ---- 같은 대화 중복 열기 막기 ----
+// 허브의 다른 패널이나 허브 밖 터미널에서 이미 돌고 있는 대화인지. 맞으면 어디인지 돌려준다.
+// 방금 닫은 패널의 claude 는 강제 종료가 끝날 때까지 잠깐 살아 있다 — 그건 허브 것으로 친다.
+const RETIRED_PID_MS = 15000;
+const retiredClaudePids = new Map(); // pid -> 놓은 시각
+const retiredSessionIds = new Map(); // 세션 ID -> 놓은 시각 (claude pid 를 아직 못 짝지었을 때)
+function findSessionHolder(id, key) {
+  if (!id || !SESSION_ID_RE.test(String(id))) return null;
+  for (const s of ptyStore.values()) {
+    if (s.key === key || s.exited || s.forkOf) continue;
+    if (s.resumeId === id) return { where: 'hub', key: s.key, profile: s.profile || 'default' };
+  }
+  // tmux 는 허브를 껐다 켜도 claude 가 살아 있다 — 같은 패널로 다시 붙는 것이므로 막지 않는다
+  if (readShellSettings().shell === 'tmux' && tmuxHasSession(tmuxSessionName(key))) return null;
+  const now = Date.now();
+  for (const m of [retiredClaudePids, retiredSessionIds]) for (const [k, at] of m) if (now - at > RETIRED_PID_MS) m.delete(k);
+  if (retiredSessionIds.has(id)) return null;
+  const hubPids = new Set([...ptyStore.values()].map((s) => s.claudePid).filter(Boolean));
+  // 같은 대화 ID 인 것만 프로세스를 확인한다(확인 한 번에 수십 ms — 등록부 전체를 보면 패널 복원이 느려진다)
+  for (const pid of allProfileIds()) {
+    const hit = claudeRegistry.readEntries(sessionsDirFor(pid))
+      .find((e) => e.sessionId === id && !hubPids.has(e.pid) && !retiredClaudePids.has(e.pid) && isClaudeProcess(e.pid));
+    if (hit) return { where: 'external', profile: pid };
+  }
+  return null;
+}
+
+// ---- 패널의 계정 바꿔 이어가기 ----
+// claude 를 /exit 로 정상 종료해 대화 기록을 끝까지 쓰게 한 뒤, 같은 패널(key)에서 다른 계정으로 같은 대화를 다시 연다.
+// 대화 기록은 계정끼리 같은 파일이라 복사하지 않는다.
+const SWITCH_EXIT_WAIT_MS = 10000;
+function waitClaudeExit(session, ms) {
+  const t0 = Date.now();
+  const dir = sessionsDirFor(session.profile);
+  return new Promise((resolve) => {
+    const iv = setInterval(() => {
+      const pid = session.claudePid;
+      // claude 는 정상 종료하면 등록부 파일을 지운다 — 250ms 마다 보므로 프로세스 이름 확인(tasklist)은 하지 않는다
+      const gone = pid ? !pidAlive(pid) : !claudeRegistry.readEntries(dir).some((e) => e.sessionId === session.resumeId && pidAlive(e.pid));
+      if ((gone && Date.now() - t0 > 500) || Date.now() - t0 > ms) { clearInterval(iv); resolve(); }
+    }, 250);
+  });
+}
+// 실패하면 이유를 던진다 — 호출부가 패널에 오류로 알려 계정 칩의 «바꾸는 중» 을 푼다.
+async function switchAccount(session, profile) {
+  if (!allProfileIds().includes(profile)) throw new Error('없는 계정입니다');
+  if (session.switching) throw new Error('이미 계정을 바꾸는 중입니다');
+  if ((session.profile || 'default') === profile) throw new Error('이미 그 계정입니다');
+  if (!session.claudeLaunched || !session.resumeId) throw new Error('claude 대화가 열린 패널만 계정을 바꿀 수 있습니다');
+  if (session.forkOf) throw new Error('갈라 연 대화가 아직 새 ID 를 받지 못했습니다. 잠시 뒤 다시 해 주세요');
+  // 대상 계정이 공유 대화 폴더를 못 보면 --resume 이 대화를 못 찾는다 — 지금 claude 를 끄기 전에 확인한다
+  if (!ensureShared(profile)) throw new Error(`${profile} 계정 폴더를 공유 구조로 맞추지 못했습니다. 그 계정의 claude 가 허브 밖에서 돌고 있으면 끄고 다시 해 주세요`);
+  session.switching = true;
+  try {
+    const from = session.profile || 'default';
+    const old = session.term;
+    broadcastJson(session, { type: 'switching', from, to: profile });
+    try { old.write('/exit\r'); } catch {}
+    await waitClaudeExit(session, SWITCH_EXIT_WAIT_MS);
+    // 기다리는 사이 패널이 닫혔다 — 새 셸을 띄우면 아무도 못 보는 claude 가 남는다
+    if (session.exited || ptyStore.get(session.key) !== session) return;
+    stopWatch(session);
+    session.gen++; // 옛 pty 의 남은 출력·종료는 무시
+    killPtyTree(old);
+    // 같은 이름의 tmux 세션이 남아 있으면 새 셸이 거기 붙어 claude 를 다시 치지 않는다
+    if (old.tmuxName) { try { execFileSync('tmux', ['kill-session', '-t', old.tmuxName], { timeout: 5000, stdio: 'ignore' }); } catch {} }
+    Object.assign(session, { profile, claudePid: 0, treeTries: 0, freshId: false, forkOf: null });
+    let term;
+    try { term = spawnShell(session.cwd, old.cols || 80, old.rows || 24, profile, session.key); }
+    catch (e) {
+      // 새 셸을 못 띄웠다 — 죽은 pty 에 패널이 붙어 있지 않게 끝난 세션으로 정리한다
+      session.exited = true;
+      broadcastJson(session, { type: 'error', message: `계정 전환 실패: 새 셸을 띄우지 못했습니다 (${e.message})` });
+      broadcastJson(session, { type: 'exit', code: -1 });
+      releaseSession(session);
+      return;
+    }
+    attachTerm(session, term);
+    launchClaude(session, { resumeId: session.resumeId });
+    startWatch(session);
+    broadcastJson(session, { type: 'account', profile, id: session.resumeId });
+  } finally {
+    session.switching = false;
+  }
 }
 
 wss.on('connection', (ws) => {
@@ -1111,35 +1249,32 @@ wss.on('connection', (ws) => {
         try { existing.term.resize(cols, rows); } catch {}
         return;
       }
-      // 신규 세션 생성
+      // 같은 대화가 이미 다른 곳에서 돌고 있으면 열지 않는다 — 두 곳에서 쓰면 기록이 뒤섞인다
+      const holder = msg.fork ? null : findSessionHolder(msg.resumeId, key);
+      if (holder) { safeSend({ type: 'busy', id: String(msg.resumeId), ...holder }); return; }
+      // 신규 세션 생성 — 지워진 계정이면 기본 계정으로
       const cwd = (msg.cwd || '').trim();
+      if (!allProfileIds().includes(msg.profile)) msg.profile = 'default';
+      // 계정 폴더가 공유 대화 폴더를 못 보면 --resume 이 대화를 못 찾아 빈 셸만 남는다 — 열지 않고 알린다
+      if (!ensureShared(msg.profile)) {
+        safeSend({ type: 'error', message: `${msg.profile} 계정 폴더를 공유 구조로 맞추지 못했습니다. 그 계정의 claude 가 허브 밖에서 돌고 있으면 끄고 패널을 다시 열어 주세요.` });
+        return;
+      }
       let term;
       try { term = spawnShell(cwd, cols, rows, msg.profile, key); }
       catch (err) { safeSend({ type: 'error', message: `PTY 생성 실패: ${err.message}` }); return; }
       const session = {
-        key, term, cwd: cwd || os.homedir(), profile: msg.profile, resumeId: msg.resumeId,
+        key, term: null, cwd: cwd || os.homedir(), profile: msg.profile, resumeId: msg.resumeId,
         buf: '', subs: new Set([ws]), exited: false, watch: { file: null, pos: 0, isResume: false, discoverIv: null, subIv: null },
       };
       ptyStore.set(key, session);
       boundKey = key;
-      term.onData((data) => {
-        session.buf += data;
-        if (session.buf.length > MAX_BUF) session.buf = session.buf.slice(-MAX_BUF);
-        broadcast(session, data);
-      });
-      term.onExit(({ exitCode }) => { session.exited = true; broadcastJson(session, { type: 'exit', code: exitCode }); releaseSession(session); });
+      attachTerm(session, term);
       safeSend({ type: 'ready', pid: term.pid, cwd: session.cwd });
-      // 살아 있던 tmux 세션에 붙은 것이면 claude 가 이미 그 안에서 돌고 있다 — 다시 치지 않는다.
-      const cmd = term.tmuxReattached ? null : buildClaudeCommand(msg, session);
-      // claude 를 띄운(또는 살아 있는 tmux 안에서 돌던) 패널만 세션 ID 를 따라간다 — 맨 셸에서 직접 친 claude 는 제외
-      session.claudeLaunched = !!(cmd ? /^claude(\s|$)/.test(cmd) : (term.tmuxReattached && (msg.resumeId || msg.runClaude)));
+      launchClaude(session, msg);
       // 새 대화에 미리 정한 ID 를 클라이언트에 알려 레이아웃에 남긴다 → 허브를 다시 켜면 이 대화로 이어진다.
-      if (session.freshId && !msg.resumeId) safeSend({ type: 'session', id: session.resumeId });
-      // tmux 는 내부 로그인 셸이 뜨는 시간이 더 필요하다(400ms 면 입력이 삼켜짐).
-      // WSL 은 배포판 기동까지 겹쳐 더 느리다.
-      const shellKind = readShellSettings().shell;
-      const bootDelay = shellKind === 'wsl-tmux' ? 2500 : (shellKind === 'tmux' ? 1200 : 400);
-      if (cmd) setTimeout(() => { try { term.write(`${cmd}\r`); } catch {} }, bootDelay);
+      // 빈 대화를 갈라 연 경우도 새 ID 다.
+      if (session.freshId && session.resumeId !== msg.resumeId) safeSend({ type: 'session', id: session.resumeId });
       startWatch(session);
       return;
     }
@@ -1149,6 +1284,9 @@ wss.on('connection', (ws) => {
     if (msg.type === 'input') { try { s.term.write(msg.data); } catch {} }
     else if (msg.type === 'resize') { try { s.term.resize(Math.max(2, msg.cols | 0) || 80, Math.max(1, msg.rows | 0) || 24); } catch {} }
     else if (msg.type === 'kill') { killSession(boundKey); } // 사용자가 패널 종료 → 실제 pty 종료
+    else if (msg.type === 'switchAccount') {
+      switchAccount(s, String(msg.profile || '')).catch((e) => broadcastJson(s, { type: 'error', message: `계정 전환 실패: ${e.message}` }));
+    }
   });
 
   // ws 가 끊겨도 pty 는 죽이지 않는다 (재부착 대비). 구독만 해제.
@@ -1183,6 +1321,12 @@ process.on('uncaughtException', (err) => {
 process.on('unhandledRejection', (reason) => {
   console.error('[unhandledRejection] 무시하고 계속:', reason);
 });
+
+// 시작할 때 계정 폴더를 공유 구조로 맞춘다 — 서버가 막 떴으니 허브가 띄운 claude 는 아직 없다.
+// 허브 밖에서 그 계정의 claude 가 돌고 있으면 건너뛰고, 그 계정으로 패널을 열 때 다시 해 본다.
+for (const id of allProfileIds()) {
+  try { ensureShared(id); } catch (e) { console.error(`[공유] ${id} 준비 실패:`, e.message); }
+}
 
 server.listen(PORT, '127.0.0.1', () => {
   console.log(`Claude Terminal Hub → http://localhost:${PORT}  (pid ${process.pid})`);
