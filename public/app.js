@@ -341,19 +341,35 @@ function setGroupProjects(on) {
 }
 workspaces[currentWsKey()] = { columns, activePane: null, columnSizes: null };
 const accountCache = {}; // id -> 로그인한 이메일 또는 안내 (계정 메뉴)
+const accountPlan = {};  // id -> 'team' | 'pro' | 'max' … (로그인할 때 claude 가 남긴 값)
 function fetchAccount(id) {
   accountCache[id] = '확인 중…';
   fetch(`/api/account?profile=${encodeURIComponent(id)}`).then((r) => r.json()).then((a) => {
     accountCache[id] = a.loggedIn ? a.email : '로그인 안 됨';
+    const plan = (a.loggedIn && a.plan) || null;
+    if (accountPlan[id] === plan) return;
+    accountPlan[id] = plan;
+    renderAccountNames(); // [팀] 표시가 바뀌었으면 이름이 보이는 곳을 다시 그린다
   }).catch(() => { accountCache[id] = '계정 정보 없음'; });
+}
+function renderAccountNames() {
+  renderAccountButton();
+  allWorkspacePanes().forEach((x) => { if (x._renderAcct) x._renderAcct(); });
+  refreshLnb(); // 세션 목록의 «마지막 계정» 칩
 }
 const wsStash = document.createElement('div');
 wsStash.style.display = 'none';
 document.body.appendChild(wsStash);
 // LNB "모든 세션" 보기 토글 — 켜면 개수 제한 없이(서버 상한 500) 닫힌 세션까지 전부 나열 + 입력 시각 표시
 let lnbAllSessions = localStorage.getItem('cth_lnb_all_sessions') === '1';
-function profileName(id) { const p = profiles.find((x) => x.id === id); return p ? p.name : (!id || id === 'default' ? '기본' : id); }
+function profileName(id) {
+  const p = profiles.find((x) => x.id === id);
+  const name = p ? p.name : (!id || id === 'default' ? '기본' : id);
+  return accountPlan[id || 'default'] === 'team' ? `[팀] ${name}` : name;
+}
 const knownProfile = (id) => profiles.some((p) => p.id === id);
+// 기본 계정도 지울 수 있다 — 계정이 비면 남은 첫 계정으로 돌린다
+const fallbackProfile = () => (profiles[0] && profiles[0].id) || 'default';
 
 // 세션 열기: 이미 패널에 열려 있으면 그리로 가고, 아니면 새 패널 기본 계정으로 연다
 function openSession(s, placement) {
@@ -430,7 +446,7 @@ function switchWorkspace(profile, project) {
 // 계정은 화면을 나누지 않는다 — 지워진 계정 소속이면 새 패널 기본 계정으로 돌린다.
 function routeToWorkspaceFor(cfg) {
   if (!cfg || !cfg.cwd) return;
-  if (!knownProfile(cfg.profile)) cfg.profile = knownProfile(newPaneProfile) ? newPaneProfile : 'default';
+  if (!knownProfile(cfg.profile)) cfg.profile = knownProfile(newPaneProfile) ? newPaneProfile : fallbackProfile();
   const project = projectOfCwd(cfg.cwd);
   const key = PK.workspaceKey(activeProfileId, project);
   if (project && !projectCwd[key]) projectCwd[key] = cfg.cwd;
@@ -550,7 +566,7 @@ function renderTabs() {
 const acctBtn = document.getElementById('acctBtn');
 function renderAccountButton() {
   if (!acctBtn) return;
-  if (!knownProfile(newPaneProfile)) newPaneProfile = 'default';
+  if (!knownProfile(newPaneProfile)) newPaneProfile = fallbackProfile();
   acctBtn.innerHTML = `${AccountUI.dotHtml(newPaneProfile)}<span class="lbl">${escapeHtml(profileName(newPaneProfile))}</span><span class="car">▼</span>`;
 }
 function setNewPaneProfile(id) {
@@ -566,20 +582,19 @@ function accountSub(id) {
 }
 function openAccountMenu() {
   AccountUI.openMenu(acctBtn, [
-    { title: '새 패널을 열 계정', items: profiles.map((p) => ({ id: p.id, label: p.name, sub: accountSub(p.id), current: p.id === newPaneProfile, onClick: () => setNewPaneProfile(p.id) })) },
+    { title: '새 패널을 열 계정', items: profiles.map((p) => ({ id: p.id, label: profileName(p.id), sub: accountSub(p.id), current: p.id === newPaneProfile, onClick: () => setNewPaneProfile(p.id) })) },
     { title: '관리', items: [
       { label: '+ 계정 추가', sub: '새 패널에서 /login', onClick: addProfile },
-      ...(profiles.length > 1 ? [
-        { label: '이름 바꾸기…', onClick: () => pickAccountThen('이름을 바꿀 계정', renameProfile) },
-        { label: '계정 삭제…', onClick: () => pickAccountThen('삭제할 계정', deleteProfile) },
-      ] : []),
+      ...(knownProfile('default') ? [] : [{ id: 'default', label: '기본 계정 다시 추가', sub: '~/.claude 로그인', onClick: restoreDefaultProfile }]),
+      { label: '이름 바꾸기…', onClick: () => pickAccountThen('이름을 바꿀 계정', renameProfile) },
+      ...(profiles.length > 1 ? [{ label: '계정 삭제…', onClick: () => pickAccountThen('삭제할 계정', deleteProfile) }] : []),
     ] },
   ], '설정 · 에이전트 · 스킬 · 대화 기록은 모든 계정이 같이 씁니다. 계정마다 다른 건 로그인과 사용량뿐입니다. 열린 패널의 계정은 패널 머리줄의 계정 칩으로 바꿉니다.');
 }
-// 이름 바꾸기·삭제할 계정 고르기 (기본 계정은 이름 고정 · 삭제 불가)
+// 이름 바꾸기·삭제할 계정 고르기
 function pickAccountThen(title, fn) {
   setTimeout(() => AccountUI.openMenu(acctBtn, [
-    { title, items: profiles.filter((p) => p.id !== 'default').map((p) => ({ id: p.id, label: p.name, sub: accountSub(p.id), onClick: () => fn(p.id) })) },
+    { title, items: profiles.map((p) => ({ id: p.id, label: profileName(p.id), sub: accountSub(p.id), onClick: () => fn(p.id) })) },
   ]), 0);
 }
 if (acctBtn) acctBtn.addEventListener('click', (e) => { e.stopPropagation(); closePopovers(); openAccountMenu(); });
@@ -595,22 +610,31 @@ async function addProfile() {
 }
 
 async function renameProfile(id) {
-  if (id === 'default') return; // 기본 계정은 이름 고정
   const p = profiles.find((x) => x.id === id);
   if (!p) return;
   const v = await uiPrompt('계정 이름 바꾸기', p.name);
   if (v === null || !v.trim()) return;
-  p.name = v.trim();
+  p.name = v.trim().replace(/^[팀]s*/, ''); // [팀] 은 자동으로 붙는다
   saveProfiles();
   renderTabs();
-  allWorkspacePanes().forEach((x) => { if (x._renderAcct) x._renderAcct(); });
+  renderAccountNames();
 }
 
 async function deleteProfile(id) {
   if (paneCountOf(id) > 0) { await uiConfirm('이 계정으로 돌고 있는 패널이 있습니다. 먼저 닫거나 다른 계정으로 바꿔 주세요.', '삭제 불가'); return; }
-  if (!(await uiConfirm('로그인 폴더(~/.claude-hub-profiles)는 남습니다. 대화 기록은 모든 계정이 같이 쓰므로 그대로입니다.', `${profileName(id)} 계정을 목록에서 뺄까요?`))) return;
+  const kept = id === 'default'
+    ? '~/.claude 의 로그인은 남고, 설정 · 대화 기록도 그대로입니다. 계정 메뉴의 「기본 계정 다시 추가」로 되돌릴 수 있습니다.'
+    : '로그인 폴더(~/.claude-hub-profiles)는 남습니다. 대화 기록은 모든 계정이 같이 쓰므로 그대로입니다.';
+  if (!(await uiConfirm(kept, `${profileName(id)} 계정을 목록에서 뺄까요?`))) return;
   profiles = profiles.filter((p) => p.id !== id);
-  if (newPaneProfile === id) setNewPaneProfile('default');
+  if (newPaneProfile === id) setNewPaneProfile(fallbackProfile());
+  saveProfiles();
+  renderTabs();
+}
+
+function restoreDefaultProfile() {
+  if (knownProfile('default')) return;
+  profiles.unshift({ id: 'default', name: '기본' });
   saveProfiles();
   renderTabs();
 }
@@ -2042,7 +2066,7 @@ function addPane(cfg, placement) {
     AccountUI.openMenu(acctChip, [{
       title: '이 대화를 이어갈 계정',
       items: profiles.map((p) => ({
-        id: p.id, label: p.id === cfg.profile ? p.name : `${p.name}로 이어가기`,
+        id: p.id, label: p.id === cfg.profile ? profileName(p.id) : `${profileName(p.id)}로 이어가기`,
         sub: p.id === cfg.profile ? '지금 계정' : accountSub(p.id), current: p.id === cfg.profile,
         onClick: () => switchPaneAccount(p.id),
       })),
@@ -2061,7 +2085,7 @@ function addPane(cfg, placement) {
     const others = profiles.filter((p) => p.id !== (profile || cfg.profile));
     if (!others.length) return;
     AccountUI.showBar(pane, `<b>${escapeHtml(profileName(profile || cfg.profile))}</b> 계정 사용 한도에 도달했습니다. 다른 계정으로 이 대화를 이어갈까요?`,
-      others.map((p) => ({ id: p.id, label: `${p.name}로 이어가기`, onClick: () => switchPaneAccount(p.id) })));
+      others.map((p) => ({ id: p.id, label: `${profileName(p.id)}로 이어가기`, onClick: () => switchPaneAccount(p.id) })));
   }
   // 같은 대화가 이미 다른 곳에서 열려 있다 — 서버가 pty 를 만들지 않고 알려 온다
   function onSessionBusy(m) {
@@ -2906,7 +2930,7 @@ async function initState() {
     if (s.settings) { shellSettings = { ...shellSettings, ...s.settings }; renderShellPopover(); }
     merge = s.merge || null;
   } catch {}
-  if (!profiles.find((p) => p.id === 'default')) profiles.unshift({ id: 'default', name: '기본' });
+  if (!profiles.length) profiles = [{ id: 'default', name: '기본' }];
   renderAccountButton();
   profiles.forEach((p) => fetchAccount(p.id)); // 계정 메뉴에 로그인 이메일을 바로 보이게
   restoreAllLayouts(); // 마지막으로 열려있던 패널 레이아웃 복원(프로젝트 탭 전부)

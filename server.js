@@ -25,6 +25,7 @@ const activity = require('./lib/activity');
 const subagents = require('./lib/subagents');
 const sharedConfig = require('./lib/shared-config');
 const usageLimit = require('./lib/usage-limit');
+const { planOf } = require('./lib/account-plan');
 let pty;
 try {
   pty = require('node-pty');
@@ -342,16 +343,16 @@ app.post('/api/profiles', (req, res) => {
   res.json({ ok: true });
 });
 
-// 프로필(계정) 로그인 정보 — .claude.json 의 oauthAccount
+// 프로필(계정) 로그인 정보 — .claude.json 의 oauthAccount + 플랜(토큰은 넘기지 않는다)
+function readJsonOrNull(file) {
+  try { return JSON.parse(fs.readFileSync(file, 'utf8')); } catch { return null; }
+}
 app.get('/api/account', (req, res) => {
-  try {
-    const j = JSON.parse(fs.readFileSync(accountFileFor(req.query.profile), 'utf8'));
-    const a = j.oauthAccount;
-    if (a && a.emailAddress) {
-      return res.json({ loggedIn: true, email: a.emailAddress, org: a.organizationUuid || null });
-    }
-  } catch { /* 파일 없음/미로그인 */ }
-  res.json({ loggedIn: false });
+  const j = readJsonOrNull(accountFileFor(req.query.profile));
+  const a = j && j.oauthAccount;
+  if (!a || !a.emailAddress) return res.json({ loggedIn: false });
+  const credentials = readJsonOrNull(path.join(configDirFor(req.query.profile) || MAIN_CONFIG_DIR, '.credentials.json'));
+  res.json({ loggedIn: true, email: a.emailAddress, org: a.organizationUuid || null, plan: planOf(credentials, a) });
 });
 
 // ---- 파일시스템 탐색 (폴더 선택기용) ----
