@@ -190,9 +190,13 @@ ipcMain.on('cth-badge', (e, payload) => {
 });
 
 // 자동 업데이트: GitHub Release 에 올라간 최신 버전을 백그라운드로 받아뒀다가,
-// 사용자 확인 후(또는 다음 종료 시 자동으로) 설치한다. 개발 실행(패키징 안 됨)일 땐 업데이트 서버가 없어 스킵.
+// 사용자 확인 후(또는 다음 종료 시 자동으로) 마법사 없이 설치한다. 개발 실행(패키징 안 됨)일 땐 업데이트 서버가 없어 스킵.
 autoUpdater.autoDownload = true;
 autoUpdater.autoInstallOnAppQuit = true;
+// 허브는 며칠씩 켜 두므로 시작할 때 한 번으로는 새 버전을 늦게 안다
+const UPDATE_CHECK_INTERVAL_MS = 3 * 60 * 60 * 1000;
+// 설치 마법사 없이 조용히 덮어쓰고, 끝나면 앱을 다시 띄운다(패널은 재시작 후 --resume 으로 복원)
+function installUpdateNow() { autoUpdater.quitAndInstall(true, true); }
 
 // 렌더러(헤더의 버전 팝오버)로 진행 상황을 그대로 흘려보낸다.
 let updateWin = null;
@@ -213,7 +217,7 @@ ipcMain.handle('update-check', async () => {
     return { state: 'error', message };
   }
 });
-ipcMain.handle('update-install', () => { autoUpdater.quitAndInstall(); });
+ipcMain.handle('update-install', () => { installUpdateNow(); });
 
 function initAutoUpdate(win) {
   updateWin = win;
@@ -222,8 +226,13 @@ function initAutoUpdate(win) {
   autoUpdater.on('update-not-available', () => sendUpdateStatus({ state: 'none' }));
   autoUpdater.on('update-available', (info) => sendUpdateStatus({ state: 'available', version: info && info.version }));
   autoUpdater.on('download-progress', (p) => sendUpdateStatus({ state: 'progress', percent: p && p.percent }));
+  let promptedVersion = null;
   autoUpdater.on('update-downloaded', async (info) => {
-    sendUpdateStatus({ state: 'downloaded', version: info && info.version });
+    const version = info && info.version;
+    sendUpdateStatus({ state: 'downloaded', version });
+    // 주기 확인마다 같은 버전으로 다시 불리므로 묻는 건 버전당 한 번
+    if (version && version === promptedVersion) return;
+    promptedVersion = version;
     const r = await dialog.showMessageBox(win, {
       type: 'info',
       title: 'Claude Terminal Hub 업데이트',
@@ -232,7 +241,7 @@ function initAutoUpdate(win) {
       defaultId: 0,
       cancelId: 1,
     });
-    if (r.response === 0) autoUpdater.quitAndInstall();
+    if (r.response === 0) installUpdateNow();
   });
   autoUpdater.on('error', (err) => {
     const message = (err && err.message) ? err.message : String(err);
@@ -240,6 +249,7 @@ function initAutoUpdate(win) {
     sendUpdateStatus({ state: 'error', message });
   });
   autoUpdater.checkForUpdates().catch(() => {});
+  setInterval(() => { autoUpdater.checkForUpdates().catch(() => {}); }, UPDATE_CHECK_INTERVAL_MS);
 }
 
 // 한 번만 실행 — 두 번째 실행은 떠 있는 허브 창을 앞으로 올리고 끝난다.
