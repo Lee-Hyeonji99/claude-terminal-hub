@@ -30,7 +30,7 @@
         map.set(k, {
           key: k, hue: it.hue, project: it.project || '', projectId: it.projectId || '', theme: it.theme || '',
           name: it.character || it.project || it.title,
-          sub: it.character ? (it.project || '') : (it.profile || ''),
+          sub: '',
           sessions: [],
         });
       }
@@ -38,6 +38,9 @@
     }
     const out = [];
     for (const p of map.values()) {
+      // 캐릭터가 있으면 프로젝트 이름, 없으면 그 프로젝트에서 돌고 있는 계정들
+      const profiles = [...new Set(p.sessions.map((s) => s.profile).filter(Boolean))];
+      p.sub = p.sessions[0].character ? p.project : profiles.join(' · ');
       const working = p.sessions.filter((s) => s.state === 'work');
       const state = working.length ? 'work' : (p.sessions.some((s) => s.state === 'ask') ? 'ask' : 'rest');
       const since = working.length ? Math.min(...working.map((s) => s.since || Date.now())) : 0;

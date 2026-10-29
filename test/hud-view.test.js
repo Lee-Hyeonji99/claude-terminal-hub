@@ -70,3 +70,13 @@ test('서브에이전트가 돌고 있으면 그 세션은 일하는 중 — 부
   assert.equal(hasRunningSubagents([{ state: 'done' }]), false);
   assert.equal(hasRunningSubagents(undefined), false);
 });
+
+test('같은 프로젝트는 계정이 달라도 한 묶음 — 부제에 계정을 모두 적는다', () => {
+  const ps = groupProjects([
+    { ...s({ key: 'a', project: 'hub', state: 'idle' }), profile: '[팀] 기본' },
+    { ...s({ key: 'b', project: 'hub', state: 'work' }), profile: 'everyun' },
+    { ...s({ key: 'c', project: 'hub', state: 'idle' }), profile: 'everyun' },
+  ]);
+  assert.equal(ps.length, 1);
+  assert.equal(ps[0].sub, '[팀] 기본 · everyun');
+});

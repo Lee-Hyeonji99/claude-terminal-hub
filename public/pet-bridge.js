@@ -63,7 +63,8 @@
     const charTheme = (typeof CHAR_MAP === 'function' && CHAR_MAP()[proj.theme]) || null;
     return {
       key: p.cfg.key, title: p.cfg.title || 'claude', project: proj.name, hue: proj.hue,
-      projectKey: PK.workspaceKey(p.cfg.profile, projectOfCwd(p.cfg.cwd)),
+      // 화면이 계정과 상관없이 프로젝트 탭 하나라 묶음 키의 계정 자리도 고정 — 안 그러면 계정마다 따로 나온다
+      projectKey: PK.workspaceKey('default', projectOfCwd(p.cfg.cwd)),
       projectId: proj.id, theme: proj.theme,   // HUD 캐릭터 — 그 프로젝트 펫과 같은 캐릭터(pet-avatar.js)
       character: charTheme ? charTheme.name : '', profile: profileName(p.cfg.profile),
       state, since: p._hudSince, lastWorkAt,
@@ -86,7 +87,7 @@
       trackWorking(p, working, !!prompt);
       const id = PK.projectId(p.cfg.cwd);
       if (!projects.has(id)) {
-        const theme = themeOfWorkspace(PK.workspaceKey(p.cfg.profile, projectOfCwd(p.cfg.cwd)));
+        const theme = themeOfWorkspace(PK.workspaceKey('default', projectOfCwd(p.cfg.cwd)));
         projects.set(id, { id, name: PK.projectName(p.cfg.cwd) || '기타', cwd: p.cfg.cwd || '', hue: PK.projectHue(id), theme, working: 0, questions: [], done: [], sessions: [] });
       }
       const proj = projects.get(id);
