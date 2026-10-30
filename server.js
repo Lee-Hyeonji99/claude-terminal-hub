@@ -25,6 +25,7 @@ const activity = require('./lib/activity');
 const subagents = require('./lib/subagents');
 const sharedConfig = require('./lib/shared-config');
 const usageLimit = require('./lib/usage-limit');
+const mcpConfig = require('./lib/mcp-config');
 const { planOf } = require('./lib/account-plan');
 let pty;
 try {
@@ -95,7 +96,6 @@ function rememberSessionAccount(id, profile) {
 // 계정 폴더 안의 projects·agents·skills… 를 메인으로 가는 연결로 바꾸고, 이미 쌓인 내용은 메인으로 합친다.
 // 그 계정의 claude 가 돌고 있으면 파일을 옮기는 도중에 쓰일 수 있으므로 건너뛰고 다음 기회에 한다.
 const MERGE_BACKUP_DIR = path.join(os.homedir(), '.claude-terminal-hub', 'merge-backup');
-const sharedReady = new Set();
 let pendingMergeReport = null; // 첫 화면에서 한 번 알린다(/api/state)
 function pidAlive(pid) {
   try { process.kill(pid, 0); return true; } catch (e) { return e.code === 'EPERM'; }
@@ -114,48 +114,82 @@ function isClaudeProcess(pid) {
 function liveClaudeIn(sessionsDir) {
   return claudeRegistry.readEntries(sessionsDir).filter((e) => isClaudeProcess(e.pid));
 }
+const SHARED_BASE_DIR = path.join(os.homedir(), '.claude-terminal-hub', 'shared-base'); // 계정에 복사한 파일의 마지막 사본
+function addMergeReport(r) {
+  if (!r.moved && !r.conflicts.length) return;
+  const prev = pendingMergeReport || { moved: 0, conflicts: [], backups: [] };
+  pendingMergeReport = {
+    moved: prev.moved + r.moved,
+    conflicts: [...prev.conflicts, ...r.conflicts],
+    backups: r.backup && !prev.backups.includes(r.backup) ? [...prev.backups, r.backup] : prev.backups,
+  };
+}
+// 패널을 열 때마다 부른다 — 이미 맞춘 것은 건너뛰고 메인에 새로 생긴 스킬 항목만 잇는다.
+// 대화 폴더(projects)가 메인으로 이어져 있으면 true. 나머지 폴더 실패는 경고만 하고 패널은 연다.
+const sharedWarned = new Set();
 function ensureShared(profileId) {
   const dir = configDirFor(profileId);
-  if (!dir || sharedReady.has(profileId)) return true;
-  if (liveClaudeIn(path.join(dir, 'sessions')).length) return false;
+  if (!dir) return true;
   const stamp = new Date().toISOString().replace(/[:.]/g, '-');
-  const r = sharedConfig.linkProfile(dir, MAIN_CONFIG_DIR, path.join(MERGE_BACKUP_DIR, `${path.basename(dir)}-${stamp}`));
-  if (r.errors.length) console.error(`[공유] ${profileId} 연결 실패:`, r.errors.join(' / '));
-  else sharedReady.add(profileId);
-  if (r.moved || r.conflicts.length) {
-    const prev = pendingMergeReport || { moved: 0, conflicts: [], backups: [] };
-    pendingMergeReport = {
-      moved: prev.moved + r.moved,
-      conflicts: [...prev.conflicts, ...r.conflicts],
-      backups: r.backup ? [...prev.backups, r.backup] : prev.backups,
-    };
+  const r = sharedConfig.linkProfile(dir, MAIN_CONFIG_DIR, {
+    backupDir: path.join(MERGE_BACKUP_DIR, `${path.basename(dir)}-${stamp}`),
+    baseDir: path.join(SHARED_BASE_DIR, path.basename(dir)),
+    // 계정 쪽 실제 폴더를 옮겨야 할 때만 확인한다 — 그 계정 claude 가 돌고 있으면 쓰는 중인 파일을 옮기게 된다
+    canMove: () => !liveClaudeIn(path.join(dir, 'sessions')).length,
+  });
+  addMergeReport(r);
+  const warn = [...r.errors, ...r.pending.map((p) => `${p}: 그 계정 claude 가 돌고 있어 다음에 맞춤`), ...r.kept.map((k) => `${k}: 계정에서 바꾼 파일이라 메인 것으로 덮지 않음`)];
+  const sig = profileId + warn.join('|');
+  if (warn.length && !sharedWarned.has(sig)) { sharedWarned.add(sig); console.warn(`[공유] ${profileId}:`, warn.join(' / ')); }
+  return r.projectsReady;
+}
+
+// 계정 목록에서 뺀 계정 폴더 — 그 대화가 세션 목록에서 사라지지 않게 메인으로 한 번 복사해 온다.
+// 폴더를 허브 밖 도구가 따로 쓸 수 있어 옮기거나 연결하지 않는다. 한 번 가져온 폴더는 다시 보지 않는다.
+const ORPHAN_IMPORT_FILE = path.join(os.homedir(), '.claude-terminal-hub', 'imported-profile-dirs.json');
+function importOrphanProfiles() {
+  let done = {};
+  try { done = JSON.parse(fs.readFileSync(ORPHAN_IMPORT_FILE, 'utf8')) || {}; } catch { /* 처음 */ }
+  const known = new Set(allProfileIds().map((id) => path.basename(configDirFor(id) || '')));
+  let names = [];
+  try { names = fs.readdirSync(PROFILES_ROOT); } catch { return; }
+  for (const name of names) {
+    const dir = path.join(PROFILES_ROOT, name);
+    if (known.has(name) || done[name]) continue;
+    try {
+      if (!fs.statSync(dir).isDirectory()) continue;
+      if (liveClaudeIn(path.join(dir, 'sessions')).length) continue; // 돌고 있으면 다음에
+      const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+      const backup = path.join(MERGE_BACKUP_DIR, `${name}-unlisted-${stamp}`, 'projects');
+      const r = sharedConfig.importProjects(path.join(dir, 'projects'), PROJECTS_DIR, backup);
+      addMergeReport({ ...r, backup: r.conflicts.length ? path.dirname(backup) : null });
+      done[name] = new Date().toISOString();
+    } catch (e) { console.error(`[공유] 목록 밖 계정 폴더 ${name} 가져오기 실패:`, e.message); }
   }
-  return !r.errors.length;
+  try { fs.writeFileSync(ORPHAN_IMPORT_FILE, JSON.stringify(done, null, 2)); } catch { /* 다음에 다시 */ }
 }
 
 // 계정 쪽 claude 에 메인 settings·MCP 를 같이 넘기는 플래그. settings.json · .claude.json 은
 // 파일이라 폴더 연결로 공유되지 않는다(.claude.json 은 로그인 정보와 한 파일이라 연결하면 안 된다).
-const SHARED_MCP_FILE = path.join(os.homedir(), '.claude-terminal-hub', 'shared-mcp.json');
+// MCP 는 사용자 범위 + 그 작업 경로의 프로젝트 범위를 작업 경로별 파일로 넘긴다(lib/mcp-config.js).
+const SHARED_MCP_DIR = path.join(os.homedir(), '.claude-terminal-hub', 'shared-mcp');
+try { fs.unlinkSync(path.join(os.homedir(), '.claude-terminal-hub', 'shared-mcp.json')); } catch { /* v1.27 의 한 파일짜리 — 없으면 그만 */ }
 function quoteArg(s) {
   return IS_WIN ? `'${String(s).replace(/'/g, "''")}'` : `'${String(s).replace(/'/g, `'\\''`)}'`;
 }
-function sharedClaudeFlags(profileId) {
+function sharedClaudeFlags(profileId, cwd) {
   if (!configDirFor(profileId)) return '';
   const flags = [];
   const settings = path.join(MAIN_CONFIG_DIR, 'settings.json');
   if (fs.existsSync(settings)) flags.push('--settings', quoteArg(settings));
-  const mcp = sharedConfig.readUserMcpServers(path.join(os.homedir(), '.claude.json'));
-  if (mcp) {
-    try {
-      fs.mkdirSync(path.dirname(SHARED_MCP_FILE), { recursive: true });
-      fs.writeFileSync(SHARED_MCP_FILE, JSON.stringify({ mcpServers: mcp }, null, 2), { mode: 0o600 });
-      flags.push('--mcp-config', quoteArg(SHARED_MCP_FILE));
-    } catch (e) { console.error('[공유] MCP 설정 파일 저장 실패:', e.message); }
-  }
+  try {
+    const mcpFile = mcpConfig.writeMcpConfig(path.join(os.homedir(), '.claude.json'), cwd, SHARED_MCP_DIR);
+    if (mcpFile) flags.push('--mcp-config', quoteArg(mcpFile));
+  } catch (e) { console.error('[공유] MCP 설정 파일 저장 실패:', e.message); }
   return flags.join(' ');
 }
-function withSharedFlags(cmd, profileId) {
-  const flags = sharedClaudeFlags(profileId);
+function withSharedFlags(cmd, profileId, cwd) {
+  const flags = sharedClaudeFlags(profileId, cwd);
   return flags ? cmd.replace(/^claude(?=\s|$)/, `claude ${flags}`) : cmd;
 }
 
@@ -927,6 +961,8 @@ function beginWatch(session, jsonl, isResume) {
     // HUD «무슨 일 하는 중» — 마지막 도구 사용(또는 새 턴 시작)
     const act = activity.lastActivity(delta);
     if (act) { session.activity = { ...act, at: Date.now() }; broadcastJson(session, { type: 'activity', ...session.activity }); }
+    // 한도로 멈춘 응답이 기록에 붙었다 — 화면 문구가 바뀌어도 이건 확실하다
+    if (usageLimit.transcriptHitLimit(delta)) notifyUsageLimit(session);
   });
 }
 function startWatch(session) {
@@ -960,7 +996,7 @@ const CLAUDE_SESSION_FLAG_RE = /\s(-r|--resume|-c|--continue|--session-id|-p|--p
 // 계정 쪽이면 메인 settings·MCP 플래그를 붙인다
 function buildClaudeCommand(msg, session) {
   const cmd = buildBaseCommand(msg, session);
-  return cmd ? withSharedFlags(cmd, session.profile) : cmd;
+  return cmd ? withSharedFlags(cmd, session.profile, session.cwd) : cmd;
 }
 function buildBaseCommand(msg, session) {
   const id = msg.resumeId ? String(msg.resumeId) : '';
@@ -1108,15 +1144,28 @@ function attachTerm(session, term) {
   });
 }
 
-// 사용 한도 문구가 보이면 패널에 «다른 계정으로 이어가기» 를 제안한다(같은 패널엔 1분에 한 번)
-// claude 를 띄운 직후는 --resume 이 지난 대화(옛 한도 문구 포함)를 다시 그리는 중이라 보지 않는다.
+// 사용 한도 — 패널에 «다른 계정으로 이어가기» 를 제안한다(같은 패널엔 1분에 한 번).
+// 1순위는 대화 기록의 한도 응답(beginWatch 의 transcriptHitLimit — 오탐 없음). 화면 문구는 그 줄이 안 남는
+// 「Usage limit reached · continuing automatically」 때문에 남기되 좁게 본다:
+//   - claude 를 띄운 직후 · 패널 크기를 바꾼 직후 · 화면 전체를 다시 그리는 출력은 지난 대화(옛 한도 문구 포함)를
+//     다시 그리는 것이라 보지 않는다
+//   - 문구가 보여도 대화가 답을 기다린 채 멈춰 있을 때만 알린다 — 대화 중에 한도 문구를 말한 것과 구분
 const LIMIT_NOTIFY_GAP_MS = 60000;
 const LIMIT_LAUNCH_GRACE_MS = 15000;
+const LIMIT_RESIZE_GRACE_MS = 4000;
 function watchUsageLimit(session, data) {
-  if (!session.claudeLaunched || Date.now() - (session.launchedAt || 0) < LIMIT_LAUNCH_GRACE_MS) return;
+  if (!session.claudeLaunched) return;
+  const now = Date.now();
+  if (now - (session.launchedAt || 0) < LIMIT_LAUNCH_GRACE_MS || now - (session.resizedAt || 0) < LIMIT_RESIZE_GRACE_MS
+    || usageLimit.isRepaint(data)) { session.limitTail = ''; return; }
   const r = usageLimit.scan(session.limitTail, data);
   session.limitTail = r.tail;
-  if (!r.hit || Date.now() - (session.limitAt || 0) < LIMIT_NOTIFY_GAP_MS) return;
+  // 상태 줄은 다시 그릴 때마다 또 나온다 — 알린 지 얼마 안 됐으면 기록 파일을 읽지 않는다
+  if (!r.hit || now - (session.limitAt || 0) < LIMIT_NOTIFY_GAP_MS) return;
+  if (claudeBusy(session) === 'turn') notifyUsageLimit(session);
+}
+function notifyUsageLimit(session) {
+  if (Date.now() - (session.limitAt || 0) < LIMIT_NOTIFY_GAP_MS) return;
   session.limitAt = Date.now();
   broadcastJson(session, { type: 'limit', profile: session.profile || 'default' });
 }
@@ -1162,9 +1211,10 @@ function findSessionHolder(id, key) {
 }
 
 // ---- 패널의 계정 바꿔 이어가기 ----
-// claude 를 /exit 로 정상 종료해 대화 기록을 끝까지 쓰게 한 뒤, 같은 패널(key)에서 다른 계정으로 같은 대화를 다시 연다.
+// claude 를 스스로 종료하게 해(Ctrl+C — 입력창 비우기 → 종료) 대화 기록을 끝까지 쓰게 한 뒤, 같은 패널(key)에서 다른 계정으로 같은 대화를 다시 연다.
 // 대화 기록은 계정끼리 같은 파일이라 복사하지 않는다.
-const SWITCH_EXIT_WAIT_MS = 10000;
+const SWITCH_EXIT_WAIT_MS = 15000;
+// claude 가 꺼질 때까지 기다린다. 끝나면 true, 시간 안에 안 꺼지면 false.
 function waitClaudeExit(session, ms) {
   const t0 = Date.now();
   const dir = sessionsDirFor(session.profile);
@@ -1173,12 +1223,46 @@ function waitClaudeExit(session, ms) {
       const pid = session.claudePid;
       // claude 는 정상 종료하면 등록부 파일을 지운다 — 250ms 마다 보므로 프로세스 이름 확인(tasklist)은 하지 않는다
       const gone = pid ? !pidAlive(pid) : !claudeRegistry.readEntries(dir).some((e) => e.sessionId === session.resumeId && pidAlive(e.pid));
-      if ((gone && Date.now() - t0 > 500) || Date.now() - t0 > ms) { clearInterval(iv); resolve(); }
+      if (gone && Date.now() - t0 > 500) { clearInterval(iv); resolve(true); }
+      else if (Date.now() - t0 > ms) { clearInterval(iv); resolve(false); }
     }, 250);
   });
 }
+// 지금 claude 가 일하는 중인가 — 'subagents' | 'turn' | null. 이때 끄면 답변·서브에이전트·백그라운드 작업이 같이 끝난다.
+// 대화 기록 끝부분을 읽는다 — 마지막 줄이 아주 길면(큰 도구 결과) 더 크게 읽는다
+const TURN_TAIL_STEPS = [256 * 1024, 4 * 1024 * 1024];
+function claudeBusy(session) {
+  if ((session.subagents || []).some((a) => a.state !== 'done')) return 'subagents';
+  // 감시 중인 파일은 /clear 직후나 새 대화를 찾는 중에 다른 대화일 수 있다 — 지금 세션 ID 의 파일을 먼저 본다
+  const own = session.resumeId ? sessionFile(session.cwd, session.resumeId) : null;
+  const f = own && fs.existsSync(own) ? own : (session.watch && session.watch.file);
+  if (!f) return null;
+  try {
+    const size = fs.statSync(f).size;
+    for (const step of TURN_TAIL_STEPS) {
+      const len = Math.min(size, step);
+      const fd = fs.openSync(f, 'r');
+      const b = Buffer.alloc(len);
+      try { fs.readSync(fd, b, 0, len, size - len); } finally { fs.closeSync(fd); }
+      const busy = usageLimit.turnInProgress(b.toString('utf8'));
+      if (busy !== null || len === size) return busy ? 'turn' : null;
+    }
+  } catch { /* 못 읽으면 모름 */ }
+  return null;
+}
+// claude 를 스스로 끝내게 한다. Ctrl+C 는 입력창에 글이 있으면 비우고, 응답 중이면 멈추고, 빈 입력창에서 두 번이면 종료한다.
+// `/exit` 를 치면 입력창에 남은 글과 붙어 질문으로 보내지거나 권한 확인 메뉴에서 Enter 로 «예» 가 골라질 수 있다.
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+async function askClaudeToExit(term) {
+  for (let i = 0; i < 3; i++) { try { term.write('\x03'); } catch {} await sleep(350); }
+}
+const BUSY_TEXT = {
+  subagents: '서브에이전트가 일하는 중입니다',
+  turn: 'claude 가 답변하는 중입니다',
+};
 // 실패하면 이유를 던진다 — 호출부가 패널에 오류로 알려 계정 칩의 «바꾸는 중» 을 푼다.
-async function switchAccount(session, profile) {
+// force: 일하는 중이어도 멈추고 바꾼다(사용자가 안내 줄에서 고른 경우).
+async function switchAccount(session, profile, force) {
   if (!allProfileIds().includes(profile)) throw new Error('없는 계정입니다');
   if (session.switching) throw new Error('이미 계정을 바꾸는 중입니다');
   if ((session.profile || 'default') === profile) throw new Error('이미 그 계정입니다');
@@ -1186,15 +1270,21 @@ async function switchAccount(session, profile) {
   if (session.forkOf) throw new Error('갈라 연 대화가 아직 새 ID 를 받지 못했습니다. 잠시 뒤 다시 해 주세요');
   // 대상 계정이 공유 대화 폴더를 못 보면 --resume 이 대화를 못 찾는다 — 지금 claude 를 끄기 전에 확인한다
   if (!ensureShared(profile)) throw new Error(`${profile} 계정 폴더를 공유 구조로 맞추지 못했습니다. 그 계정의 claude 가 허브 밖에서 돌고 있으면 끄고 다시 해 주세요`);
+  const busy = claudeBusy(session);
+  if (busy && !force) { broadcastJson(session, { type: 'switch-blocked', reason: busy, text: BUSY_TEXT[busy], to: profile }); return; }
   session.switching = true;
   try {
     const from = session.profile || 'default';
     const old = session.term;
     broadcastJson(session, { type: 'switching', from, to: profile });
-    try { old.write('/exit\r'); } catch {}
-    await waitClaudeExit(session, SWITCH_EXIT_WAIT_MS);
+    await askClaudeToExit(old);
+    let exited = await waitClaudeExit(session, 5000);
+    // 멈추는 데 시간이 걸리는 응답이면 한 번 더 — 그래도 안 꺼지면 아래에서 취소
+    if (!exited && !session.exited) { await askClaudeToExit(old); exited = await waitClaudeExit(session, SWITCH_EXIT_WAIT_MS); }
     // 기다리는 사이 패널이 닫혔다 — 새 셸을 띄우면 아무도 못 보는 claude 가 남는다
     if (session.exited || ptyStore.get(session.key) !== session) return;
+    // 안 꺼졌으면 강제로 죽이지 않는다 — 쓰던 기록이 잘린다. 전환을 취소하고 그대로 둔다.
+    if (!exited) throw new Error('claude 가 종료되지 않아 계정 전환을 취소했습니다. 패널에서 claude 상태를 확인한 뒤 다시 해 주세요');
     stopWatch(session);
     session.gen++; // 옛 pty 의 남은 출력·종료는 무시
     killPtyTree(old);
@@ -1247,6 +1337,7 @@ wss.on('connection', (ws) => {
         if (existing.activity) safeSend({ type: 'activity', ...existing.activity });
         safeSend({ type: 'subagents', list: existing.subagents || [] });
         if (existing.buf) { try { ws.send(existing.buf); } catch {} } // 최근 화면 재생 → 재부착 클라이언트 상태 복원
+        existing.resizedAt = Date.now(); // 다시 붙으면 화면 전체를 다시 그린다 — 지난 대화 속 한도 문구에 걸리지 않게
         try { existing.term.resize(cols, rows); } catch {}
         return;
       }
@@ -1283,10 +1374,10 @@ wss.on('connection', (ws) => {
     const s = boundKey ? ptyStore.get(boundKey) : null;
     if (!s || s.exited) return;
     if (msg.type === 'input') { try { s.term.write(msg.data); } catch {} }
-    else if (msg.type === 'resize') { try { s.term.resize(Math.max(2, msg.cols | 0) || 80, Math.max(1, msg.rows | 0) || 24); } catch {} }
+    else if (msg.type === 'resize') { s.resizedAt = Date.now(); try { s.term.resize(Math.max(2, msg.cols | 0) || 80, Math.max(1, msg.rows | 0) || 24); } catch {} }
     else if (msg.type === 'kill') { killSession(boundKey); } // 사용자가 패널 종료 → 실제 pty 종료
     else if (msg.type === 'switchAccount') {
-      switchAccount(s, String(msg.profile || '')).catch((e) => broadcastJson(s, { type: 'error', message: `계정 전환 실패: ${e.message}` }));
+      switchAccount(s, String(msg.profile || ''), !!msg.force).catch((e) => broadcastJson(s, { type: 'error', message: `계정 전환 실패: ${e.message}` }));
     }
   });
 
@@ -1323,11 +1414,12 @@ process.on('unhandledRejection', (reason) => {
   console.error('[unhandledRejection] 무시하고 계속:', reason);
 });
 
-// 시작할 때 계정 폴더를 공유 구조로 맞춘다 — 서버가 막 떴으니 허브가 띄운 claude 는 아직 없다.
-// 허브 밖에서 그 계정의 claude 가 돌고 있으면 건너뛰고, 그 계정으로 패널을 열 때 다시 해 본다.
+// 시작할 때 계정 폴더를 공유 구조로 맞춘다. tmux 세션이나 허브 밖 터미널의 claude 는 허브를 다시 켜도 살아 있을 수 있어,
+// 그 계정에서 옮겨야 할 폴더는 건너뛰고 그 계정으로 패널을 열 때 다시 해 본다(이미 연결된 것은 상관없음).
 for (const id of allProfileIds()) {
   try { ensureShared(id); } catch (e) { console.error(`[공유] ${id} 준비 실패:`, e.message); }
 }
+try { importOrphanProfiles(); } catch (e) { console.error('[공유] 목록 밖 계정 폴더 확인 실패:', e.message); }
 
 server.listen(PORT, '127.0.0.1', () => {
   console.log(`Claude Terminal Hub → http://localhost:${PORT}  (pid ${process.pid})`);

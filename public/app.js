@@ -1777,6 +1777,7 @@ function addPane(cfg, placement) {
             return;
           }
           if (m.type === 'account') { onAccountSwitched(m.profile); return; }
+          if (m.type === 'switch-blocked') { onSwitchBlocked(m); return; }
           if (m.type === 'pong') { missedPongs = 0; return; } // 하트비트 응답 → 살아있음
           if (m.type === 'changed') { onExternalChange(); return; }
           // 새 대화의 Claude 세션 ID — 레이아웃에 남겨 허브를 다시 켜면 이 대화로 이어간다.
@@ -2054,12 +2055,21 @@ function addPane(cfg, placement) {
   paneObj._renderAcct = renderAcct;
   renderAcct();
   function setAcctBusy(on) { acctChip.classList.toggle('busy', !!on); }
-  function switchPaneAccount(id) {
+  // force: 일하는 중이어도 멈추고 바꾼다(작업 중이라 막혔다는 안내 줄에서 고른 경우)
+  function switchPaneAccount(id, force) {
     if (id === cfg.profile) return;
     if (!cfg.resumeId) { AccountUI.toast('claude 대화가 열린 패널만 계정을 바꿀 수 있습니다'); return; }
     if (!ws || ws.readyState !== WebSocket.OPEN) { AccountUI.toast('서버와 다시 연결된 뒤에 바꿔 주세요'); return; }
     setAcctBusy(true);
-    ws.send(JSON.stringify({ type: 'switchAccount', profile: id }));
+    ws.send(JSON.stringify({ type: 'switchAccount', profile: id, force: !!force }));
+  }
+  // 답변 · 서브에이전트가 도는 중이라 서버가 전환을 미뤘다 — 바꾸면 그 작업이 같이 끝난다
+  function onSwitchBlocked(m) {
+    setAcctBusy(false);
+    AccountUI.showBar(pane, `${escapeHtml(m.text || '작업 중입니다')}. 지금 바꾸면 진행 중인 작업이 멈춥니다.`, [
+      { label: '끝나면 다시 하기', onClick: () => {} },
+      { id: m.to, label: `멈추고 ${profileName(m.to)}로 바꾸기`, onClick: () => switchPaneAccount(m.to, true) },
+    ]);
   }
   acctChip.addEventListener('click', (e) => {
     e.stopPropagation();
@@ -2070,7 +2080,7 @@ function addPane(cfg, placement) {
         sub: p.id === cfg.profile ? '지금 계정' : accountSub(p.id), current: p.id === cfg.profile,
         onClick: () => switchPaneAccount(p.id),
       })),
-    }], '지금 claude 를 정상 종료한 뒤 같은 대화를 그 계정으로 다시 엽니다. 진행 중인 답변이 있으면 끝난 뒤에 바꾸세요.');
+    }], '지금 claude 를 정상 종료한 뒤 같은 대화를 그 계정으로 다시 엽니다. 답변이나 서브에이전트가 도는 중이면 먼저 물어봅니다. 바꾼 직후 첫 응답은 대화 전체를 새 계정 캐시에 다시 써서 평소보다 사용량이 큽니다.');
   });
   function onAccountSwitched(id) {
     setAcctBusy(false);
