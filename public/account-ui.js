@@ -88,5 +88,7 @@
     setTimeout(() => t.remove(), ms || 4000);
   }
 
-  root.AccountUI = { dotHtml, openMenu, closeMenu, showBar, toast, esc };
+  function isOpenFor(anchor) { return !!openMenuEl && openMenuEl._anchor === anchor; }
+
+  root.AccountUI = { dotHtml, openMenu, closeMenu, isOpenFor, showBar, toast, esc };
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -342,15 +342,20 @@ function setGroupProjects(on) {
 workspaces[currentWsKey()] = { columns, activePane: null, columnSizes: null };
 const accountCache = {}; // id -> 로그인한 이메일 또는 안내 (계정 메뉴)
 const accountPlan = {};  // id -> 'team' | 'pro' | 'max' … (로그인할 때 claude 가 남긴 값)
+// 로그인 상태는 바뀔 수 있다(새 계정 패널에서 /login) — 다시 물어볼 때는 이전 값을 보여 둔 채 바꾼다.
+// 값이 바뀌었으면 true 로 끝나는 Promise.
 function fetchAccount(id) {
-  accountCache[id] = '확인 중…';
-  fetch(`/api/account?profile=${encodeURIComponent(id)}`).then((r) => r.json()).then((a) => {
+  if (!(id in accountCache)) accountCache[id] = '확인 중…';
+  const before = accountCache[id] + '|' + accountPlan[id];
+  return fetch(`/api/account?profile=${encodeURIComponent(id)}`).then((r) => r.json()).then((a) => {
     accountCache[id] = a.loggedIn ? a.email : '로그인 안 됨';
     const plan = (a.loggedIn && a.plan) || null;
-    if (accountPlan[id] === plan) return;
-    accountPlan[id] = plan;
-    renderAccountNames(); // [팀] 표시가 바뀌었으면 이름이 보이는 곳을 다시 그린다
-  }).catch(() => { accountCache[id] = '계정 정보 없음'; });
+    if (accountPlan[id] !== plan) {
+      accountPlan[id] = plan;
+      renderAccountNames(); // [팀] 표시가 바뀌었으면 이름이 보이는 곳을 다시 그린다
+    }
+    return before !== accountCache[id] + '|' + accountPlan[id];
+  }).catch(() => { accountCache[id] = '계정 정보 없음'; return false; });
 }
 function renderAccountNames() {
   renderAccountButton();
@@ -580,7 +585,14 @@ function accountSub(id) {
   const n = paneCountOf(id);
   return accountCache[id] + (n ? ` · 패널 ${n}` : '');
 }
+// 메뉴는 아는 값으로 바로 띄우고, 로그인 상태를 다시 물어 바뀐 게 있으면 열린 채로 다시 그린다
 function openAccountMenu() {
+  if (!showAccountMenu()) return;
+  Promise.all(profiles.map((p) => fetchAccount(p.id))).then((changed) => {
+    if (changed.some(Boolean) && AccountUI.isOpenFor(acctBtn)) { AccountUI.closeMenu(); showAccountMenu(); }
+  });
+}
+function showAccountMenu() {
   AccountUI.openMenu(acctBtn, [
     { title: '새 패널을 열 계정', items: profiles.map((p) => ({ id: p.id, label: profileName(p.id), sub: accountSub(p.id), current: p.id === newPaneProfile, onClick: () => setNewPaneProfile(p.id) })) },
     { title: '관리', items: [
@@ -590,6 +602,7 @@ function openAccountMenu() {
       ...(profiles.length > 1 ? [{ label: '계정 삭제…', onClick: () => pickAccountThen('삭제할 계정', deleteProfile) }] : []),
     ] },
   ], '설정 · 에이전트 · 스킬 · 대화 기록은 모든 계정이 같이 씁니다. 계정마다 다른 건 로그인과 사용량뿐입니다. 열린 패널의 계정은 패널 머리줄의 계정 칩으로 바꿉니다.');
+  return AccountUI.isOpenFor(acctBtn); // 같은 버튼을 다시 눌러 닫았으면 false
 }
 // 이름 바꾸기·삭제할 계정 고르기
 function pickAccountThen(title, fn) {
