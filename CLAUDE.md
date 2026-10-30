@@ -60,7 +60,12 @@ UI/서버 변경 후 가능하면 실제로 확인한다.
 - 세션 커스텀 이름/프로필: 서버 전역 파일 `~/.claude-terminal-hub/state.json` (localStorage 아님).
 - 세션 제목 우선순위: Claude `/rename`(custom-title) > ai-title > 첫 메시지.
 - **계정 = 로그인만 다른 같은 작업 환경**: `CLAUDE_CONFIG_DIR = ~/.claude-hub-profiles/<id>` 에는 로그인(`.credentials.json` · `.claude.json`)과 실행 중 세션 등록부(`sessions/`)만 계정별로 둔다.
-  - `projects` · `agents` · `skills` · `commands` · `rules` · `hooks` · `output-styles` 는 `~/.claude` 로 가는 junction, `CLAUDE.md` 는 `@~/.claude/CLAUDE.md` import, settings · MCP 는 실행 시 `--settings` · `--mcp-config` (`lib/shared-config.js`, `server.js ensureShared`).
+  - 폴더 통째 junction: `projects` · `agents` · `commands` · `rules` · `hooks` · `output-styles` · `file-history` · `tasks` · `plans` · `session-env`.
+  - 항목별 junction(폴더는 계정 것): `skills`(`synced` 제외). `synced` 는 claude.ai 계정에서 내려오는 계정 전용이라 섞으면 안 된다.
+  - `plugins` 는 공유하지 않는다 — 설치 목록 파일과 설치본(cache)이 한 쌍인데 파일은 연결할 수 없어, 목록만 갈라지면 한 계정의 정리 작업이 다른 계정 설치본을 지울 수 있다. 계정마다 설치.
+  - 계정 전환은 `/exit` 를 치지 않고 Ctrl+C(입력창 비우기 → 종료)로 끈다(입력창에 남은 글과 붙어 질문으로 보내지는 것 방지). 안 꺼지면 강제 종료하지 않고 취소.
+  - `CLAUDE.md` 는 `@~/.claude/CLAUDE.md` import, settings 는 `--settings`, MCP 는 사용자 + 그 작업 경로의 프로젝트 범위를 작업 경로별 `--mcp-config` 파일로 (`lib/shared-config.js` · `lib/mcp-config.js` · `server.js ensureShared`).
+  - 계정 쪽 실제 폴더를 옮기는 건 그 계정 claude 가 꺼져 있을 때만(`canMove`). 이미 연결된 계정은 claude 가 돌아도 패널을 연다.
   - 대화 기록이 한 곳이라 계정 전환은 복사 없이 `--resume`. 같은 대화를 두 곳에서 동시에 열면 기록이 섞이므로 서버가 막는다(`findSessionHolder`).
   - 화면은 계정과 무관하게 프로젝트 탭 하나 — 워크스페이스 키의 프로필 자리는 항상 `default`, 계정은 패널 `cfg.profile`.
 - **캐릭터 테마 이미지**: `~/.claude-terminal-hub/theme-assets/` (서버가 `/theme-assets` 로 읽기 제공, `POST /api/theme-assets` 로 저장).
