@@ -63,7 +63,7 @@ npm install
 ## 상태 저장 위치
 
 - 세션 커스텀 이름 · 계정 목록 · 대화별 마지막 계정: `~/.claude-terminal-hub/state.json`
-- 계정별 로그인: `~/.claude-hub-profiles/<계정 id>` (`CLAUDE_CONFIG_DIR`). 이 안의 `projects` · `agents` · `commands` · `rules` · `hooks` · `output-styles` · `file-history` · `tasks` · `plans` · `session-env` 는 `~/.claude` 로 가는 연결(Windows junction)이고, `skills` 는 계정 전용 `synced` 를 빼고 항목별로 연결합니다. 플러그인은 계정마다 설치합니다. `CLAUDE.md` 는 `@~/.claude/CLAUDE.md` 를 불러오고, settings 와 MCP(사용자 + 그 프로젝트 범위)는 실행할 때 `--settings` · `--mcp-config` 로 넘깁니다.
+- 계정별 로그인: `~/.claude-hub-profiles/<계정 id>` (`CLAUDE_CONFIG_DIR`). 이 안의 `projects` · `agents` · `commands` · `rules` · `hooks` · `output-styles` · `file-history` · `tasks` · `plans` · `session-env` · `sessions`(실행 중 세션 목록) 는 `~/.claude` 로 가는 연결(Windows junction)이고 — 그래서 계정이 달라도 세션끼리 `@` 멘션 · 메시지를 주고받습니다 — `skills` 는 계정 전용 `synced` 를 빼고 항목별로 연결합니다. 플러그인은 계정마다 설치합니다. `CLAUDE.md` 는 `@~/.claude/CLAUDE.md` 를 불러오고, settings 와 MCP(사용자 + 그 프로젝트 범위)는 실행할 때 `--settings` · `--mcp-config` 로 넘깁니다.
 - 계정 폴더를 합칠 때 양쪽에서 따로 이어진 대화: `~/.claude-terminal-hub/merge-backup/`
 - 패널 레이아웃(마지막 화면): 브라우저/앱의 `localStorage`
 

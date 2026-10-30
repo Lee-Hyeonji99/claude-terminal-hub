@@ -59,8 +59,9 @@ UI/서버 변경 후 가능하면 실제로 확인한다.
 
 - 세션 커스텀 이름/프로필: 서버 전역 파일 `~/.claude-terminal-hub/state.json` (localStorage 아님).
 - 세션 제목 우선순위: Claude `/rename`(custom-title) > ai-title > 첫 메시지.
-- **계정 = 로그인만 다른 같은 작업 환경**: `CLAUDE_CONFIG_DIR = ~/.claude-hub-profiles/<id>` 에는 로그인(`.credentials.json` · `.claude.json`)과 실행 중 세션 등록부(`sessions/`)만 계정별로 둔다.
-  - 폴더 통째 junction: `projects` · `agents` · `commands` · `rules` · `hooks` · `output-styles` · `file-history` · `tasks` · `plans` · `session-env`.
+- **계정 = 로그인만 다른 같은 작업 환경**: `CLAUDE_CONFIG_DIR = ~/.claude-hub-profiles/<id>` 에는 로그인(`.credentials.json` · `.claude.json`)만 계정별로 둔다.
+  - 폴더 통째 junction: `projects` · `agents` · `commands` · `rules` · `hooks` · `output-styles` · `file-history` · `tasks` · `plans` · `session-env` · `sessions`.
+  - `sessions`(실행 중 세션 목록 + Windows 세션 간 메시지 인증 키)를 공유하는 이유: Claude Code 는 같은 목록을 쓰는 세션끼리만 서로 찾고(@멘션 · 메시지) 「같은 대화가 두 곳에서 열림」을 감지한다. 기록에 계정 정보가 없어 허브는 허브 밖에서 연 세션의 계정을 모른다. 허브 코드는 `realSessionsDir` 로 같은 폴더를 한 번만 읽는다.
   - 항목별 junction(폴더는 계정 것): `skills`(`synced` 제외). `synced` 는 claude.ai 계정에서 내려오는 계정 전용이라 섞으면 안 된다.
   - `plugins` 는 공유하지 않는다 — 설치 목록 파일과 설치본(cache)이 한 쌍인데 파일은 연결할 수 없어, 목록만 갈라지면 한 계정의 정리 작업이 다른 계정 설치본을 지울 수 있다. 계정마다 설치.
   - 계정 전환은 `/exit` 를 치지 않고 Ctrl+C(입력창 비우기 → 종료)로 끈다(입력창에 남은 글과 붙어 질문으로 보내지는 것 방지). 안 꺼지면 강제 종료하지 않고 취소.
