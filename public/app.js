@@ -1631,9 +1631,16 @@ function addPane(cfg, placement) {
   try { term.onBell(() => markPaneDone(paneObj)); } catch {}
 
   // 복사/붙여넣기 + 제어키 처리
+  // 같은 글을 짧은 사이에 두 번 보내지 않는다 — 한 번의 붙여넣기 동작에 두 경로가 겹쳐도 한 번만 들어가게
+  let lastPaste = { text: '', at: 0 };
+  const PASTE_DEDUPE_MS = 600;
   const pasteFromClipboard = () => {
     navigator.clipboard.readText().then((t) => {
-      if (t && ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: 'input', data: t }));
+      if (!t || !ws || ws.readyState !== WebSocket.OPEN) return;
+      const now = Date.now();
+      if (t === lastPaste.text && now - lastPaste.at < PASTE_DEDUPE_MS) return;
+      lastPaste = { text: t, at: now };
+      ws.send(JSON.stringify({ type: 'input', data: t }));
     }).catch(() => {});
   };
   const copySelection = () => {
@@ -1660,8 +1667,14 @@ function addPane(cfg, placement) {
     }
     return true;
   });
-  // 우클릭 붙여넣기
-  termEl.addEventListener('contextmenu', (e) => { e.preventDefault(); pasteFromClipboard(); });
+  // 우클릭 붙여넣기. claude 가 마우스를 쓰는 화면(전체 화면 모드 등)이면 우클릭이 claude 에도 전달돼
+  // claude 가 직접 붙여넣는다 — 그때 허브까지 붙여넣으면 두 번 들어간다.
+  termEl.addEventListener('contextmenu', (e) => {
+    e.preventDefault();
+    const mouse = term.modes && term.modes.mouseTrackingMode;
+    if (mouse && mouse !== 'none') return;
+    pasteFromClipboard();
+  });
 
   let disposed = false;
   let reloading = false;
