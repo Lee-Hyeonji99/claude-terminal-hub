@@ -2126,7 +2126,9 @@ function addPane(cfg, placement) {
   // 같은 대화가 이미 다른 곳에서 열려 있다 — 서버가 pty 를 만들지 않고 알려 온다
   function onSessionBusy(m) {
     const other = m.where === 'hub' ? allWorkspacePanes().find((p) => p.cfg && p.cfg.key === m.key) : null;
-    const where = other ? `다른 패널(${profileName(m.profile)} 계정)` : `허브 밖 터미널(${profileName(m.profile)} 계정)`;
+    // 허브 밖이면 계정을 모를 수 있다(실행 중 세션 목록을 계정끼리 같이 써서 기록에 계정이 없다)
+    const where = other ? `다른 패널(${profileName(m.profile)} 계정)`
+      : (m.profile ? `허브 밖 터미널(${profileName(m.profile)} 계정)` : '허브 밖 터미널');
     term.write(`\r\n\x1b[33m[이 대화는 이미 ${where}에서 열려 있습니다]\x1b[0m\r\n`);
     const actions = [];
     if (other) actions.push({ label: '그 패널로 이동', primary: true, onClick: () => { paneObj.dispose(); revealPane(other); } });

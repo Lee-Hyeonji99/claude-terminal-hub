@@ -1033,6 +1033,15 @@ const registryWatchers = new Map();
 function sessionsDirFor(profile) {
   return path.join(configDirFor(profile) || path.join(os.homedir(), '.claude'), 'sessions');
 }
+// 실행 중 세션 목록은 계정끼리 공유한다(lib/shared-config.js) — 계정 폴더의 sessions 는 메인으로 가는 연결이라
+// 같은 폴더를 여러 이름으로 부른다. 같은 목록을 두 번 읽지 않게 실제 경로로 맞춘다(아직 안 바뀐 계정은 제 폴더).
+function realSessionsDir(profile) {
+  const d = sessionsDirFor(profile);
+  try { return fs.realpathSync(d); } catch { return d; }
+}
+function sessionsDirsOfAllAccounts() {
+  return [...new Set(allProfileIds().map(realSessionsDir))];
+}
 function watchRegistry(dir) {
   if (registryWatchers.has(dir)) return;
   registryWatchers.set(dir, null);
@@ -1058,7 +1067,7 @@ async function trackSessions() {
     const groups = new Map();
     for (const s of ptyStore.values()) {
       if (s.exited || !s.term || !s.claudeLaunched) continue;
-      const dir = sessionsDirFor(s.profile);
+      const dir = realSessionsDir(s.profile);
       if (!groups.has(dir)) groups.set(dir, []);
       groups.get(dir).push(s);
     }
@@ -1201,11 +1210,14 @@ function findSessionHolder(id, key) {
   for (const m of [retiredClaudePids, retiredSessionIds]) for (const [k, at] of m) if (now - at > RETIRED_PID_MS) m.delete(k);
   if (retiredSessionIds.has(id)) return null;
   const hubPids = new Set([...ptyStore.values()].map((s) => s.claudePid).filter(Boolean));
-  // 같은 대화 ID 인 것만 프로세스를 확인한다(확인 한 번에 수십 ms — 등록부 전체를 보면 패널 복원이 느려진다)
-  for (const pid of allProfileIds()) {
-    const hit = claudeRegistry.readEntries(sessionsDirFor(pid))
+  // 같은 대화 ID 인 것만 프로세스를 확인한다(확인 한 번에 수십 ms — 등록부 전체를 보면 패널 복원이 느려진다).
+  // 공유 목록에는 계정 정보가 없어 어느 계정인지는 모른다 — 계정별 목록일 때만 알려 준다.
+  for (const dir of sessionsDirsOfAllAccounts()) {
+    const hit = claudeRegistry.readEntries(dir)
       .find((e) => e.sessionId === id && !hubPids.has(e.pid) && !retiredClaudePids.has(e.pid) && isClaudeProcess(e.pid));
-    if (hit) return { where: 'external', profile: pid };
+    if (!hit) continue;
+    const owners = allProfileIds().filter((p) => realSessionsDir(p) === dir);
+    return { where: 'external', profile: owners.length === 1 ? owners[0] : null };
   }
   return null;
 }

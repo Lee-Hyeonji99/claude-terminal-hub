@@ -146,6 +146,19 @@ test('되돌리기 · 작업 목록 폴더도 공유한다 — 상태 파일은 
   assert.ok(isLink(path.join(prof, 'file-history')));
 });
 
+test('실행 중 세션 목록(sessions)도 공유한다 — 그 계정 claude 가 돌고 있으면 미룬다', () => {
+  const { main, prof, put, opts } = fixture();
+  put(prof, 'sessions/123.json', '{"pid":123}');
+  put(prof, 'sessions/123.abc.key', 'k');
+  const r = linkProfile(prof, main, opts({ canMove: () => false }));
+  assert.ok(r.pending.includes('sessions'));
+  assert.ok(!isLink(path.join(prof, 'sessions')));
+  linkProfile(prof, main, opts());
+  assert.ok(isLink(path.join(prof, 'sessions')));
+  assert.equal(read(path.join(main, 'sessions/123.json')), '{"pid":123}');
+  assert.equal(read(path.join(main, 'sessions/123.abc.key')), 'k');
+});
+
 test('skills 는 항목별로 잇고 계정 전용 synced 는 따로 둔다', () => {
   const { main, prof, put, opts } = fixture();
   put(main, 'skills/foo/SKILL.md', 'foo');
