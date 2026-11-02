@@ -1,11 +1,14 @@
 'use strict';
-/* Claude Terminal Hub — 폴더 선택 → 세션 목록(재개) → split/도킹 뷰 */
+/* Claude Terminal Hub — 에이전트(Claude/Codex) 선택 → 폴더 선택 → split/도킹 뷰 */
 
 /* ---------- SVG 아이콘 (이모지 대체, currentColor) ---------- */
 function ic(inner) {
   return `<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${inner}</svg>`;
 }
 const ICON = {
+  claude: ic('<path d="M12 3v18M3 12h18M5.6 5.6l12.8 12.8M18.4 5.6L5.6 18.4"/>'),
+  codex: ic('<rect x="2.5" y="3.5" width="19" height="17" rx="5"/><path d="M8 9.5l3 2.5-3 2.5M13 15h3.5"/>'),
+  caret: ic('<path d="M6 9l6 6 6-6"/>'),
   plus: ic('<path d="M12 5v14M5 12h14"/>'),
   globe: ic('<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.5 2.7 2.5 15.3 0 18M12 3c-2.5 2.7-2.5 15.3 0 18"/>'),
   moon: ic('<path d="M21 12.8A9 9 0 1 1 11.2 3 7 7 0 0 0 21 12.8z"/>'),
@@ -52,7 +55,6 @@ const stage = document.getElementById('stage');
 const emptyMsg = document.getElementById('empty');
 const overlay = document.getElementById('overlay');
 const folderModal = document.getElementById('folderModal');
-const sessionModal = document.getElementById('sessionModal');
 const statusEl = document.getElementById('status');
 
 /* ---------- 레이아웃 모델 ----------
@@ -557,7 +559,7 @@ function renderProjectTabs() {
   add.innerHTML = ICON.plus;
   add.addEventListener('click', () => {
     const cwd = projectCwd[cur];
-    if (activeProject && cwd) openSessionPicker(cwd); else startNewSession();
+    showAgentMenu(add, (a) => { if (activeProject && cwd) launchAgent(a, cwd, getPlacement()); else startNewSession(a); });
   });
   bar.appendChild(add);
 }
@@ -1229,7 +1231,8 @@ function renderTray() {
     chip.className = 'min-chip' + (done ? ' done' : '');
     chip.title = '클릭하면 다시 꺼냅니다';
     const t = (p.cfg && p.cfg.title) || 'claude';
-    chip.innerHTML = `<span class="cd"></span><span class="mt"></span><button class="mx" title="세션 종료">${ICON.x}</button>`;
+    const chipAgent = p.cfg ? paneAgent(p.cfg) : null;
+    chip.innerHTML = `<span class="cd"></span>${chipAgent ? `<span class="chip-agent" title="${AGENT_LABEL[chipAgent]}">${ICON[chipAgent]}</span>` : ''}<span class="mt"></span><button class="mx" title="세션 종료">${ICON.x}</button>`;
     chip.querySelector('.mt').textContent = t;
     chip.addEventListener('click', () => restorePane(p));
     chip.querySelector('.mx').addEventListener('click', (e) => { e.stopPropagation(); p.dispose(); });
@@ -1379,7 +1382,7 @@ function paneSnapshot(p) {
     return {
       type: 'term', key: cfg.key, cwd: cfg.cwd, profile: cfg.profile,
       resumeId: cfg.resumeId || null, command: cfg.command || null, runClaude: !!cfg.runClaude,
-      title: cfg.title || null,
+      agent: cfg.agent || null, title: cfg.title || null,
     };
   }
   return null;
@@ -1458,7 +1461,7 @@ function restoreWorkspaceSnapshot(saved, applySizes) {
       if (ps.type === 'term') {
         const made = addPane({
           key: ps.key, cwd: ps.cwd, profile: ps.profile, resumeId: ps.resumeId || undefined,
-          command: ps.command || undefined, runClaude: !!ps.runClaude, title: ps.title || undefined,
+          command: ps.command || undefined, runClaude: !!ps.runClaude, agent: ps.agent || undefined, title: ps.title || undefined,
         }, first ? 'newcol' : 'row');
         keyToPane.set(ps.key, made); // 옛 형식은 다른 프로젝트 탭으로 갈 수 있어 «마지막 컬럼» 으로 찾으면 틀린다
         first = false;
@@ -1502,7 +1505,7 @@ function restoreMinimized() {
       if (ps.type !== 'term') continue;
       minimizePane(addPane({
         key: ps.key, cwd: ps.cwd, profile: ps.profile, resumeId: ps.resumeId || undefined,
-        command: ps.command || undefined, runClaude: !!ps.runClaude, title: ps.title || undefined,
+        command: ps.command || undefined, runClaude: !!ps.runClaude, agent: ps.agent || undefined, title: ps.title || undefined,
       }, 'newcol'));
     }
   } finally {
@@ -1569,6 +1572,17 @@ function pickColumnForPlacement(placement) {
 }
 
 /* ---------- 패널(세션) 생성 ---------- */
+// 패널이 돌리는 에이전트 — 'claude' | 'codex' | null(맨 셸·직접 입력한 명령)
+function paneAgent(cfg) {
+  if (cfg.agent === 'codex' || cfg.agent === 'claude') return cfg.agent;
+  if (cfg.resumeId || (cfg.runClaude && /^claude(\s|$)/.test(cfg.command || ''))) return 'claude';
+  return null;
+}
+const AGENT_LABEL = { claude: 'Claude', codex: 'Codex' };
+function agentBadgeHtml(agent) {
+  return agent ? `<span class="agent-badge" data-agent="${agent}" title="${AGENT_LABEL[agent]}">${ICON[agent]}<span>${AGENT_LABEL[agent]}</span></span>` : '';
+}
+
 function addPane(cfg, placement) {
   emptyMsg.style.display = 'none';
   if (!cfg.profile) cfg.profile = activeProfileId; // 현재 계정 프로필에 소속
@@ -1580,10 +1594,13 @@ function addPane(cfg, placement) {
   const pane = document.createElement('div');
   pane.className = 'pane';
   const shortCwd = cfg.cwd.split(/[\\/]/).filter(Boolean).pop() || cfg.cwd;
-  const title = cfg.title || (cfg.resumeId ? '재개한 세션' : (cfg.command && cfg.command !== 'claude' ? cfg.command : 'claude 새 대화'));
+  const agent = paneAgent(cfg);
+  if (agent === 'codex') pane.classList.add('agent-codex');
+  const title = cfg.title || (cfg.resumeId ? '재개한 세션' : (agent === 'codex' ? 'codex 새 대화' : (cfg.command && cfg.command !== 'claude' ? cfg.command : 'claude 새 대화')));
   pane.innerHTML = `
     <div class="bar">
       <span class="dot"></span>
+      ${agentBadgeHtml(agent)}
       <span class="label" title="${escapeHtml(cfg.cwd)}">
         <span class="ttl">${escapeHtml(title)}</span><span class="cwd">${ICON.folder}<span>${escapeHtml(shortCwd)}</span></span>
       </span>
@@ -1759,7 +1776,7 @@ function addPane(cfg, placement) {
   function sendInit(fork) {
     if (!ws || ws.readyState !== WebSocket.OPEN) return;
     ws.send(JSON.stringify({
-      type: 'init', key: cfg.key, cwd: cfg.cwd, runClaude: cfg.runClaude, command: cfg.command,
+      type: 'init', key: cfg.key, cwd: cfg.cwd, runClaude: cfg.runClaude, command: cfg.command, agent: cfg.agent || undefined,
       resumeId: cfg.resumeId, profile: cfg.profile, fork: !!fork, cols: term.cols || 80, rows: term.rows || 24,
     }));
   }
@@ -2064,7 +2081,9 @@ function addPane(cfg, placement) {
   pane.querySelector('.split').addEventListener('click', (e) => {
     e.stopPropagation();
     setActive(paneObj);
-    addPane({ cwd: cfg.cwd, runClaude: true, command: 'claude', title: 'claude 새 대화', profile: cfg.profile }, 'row'); // 나눈 패널은 같은 계정으로
+    // 나눈 패널은 같은 계정·같은 에이전트로
+    if (paneAgent(cfg) === 'codex') addPane({ cwd: cfg.cwd, runClaude: true, command: 'codex', agent: 'codex', title: 'codex 새 대화', profile: cfg.profile }, 'row');
+    else addPane({ cwd: cfg.cwd, runClaude: true, command: 'claude', title: 'claude 새 대화', profile: cfg.profile }, 'row');
   });
   pane.querySelector('.reload').addEventListener('click', (e) => {
     e.stopPropagation();
@@ -2371,22 +2390,89 @@ function dockPane(src, target, zone) {
 
 /* ---------- 모달 흐름 ---------- */
 let currentPath = '';
-function openOverlay(which) {
-  folderModal.style.display = which === 'folder' ? 'flex' : 'none';
-  sessionModal.style.display = which === 'session' ? 'flex' : 'none';
+function openOverlay() {
+  folderModal.style.display = 'flex';
   overlay.classList.add('open');
 }
 function closeOverlay() { overlay.classList.remove('open'); }
 
-async function startNewSession() {
+/* ---------- 새 세션: 에이전트 선택 (Claude / Codex / 직접 입력) ---------- */
+const AGENT_CHOICES = [
+  { id: 'claude', name: 'Claude Code', sub: 'claude' },
+  { id: 'codex', name: 'Codex', sub: 'codex' },
+];
+let pendingAgent = (() => { try { const a = localStorage.getItem('cth_last_agent'); return a === 'codex' || a === 'shell' ? a : 'claude'; } catch { return 'claude'; } })();
+function rememberAgent(a) { pendingAgent = a; try { localStorage.setItem('cth_last_agent', a); } catch {} }
+
+let agentMenuEl = null;
+function closeAgentMenu() { if (agentMenuEl) { agentMenuEl.remove(); agentMenuEl = null; } }
+function showAgentMenu(anchor, onPick) {
+  closeAgentMenu();
+  const m = document.createElement('div');
+  m.className = 'agent-menu';
+  m.setAttribute('role', 'menu');
+  m.innerHTML = '<div class="am-head">어떤 에이전트로 시작할까요?</div>'
+    + AGENT_CHOICES.map((c) => `<button role="menuitem" class="am-item" data-agent="${c.id}">
+        <span class="am-ico">${ICON[c.id]}</span>
+        <span class="am-txt"><b>${c.name}</b><code>${c.sub}</code></span>
+        ${c.id === pendingAgent ? '<span class="am-last">마지막 선택</span>' : ''}</button>`).join('')
+    + `<div class="am-sep"></div><button role="menuitem" class="am-item am-small" data-agent="shell">${ic('<path d="M4 17l6-5-6-5M12 19h8"/>')}<span>명령 직접 입력… (셸)</span></button>`;
+  document.body.appendChild(m);
+  agentMenuEl = m;
+  const r = anchor.getBoundingClientRect();
+  m.style.left = Math.max(8, Math.min(r.left, window.innerWidth - m.offsetWidth - 8)) + 'px';
+  m.style.top = (r.bottom + 6) + 'px';
+  m.querySelectorAll('.am-item').forEach((b) => b.addEventListener('click', () => {
+    const a = b.dataset.agent;
+    closeAgentMenu();
+    rememberAgent(a);
+    onPick(a);
+  }));
+  const first = m.querySelector('.am-item');
+  if (first) first.focus();
+  setTimeout(() => {
+    const off = (e) => { if (!agentMenuEl || agentMenuEl.contains(e.target) || anchor.contains(e.target)) return; closeAgentMenu(); document.removeEventListener('mousedown', off, true); };
+    document.addEventListener('mousedown', off, true);
+  }, 0);
+}
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeAgentMenu(); });
+
+// 폴더가 정해지면 바로 패널을 연다. 'shell' 은 실행할 명령을 물어본다(빈칸이면 셸만).
+async function launchAgent(agent, cwd, placement) {
+  if (agent === 'codex') { addPane({ cwd, runClaude: true, command: 'codex', agent: 'codex', title: 'codex 새 대화' }, placement); return; }
+  if (agent === 'shell') {
+    const cmd = await uiPrompt('명령 직접 입력', 'claude --continue', '빈칸이면 셸만 열립니다.');
+    if (cmd === null) return;
+    addPane({ cwd, runClaude: !!cmd.trim(), command: cmd.trim() || 'claude', title: cmd.trim() || '셸' }, placement);
+    return;
+  }
+  addPane({ cwd, runClaude: true, command: 'claude', title: 'claude 새 대화' }, placement);
+}
+
+function getPlacement() {
+  const r = document.querySelector('input[name="placement"]:checked');
+  return r ? r.value : 'column';
+}
+
+function syncFolderAgentUi() {
+  document.querySelectorAll('#agentSwitch button').forEach((b) => b.classList.toggle('on', b.dataset.agent === pendingAgent));
+  const names = { claude: 'Claude', codex: 'Codex', shell: '명령' };
+  const btn = document.getElementById('pickHere');
+  btn.querySelector('.lbl').textContent = `이 폴더에서 ${names[pendingAgent] || 'Claude'} 시작`;
+}
+document.querySelectorAll('#agentSwitch button').forEach((b) => b.addEventListener('click', () => { rememberAgent(b.dataset.agent); syncFolderAgentUi(); }));
+
+async function startNewSession(agent) {
+  if (agent === 'claude' || agent === 'codex' || agent === 'shell') rememberAgent(agent);
   const defs = await fetch('/api/defaults').then((r) => r.json()).catch(() => ({}));
   document.getElementById('curPath').value = localStorage.getItem('cth_last_path') || defs.cwd || defs.home || '';
   document.getElementById('fsnote').textContent = '';
-  openOverlay('folder');
+  syncFolderAgentUi();
+  openOverlay();
   loadRecentPaths();
 }
 window.startNewSession = startNewSession;
-document.getElementById('add').addEventListener('click', startNewSession);
+document.getElementById('add').addEventListener('click', (e) => showAgentMenu(e.currentTarget, (a) => startNewSession(a)));
 
 // 최근 작업 경로 추천 목록
 async function loadRecentPaths() {
@@ -2414,19 +2500,19 @@ async function loadRecentPaths() {
   });
 }
 
-// 경로 "선택 확정" → 검증 후 세션 목록으로
+// 경로 "선택 확정" → 검증 후 고른 에이전트로 바로 시작
 async function choosePath(p) {
   p = (p || '').trim();
   if (!p) return;
   const res = await fetch(`/api/fs/list?path=${encodeURIComponent(p)}`).then((r) => r.json()).catch(() => ({ error: '경로 조회 실패' }));
   if (res.error) { document.getElementById('fsnote').textContent = res.error; return; }
   localStorage.setItem('cth_last_path', res.path);
-  openSessionPicker(res.path);
+  closeOverlay();
+  launchAgent(pendingAgent, res.path, getPlacement());
 }
 
 document.getElementById('curPath').addEventListener('keydown', (e) => { if (e.key === 'Enter') choosePath(e.target.value); });
 document.getElementById('pickHere').addEventListener('click', () => choosePath(document.getElementById('curPath').value));
-document.getElementById('changeFolder').addEventListener('click', () => { openOverlay('folder'); loadRecentPaths(); });
 
 document.getElementById('osPick').addEventListener('click', async () => {
   const btn = document.getElementById('osPick');
@@ -2452,49 +2538,6 @@ document.getElementById('osPick').addEventListener('click', async () => {
   } finally {
     btn.disabled = false; btn.textContent = orig;
   }
-});
-
-async function openSessionPicker(p) {
-  document.getElementById('sesCwd').textContent = p;
-  document.getElementById('seslist').innerHTML = '<div class="sesempty">불러오는 중…</div>';
-  openOverlay('session');
-  const res = await fetch(`/api/sessions?path=${encodeURIComponent(p)}`).then((r) => r.json()).catch(() => ({ sessions: [] }));
-  const list = document.getElementById('seslist');
-  document.getElementById('sesCount').textContent = res.total ? `(${res.sessions.length}/${res.total})` : '(0)';
-  list.innerHTML = '';
-  if (!res.sessions || res.sessions.length === 0) {
-    list.innerHTML = '<div class="sesempty">저장된 세션이 없습니다. 위의 <b>새 대화 시작</b>으로 시작하세요.</div>';
-    return;
-  }
-  res.sessions.forEach((s) => {
-    const it = document.createElement('div');
-    it.className = 'sesitem';
-    it.innerHTML = `
-      <span class="ico">${ICON.chat}</span>
-      <div class="meta">
-        <div class="title">${escapeHtml(s.title)}</div>
-        <div class="sub">${relTime(s.mtime)} · ${s.sizeKB}KB · ${s.id.slice(0, 8)}</div>
-      </div>`;
-    it.onclick = () => { closeOverlay(); addPane({ cwd: p, resumeId: s.id, title: s.title }, getPlacement()); };
-    list.appendChild(it);
-  });
-}
-
-function getPlacement() {
-  const r = document.querySelector('input[name="placement"]:checked');
-  return r ? r.value : 'column';
-}
-
-document.getElementById('newChat').addEventListener('click', () => {
-  const p = document.getElementById('sesCwd').textContent;
-  closeOverlay(); addPane({ cwd: p, runClaude: true, command: 'claude', title: 'claude 새 대화' }, getPlacement());
-});
-document.getElementById('customCmd').addEventListener('click', async () => {
-  const p = document.getElementById('sesCwd').textContent;
-  const cmd = await uiPrompt('명령 직접 입력', 'claude --continue', '빈칸이면 셸만 열립니다.');
-  if (cmd === null) return;
-  closeOverlay();
-  addPane({ cwd: p, runClaude: !!cmd.trim(), command: cmd.trim() || 'claude', title: cmd.trim() || '셸' }, getPlacement());
 });
 
 // backdrop 클릭으로는 닫지 않음 — 실수 방지. ✕/취소/닫기/Esc 로만.
@@ -2539,7 +2582,7 @@ function renderSessionList(sessions, emptyMsg, showTimes) {
     it.title = `${s.title}\n${s.cwd}` + (s.profile ? `\n마지막 계정: ${profileName(s.profile)}` : '')
       + (open ? '\n클릭 = 열려 있는 패널로 이동' : `\n클릭 = ${profileName(newPaneProfile)} 계정으로 열기`);
     it.innerHTML = `
-      <div class="rt">${ICON.chat}<span>${escapeHtml(s.title)}</span></div>
+      <div class="rt"><span class="rt-ico" title="Claude">${ICON.claude}</span><span>${escapeHtml(s.title)}</span></div>
       <div class="rf">${ICON.folder}<span>${escapeHtml(folder)}</span></div>
       ${showTimes
         ? `<div class="rs"><span>최초 ${isoTime(s.firstInputAt)} · 마지막 ${isoTime(s.lastInputAt)}</span>${chips}</div>`

@@ -240,6 +240,31 @@
 
     .seshead{display:flex;align-items:center;gap:10px;margin-bottom:8px}
     .seshead .cwd{flex:1;font-family:Consolas,monospace;color:var(--muted);font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+    /* 에이전트 표식 — 색은 쓰지 않고 테마 색을 그대로 따른다(아이콘 + 글자로 구분) */
+    #add .caret svg{width:12px;height:12px}
+    .pane .bar .agent-badge{display:inline-flex;align-items:center;gap:4px;flex:none;height:20px;padding:0 8px 0 5px;border:1px solid var(--border);border-radius:10px;background:var(--panel);color:var(--text);font-size:11px;font-weight:700}
+    .pane .bar .agent-badge svg{width:12px;height:12px;color:var(--accent)}
+    .pane.agent-codex .compose,.pane.agent-codex .bar .acct{display:none !important}
+    .min-chip .chip-agent{display:inline-flex;flex:none}
+    .min-chip .chip-agent svg{width:12px;height:12px;color:var(--muted)}
+    .recent-item .rt .rt-ico{flex:none;display:inline-flex;flex:0 0 auto}
+    .agent-switch{display:flex;align-items:center;gap:4px;margin-bottom:12px;padding:3px;border:1px solid var(--border);border-radius:9px;background:var(--bg);width:max-content;max-width:100%}
+    .agent-switch .as-label{font-size:12px;color:var(--muted);padding:0 8px}
+    .agent-switch button{display:inline-flex;align-items:center;gap:6px;border:1px solid transparent;background:transparent;color:var(--muted);border-radius:7px;padding:5px 12px;font-size:13px;font-weight:600}
+    .agent-switch button.on{background:var(--head);border-color:var(--accent);color:var(--text)}
+    .agent-menu{position:fixed;z-index:3000;width:300px;padding:6px;background:var(--head);border:1px solid var(--border);border-radius:12px;box-shadow:0 18px 40px rgba(0,0,0,.45)}
+    .agent-menu .am-head{padding:8px 10px 6px;font-size:11px;color:var(--muted)}
+    .agent-menu .am-item{display:flex;align-items:center;gap:12px;width:100%;padding:9px 10px;border:1px solid transparent;border-radius:9px;background:transparent;color:var(--text);text-align:left}
+    .agent-menu .am-item:hover,.agent-menu .am-item:focus-visible{background:var(--panel);border-color:var(--accent);outline:none}
+    .agent-menu .am-ico{display:flex;align-items:center;justify-content:center;width:32px;height:32px;border-radius:9px;border:1px solid var(--border);background:var(--panel);color:var(--accent)}
+    .agent-menu .am-ico svg{width:18px;height:18px}
+    .agent-menu .am-txt{flex:1;display:flex;flex-direction:column;gap:2px}
+    .agent-menu .am-txt b{font-size:14px}
+    .agent-menu .am-txt code{font-size:12px;color:var(--muted)}
+    .agent-menu .am-last{font-size:11px;color:var(--muted);border:1px solid var(--border);border-radius:5px;padding:2px 6px}
+    .agent-menu .am-sep{height:1px;background:var(--border);margin:6px 4px}
+    .agent-menu .am-small{padding:7px 10px;font-size:12.5px;color:var(--muted);gap:10px}
     .placement{display:flex;gap:6px;margin:6px 0 12px}
     .placement label{display:flex;align-items:center;gap:5px;color:var(--muted);font-size:12px;border:1px solid var(--border);padding:5px 9px;border-radius:6px;cursor:pointer}
     .placement input{margin:0}
@@ -470,7 +495,7 @@
   <header>
     <button id="lnbToggle" class="ghost icon-btn" title="사이드바 접기/펼치기"><span data-icon="menu"></span></button>
     <div class="brand">Claude <span>Terminal Hub</span></div>
-    <button id="add" class="primary" title="새 세션"><span data-icon="plus"></span><span class="lbl">새 세션</span></button>
+    <button id="add" class="primary" title="새 세션 — Claude 또는 Codex 선택" aria-haspopup="menu"><span data-icon="plus"></span><span class="lbl">새 세션</span><span data-icon="caret" class="caret"></span></button>
     <button id="addWeb" class="ghost" title="웹 미리보기 패널 추가"><span data-icon="globe"></span><span class="lbl">웹 미리보기</span></button>
     <button id="addFile" class="ghost" title="로컬 파일 미리보기 (HTML/이미지/MD)"><span data-icon="file"></span><span class="lbl">파일 열기</span></button>
     <button id="deskBtn" class="ghost" title="데스크톱 뷰 — Claude 데스크톱 앱처럼 대화 화면으로 보기"><span data-icon="layout"></span><span class="lbl">데스크톱 뷰</span></button>
@@ -686,13 +711,19 @@
 
   <!-- 모달 -->
   <div id="overlay">
-    <!-- 1단계: 폴더 선택 -->
+    <!-- 폴더 선택 (에이전트는 상단 새 세션 버튼에서 고르고, 여기서도 바꿀 수 있다) -->
     <div class="modal" id="folderModal" style="display:none">
       <div class="mhead">
         <h2>작업 폴더 선택</h2>
         <button class="ghost icon-btn" data-close><span data-icon="x"></span></button>
       </div>
       <div class="mbody">
+        <div class="agent-switch" id="agentSwitch" role="group" aria-label="에이전트">
+          <span class="as-label">에이전트</span>
+          <button type="button" data-agent="claude"><span data-icon="claude"></span>Claude</button>
+          <button type="button" data-agent="codex"><span data-icon="codex"></span>Codex</button>
+          <button type="button" data-agent="shell" title="실행할 명령을 직접 입력">명령</button>
+        </div>
         <label style="display:block;color:var(--muted);font-size:12px;margin-bottom:5px">작업 폴더를 직접 입력(붙여넣고 Enter)하거나, 아래 최근 경로에서 고르세요. 새 폴더 생성은 오른쪽 <b>폴더 선택기</b>.</label>
         <div class="pathbar">
           <input type="text" id="curPath" spellcheck="false" placeholder="예: C:\projects\my-project — 붙여넣고 Enter" />
@@ -703,37 +734,15 @@
         <div class="fsnote" id="fsnote"></div>
       </div>
       <div class="mfoot">
+        <div class="placement" style="margin:0;margin-right:auto">
+          <label><input type="radio" name="placement" value="column" checked /> 새 열</label>
+          <label><input type="radio" name="placement" value="row" /> 활성 패널 아래</label>
+        </div>
         <button data-close>취소</button>
-        <button class="primary" id="pickHere">이 폴더 선택</button>
+        <button class="primary" id="pickHere"><span class="lbl">이 폴더에서 Claude 시작</span></button>
       </div>
     </div>
 
-    <!-- 2단계: 세션 목록 -->
-    <div class="modal" id="sessionModal" style="display:none">
-      <div class="mhead"><h2>세션</h2><button class="ghost icon-btn" data-close><span data-icon="x"></span></button></div>
-      <div class="mbody">
-        <div class="seshead">
-          <div class="cwd" id="sesCwd"></div>
-        </div>
-        <div class="placement">
-          <span style="color:var(--muted);font-size:12px;align-self:center">열기 위치:</span>
-          <label><input type="radio" name="placement" value="column" checked /> 새 열(가로 분할)</label>
-          <label><input type="radio" name="placement" value="row" /> 활성 패널 아래(세로 분할)</label>
-        </div>
-        <div class="sesactions">
-          <button class="primary" id="newChat"><span data-icon="plus"></span> 새 대화 시작 (claude)</button>
-          <button id="customCmd">명령 직접 입력…</button>
-        </div>
-        <div style="color:var(--muted);font-size:12px;margin-bottom:6px">이어서 진행할 세션 <span id="sesCount"></span></div>
-        <div class="seslist" id="seslist"></div>
-        <div class="hint">세션을 클릭하면 <code>claude --resume &lt;id&gt;</code> 로 그 대화를 이어서 엽니다.</div>
-      </div>
-      <div class="mfoot">
-        <button id="changeFolder"><span data-icon="back"></span> 이전</button>
-        <button data-close>닫기</button>
-      </div>
-    </div>
-    <!-- (end session modal) -->
   </div>
 
   <div id="promptOverlay">
@@ -758,7 +767,7 @@
       <div class="help-body">
         <section>
           <h4>세션 · 패널</h4>
-          <div class="kv"><span>새 세션</span><b>헤더 “새 세션” · 빈 화면 버튼</b></div>
+          <div class="kv"><span>새 세션</span><b>헤더 “새 세션” → Claude / Codex 선택 · 빈 화면 버튼</b></div>
           <div class="kv"><span>아래로 분할</span><b>패널 바 분할 아이콘</b></div>
           <div class="kv"><span>패널 이동 · 도킹</span><b>패널 바를 드래그</b></div>
           <div class="kv"><span>세션 이름 변경</span><b>터미널에서 <code>/rename</code> (Claude 기본 명령)</b></div>

@@ -966,6 +966,7 @@ function beginWatch(session, jsonl, isResume) {
   });
 }
 function startWatch(session) {
+  if (session.agent === 'codex') return; // claude 대화 기록(jsonl) 감시는 claude 패널만
   const dir = path.join(projectsDirFor(), encodeProjectPath(session.cwd || os.homedir()));
   if (session.resumeId) {
     const jf = path.join(dir, session.resumeId + '.jsonl');
@@ -992,9 +993,18 @@ function startWatch(session) {
 }
 // 세션에서 칠 claude 명령. 새 대화도 ID 를 미리 정해(--session-id) 나중에 --resume 으로 이어갈 수 있게 한다.
 // session.resumeId / session.freshId 를 채운다(감시 대상 파일을 정하는 데 쓴다).
+// Codex 패널 — 셸에 codex 를 친다. 설치돼 있지 않으면 안내만 남기고 셸은 그대로 둔다.
+// 세션 ID·대화 기록 추적은 claude 전용이라 codex 는 건드리지 않는다.
+// 입력 에코가 깨지지 않게 안내 문구는 ASCII 로 둔다(셸이 로케일을 잡기 전에 들어가는 글자)
+const CODEX_MISSING_MSG = 'codex not found. Install: npm i -g @openai/codex  then: codex login';
+function buildCodexCommand() {
+  if (IS_WIN) return `if (Get-Command codex -ErrorAction SilentlyContinue) { codex } else { Write-Host '${CODEX_MISSING_MSG}' }`;
+  return `if command -v codex >/dev/null 2>&1; then codex; else echo '${CODEX_MISSING_MSG}'; fi`;
+}
 const CLAUDE_SESSION_FLAG_RE = /\s(-r|--resume|-c|--continue|--session-id|-p|--print)(\s|=|$)/;
 // 계정 쪽이면 메인 settings·MCP 플래그를 붙인다
 function buildClaudeCommand(msg, session) {
+  if (msg.agent === 'codex') return buildCodexCommand();
   const cmd = buildBaseCommand(msg, session);
   return cmd ? withSharedFlags(cmd, session.profile, session.cwd) : cmd;
 }
@@ -1185,7 +1195,8 @@ function launchClaude(session, msg) {
   // 살아 있던 tmux 세션에 붙은 것이면 claude 가 이미 그 안에서 돌고 있다 — 다시 치지 않는다.
   const cmd = term.tmuxReattached ? null : buildClaudeCommand(msg, session);
   // claude 를 띄운(또는 살아 있는 tmux 안에서 돌던) 패널만 세션 ID 를 따라간다 — 맨 셸에서 직접 친 claude 는 제외
-  session.claudeLaunched = !!(cmd ? /^claude(\s|$)/.test(cmd) : (term.tmuxReattached && (msg.resumeId || msg.runClaude)));
+  session.agent = msg.agent === 'codex' ? 'codex' : 'claude';
+  session.claudeLaunched = session.agent === 'claude' && !!(cmd ? /^claude(\s|$)/.test(cmd) : (term.tmuxReattached && (msg.resumeId || msg.runClaude)));
   if (session.claudeLaunched && session.resumeId && !session.forkOf) rememberSessionAccount(session.resumeId, session.profile);
   session.launchedAt = Date.now();
   const bootDelay = readShellSettings().shell === 'tmux' ? 1200 : 400;
@@ -1365,7 +1376,7 @@ wss.on('connection', (ws) => {
         return;
       }
       let term;
-      try { term = spawnShell(cwd, cols, rows, msg.profile, key); }
+      try { term = spawnShell(cwd, cols, rows, msg.agent === 'codex' ? 'default' : msg.profile, key); }
       catch (err) { safeSend({ type: 'error', message: `PTY 생성 실패: ${err.message}` }); return; }
       const session = {
         key, term: null, cwd: cwd || os.homedir(), profile: msg.profile, resumeId: msg.resumeId,
