@@ -212,9 +212,9 @@ function writeState(s) {
 }
 
 // ---- 터미널 셸 설정 ----
-// Windows: 'powershell' 만   macOS/Linux: 'powershell'(=$SHELL, 기본) | 'tmux'
-// Windows 의 tmux 는 v1.18.0 에서 MSYS2 것을, v1.27.0 에서 WSL 것까지 뺐다 — 예전 설정은 PowerShell 로 연다.
-const SHELL_KINDS = IS_WIN ? ['powershell'] : ['powershell', 'tmux'];
+// 항상 기본 셸(Windows 는 PowerShell, macOS/Linux 는 $SHELL)로 연다.
+// 셸 선택 UI 는 v1.30.0 다음 버전에서 뺐다 — 예전에 tmux 를 골라 둔 설정도 기본 셸로 연다(tmux 코드는 남아 있지만 쓰이지 않음).
+const SHELL_KINDS = ['powershell'];
 function readShellSettings() {
   const st = readState().settings || {};
   return { shell: SHELL_KINDS.includes(st.shell) ? st.shell : 'powershell' };

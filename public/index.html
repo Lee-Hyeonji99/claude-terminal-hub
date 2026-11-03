@@ -242,7 +242,11 @@
     .seshead .cwd{flex:1;font-family:Consolas,monospace;color:var(--muted);font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 
     /* 에이전트 표식 — 색은 쓰지 않고 테마 색을 그대로 따른다(아이콘 + 글자로 구분) */
+    #add .caret{pointer-events:auto;display:inline-flex;align-items:center;align-self:stretch;margin:-6px -10px -6px 2px;padding:0 7px;border-left:1px solid rgba(255,255,255,.35);border-radius:0 6px 6px 0}
+    #add .caret:hover{background:rgba(0,0,0,.15)}
     #add .caret svg{width:12px;height:12px}
+    #defaultAgentRow button{display:inline-flex;align-items:center;justify-content:center;gap:5px}
+    #defaultAgentRow svg{width:12px;height:12px}
     .pane .bar .agent-badge{display:inline-flex;align-items:center;gap:4px;flex:none;height:20px;padding:0 8px 0 5px;border:1px solid var(--border);border-radius:10px;background:var(--panel);color:var(--text);font-size:11px;font-weight:700}
     .pane .bar .agent-badge svg{width:12px;height:12px;color:var(--accent)}
     .pane.agent-codex .compose,.pane.agent-codex .bar .acct{display:none !important}
@@ -589,23 +593,20 @@
     </div>
     <select id="lineHeight" class="ghost" title="터미널 줄간격" style="padding:4px 6px;font-size:11px"></select>
     <div class="popover-wrap">
-      <button id="shellBtn" class="ghost icon-btn" title="프로젝트별 탭 · 터미널 셸"><span data-icon="tool"></span></button>
+      <button id="shellBtn" class="ghost icon-btn" title="새 세션 기본 에이전트 · 프로젝트별 탭"><span data-icon="tool"></span></button>
       <div id="shellPopover" class="popover" style="min-width:270px">
-        <div class="popover-sep" style="margin-top:0">프로젝트별 탭</div>
+        <div class="popover-sep" style="margin-top:0">새 세션 기본 에이전트</div>
+        <div class="seg-row" id="defaultAgentRow">
+          <button data-agent="claude"><span data-icon="claude"></span> Claude</button>
+          <button data-agent="codex"><span data-icon="codex"></span> Codex</button>
+        </div>
+        <div class="popover-note" style="padding:2px 8px 6px;font-size:11px;color:var(--muted);line-height:1.5">헤더 “새 세션”, 빈 화면 버튼, 프로젝트 탭 ＋ 가 이 값으로 바로 엽니다. 한 번만 다르게 열려면 “새 세션” 옆 ▾ 를 누릅니다.</div>
+        <div class="popover-sep">프로젝트별 탭</div>
         <div class="seg-row" id="groupProjectsRow">
           <button data-group="on">켬 — 작업 경로마다 탭</button>
           <button data-group="off">끔 — 한 화면</button>
         </div>
         <div class="popover-note" style="padding:2px 8px 6px;font-size:11px;color:var(--muted)">바꾸면 화면을 새로고침합니다. 세션은 그대로 이어집니다. 끄면 전체 테마만 씁니다.</div>
-        <div class="popover-sep">세션을 열 셸</div>
-        <div class="popover-item" data-shell="powershell"><span class="swatch" style="background:#012456"></span><span id="shellLabelDefault">PowerShell</span></div>
-        <div class="popover-item" data-shell="tmux"><span class="swatch" style="background:#1bb91f"></span>tmux</div>
-        <div class="popover-sep">안내</div>
-        <div style="padding:4px 8px 8px;font-size:11px;color:var(--muted);line-height:1.5">
-          바꾸면 <b>다음에 여는 세션부터</b> 적용됩니다.
-          <span id="tmuxNote"><br>tmux 는 허브를 껐다 켜도 세션이 살아 있고, 같은 패널로 다시 붙습니다.<br>
-          떼어내기 <b>Ctrl+B</b> 후 <b>D</b>.</span>
-        </div>
       </div>
     </div>
     <div class="popover-wrap">
@@ -767,7 +768,7 @@
       <div class="help-body">
         <section>
           <h4>세션 · 패널</h4>
-          <div class="kv"><span>새 세션</span><b>헤더 “새 세션” → Claude / Codex 선택 · 빈 화면 버튼</b></div>
+          <div class="kv"><span>새 세션</span><b>헤더 “새 세션”(기본 에이전트는 &gt;_ 버튼, ▾ 로 한 번만 바꾸기) · 빈 화면 버튼</b></div>
           <div class="kv"><span>아래로 분할</span><b>패널 바 분할 아이콘</b></div>
           <div class="kv"><span>패널 이동 · 도킹</span><b>패널 바를 드래그</b></div>
           <div class="kv"><span>세션 이름 변경</span><b>터미널에서 <code>/rename</code> (Claude 기본 명령)</b></div>

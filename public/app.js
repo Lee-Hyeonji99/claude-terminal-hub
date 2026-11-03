@@ -555,11 +555,12 @@ function renderProjectTabs() {
   });
   const add = document.createElement('button');
   add.className = 'ghost padd';
-  add.title = activeProject ? '이 프로젝트에서 새 세션' : '새 프로젝트 세션';
+  add.title = (activeProject ? '이 프로젝트에서 새 세션' : '새 프로젝트 세션') + ' — 기본 에이전트(>_ 버튼에서 변경)';
   add.innerHTML = ICON.plus;
   add.addEventListener('click', () => {
     const cwd = projectCwd[cur];
-    showAgentMenu(add, (a) => { if (activeProject && cwd) launchAgent(a, cwd, getPlacement()); else startNewSession(a); });
+    if (activeProject && cwd) launchAgent(defaultAgent, cwd, getPlacement());
+    else startNewSession(defaultAgent);
   });
   bar.appendChild(add);
 }
@@ -703,43 +704,36 @@ function setupPopover(btnId, popId) {
 }
 document.addEventListener('click', closePopovers);
 
-/* ================= 터미널 셸 선택 (PowerShell / tmux) =================
- * 세션을 어떤 셸로 열지. 서버 state.json 의 settings 에 저장되고
- * spawnShell() 이 읽는다 — 다음에 여는 세션부터 적용된다.
- * ==================================================================== */
+/* ================= 세션 기본 설정 (>_ 버튼) =================
+ * 새 세션 기본 에이전트(Claude / Codex) + 프로젝트별 탭.
+ * 셸은 고르지 않는다 — 항상 기본 셸(Windows 는 PowerShell). shellSettings 는
+ * 서버가 알려 주는 platform 을 담아 두는 용도로만 남는다(feedback.js 가 읽음).
+ * ============================================================ */
 let shellSettings = { shell: 'powershell', platform: '' };
+function renderShellPopover() {}
 
-function renderShellPopover() {
-  const isWin = shellSettings.platform === 'win32';
-  const lbl = document.getElementById('shellLabelDefault');
-  if (lbl) lbl.textContent = isWin ? 'PowerShell' : '기본 셸 ($SHELL)';
-  document.querySelectorAll('#shellPopover .popover-item[data-shell]').forEach((el) => {
-    el.classList.toggle('active', el.dataset.shell === shellSettings.shell);
-    // tmux 는 macOS/Linux 에서만 — Windows 는 PowerShell 로만 연다
-    if (el.dataset.shell === 'tmux') el.style.display = isWin ? 'none' : '';
-  });
-  const tmuxNote = document.getElementById('tmuxNote');
-  if (tmuxNote) tmuxNote.style.display = isWin ? 'none' : '';
-
-  const btn = document.getElementById('shellBtn');
-  if (btn) {
-    btn.classList.toggle('on', shellSettings.shell !== 'powershell');
-    const label = shellSettings.shell === 'tmux' ? 'tmux' : (isWin ? 'PowerShell' : '기본 셸');
-    btn.title = '터미널 셸 — 현재: ' + label;
-  }
-}
-
-async function saveShellSettings(patch) {
+const AGENT_DEFAULT_KEY = 'cth_default_agent';
+let defaultAgent = (() => {
   try {
-    const r = await fetch('/api/settings', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(patch),
-    }).then((x) => x.json());
-    if (r && r.settings) shellSettings = { ...shellSettings, ...r.settings };
-  } catch {}
-  renderShellPopover();
+    const a = localStorage.getItem(AGENT_DEFAULT_KEY) || localStorage.getItem('cth_last_agent');
+    return a === 'codex' ? 'codex' : 'claude';
+  } catch { return 'claude'; }
+})();
+function setDefaultAgent(a) {
+  defaultAgent = a === 'codex' ? 'codex' : 'claude';
+  try { localStorage.setItem(AGENT_DEFAULT_KEY, defaultAgent); } catch {}
+  renderDefaultAgentRow();
 }
+function renderDefaultAgentRow() {
+  document.querySelectorAll('#defaultAgentRow button').forEach((b) => b.classList.toggle('on', b.dataset.agent === defaultAgent));
+  const btn = document.getElementById('add');
+  if (btn) btn.title = `새 세션 — ${defaultAgent === 'codex' ? 'Codex' : 'Claude'} 로 시작 (▾ 다른 에이전트)`;
+}
+document.getElementById('defaultAgentRow').addEventListener('click', (e) => {
+  const b = e.target.closest('button[data-agent]');
+  if (b) setDefaultAgent(b.dataset.agent);
+});
+renderDefaultAgentRow();
 
 setupPopover('shellBtn', 'shellPopover');
 (function initGroupProjects() {
@@ -752,11 +746,6 @@ setupPopover('shellBtn', 'shellPopover');
     setGroupProjects(b.dataset.group === 'on');
   });
 })();
-document.getElementById('shellPopover').addEventListener('click', (e) => {
-  const item = e.target.closest('.popover-item[data-shell]');
-  if (!item) return;
-  saveShellSettings({ shell: item.dataset.shell });
-});
 
 /* ================= 캐릭터 테마 =================
  * 색은 하드코딩하지 않고 캐릭터 이미지에서 뽑아 팔레트를 만든다.
@@ -2401,8 +2390,9 @@ const AGENT_CHOICES = [
   { id: 'claude', name: 'Claude Code', sub: 'claude' },
   { id: 'codex', name: 'Codex', sub: 'codex' },
 ];
-let pendingAgent = (() => { try { const a = localStorage.getItem('cth_last_agent'); return a === 'codex' || a === 'shell' ? a : 'claude'; } catch { return 'claude'; } })();
-function rememberAgent(a) { pendingAgent = a; try { localStorage.setItem('cth_last_agent', a); } catch {} }
+// 이번에 열 에이전트. 기본값은 >_ 버튼의 defaultAgent, ▾ 메뉴 · 폴더 창 전환은 이번 한 번만 바꾼다.
+let pendingAgent = defaultAgent;
+function rememberAgent(a) { pendingAgent = a; }
 
 let agentMenuEl = null;
 function closeAgentMenu() { if (agentMenuEl) { agentMenuEl.remove(); agentMenuEl = null; } }
@@ -2412,10 +2402,10 @@ function showAgentMenu(anchor, onPick) {
   m.className = 'agent-menu';
   m.setAttribute('role', 'menu');
   m.innerHTML = '<div class="am-head">어떤 에이전트로 시작할까요?</div>'
-    + AGENT_CHOICES.map((c) => `<button role="menuitem" class="am-item" data-agent="${c.id}">
+    + [...AGENT_CHOICES].sort((x, y) => (y.id === defaultAgent) - (x.id === defaultAgent)).map((c) => `<button role="menuitem" class="am-item" data-agent="${c.id}">
         <span class="am-ico">${ICON[c.id]}</span>
         <span class="am-txt"><b>${c.name}</b><code>${c.sub}</code></span>
-        ${c.id === pendingAgent ? '<span class="am-last">마지막 선택</span>' : ''}</button>`).join('')
+        ${c.id === defaultAgent ? '<span class="am-last">기본</span>' : ''}</button>`).join('')
     + `<div class="am-sep"></div><button role="menuitem" class="am-item am-small" data-agent="shell">${ic('<path d="M4 17l6-5-6-5M12 19h8"/>')}<span>명령 직접 입력… (셸)</span></button>`;
   document.body.appendChild(m);
   agentMenuEl = m;
@@ -2463,7 +2453,7 @@ function syncFolderAgentUi() {
 document.querySelectorAll('#agentSwitch button').forEach((b) => b.addEventListener('click', () => { rememberAgent(b.dataset.agent); syncFolderAgentUi(); }));
 
 async function startNewSession(agent) {
-  if (agent === 'claude' || agent === 'codex' || agent === 'shell') rememberAgent(agent);
+  rememberAgent(agent === 'claude' || agent === 'codex' || agent === 'shell' ? agent : defaultAgent);
   const defs = await fetch('/api/defaults').then((r) => r.json()).catch(() => ({}));
   document.getElementById('curPath').value = localStorage.getItem('cth_last_path') || defs.cwd || defs.home || '';
   document.getElementById('fsnote').textContent = '';
@@ -2472,7 +2462,11 @@ async function startNewSession(agent) {
   loadRecentPaths();
 }
 window.startNewSession = startNewSession;
-document.getElementById('add').addEventListener('click', (e) => showAgentMenu(e.currentTarget, (a) => startNewSession(a)));
+// 본문은 기본 에이전트로 바로, ▾ 는 이번 한 번 다른 에이전트를 고르는 메뉴
+document.getElementById('add').addEventListener('click', (e) => {
+  if (e.target.closest('.caret')) showAgentMenu(e.currentTarget, (a) => startNewSession(a));
+  else { closeAgentMenu(); startNewSession(defaultAgent); }
+});
 
 // 최근 작업 경로 추천 목록
 async function loadRecentPaths() {
