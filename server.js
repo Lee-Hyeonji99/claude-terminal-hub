@@ -23,6 +23,7 @@ const pastedImages = require('./lib/pasted-images');
 const claudeRegistry = require('./lib/claude-registry');
 const activity = require('./lib/activity');
 const subagents = require('./lib/subagents');
+const taskList = require('./lib/task-list');
 const sharedConfig = require('./lib/shared-config');
 const usageLimit = require('./lib/usage-limit');
 const mcpConfig = require('./lib/mcp-config');
@@ -866,6 +867,8 @@ function cleanEnv(profileId) {
   delete env.CLAUDE_CONFIG_DIR;
   const cfgDir = configDirFor(profileId);
   if (cfgDir) env.CLAUDE_CONFIG_DIR = cfgDir; // 프로필(계정)별 로그인/설정 분리
+  // 작업 목록 도구(TaskCreate …)는 최신 모델에서 기본으로 꺼져 있다 — 패널 「작업 목록」 서랍이 읽을 수 있게 켠다
+  env.CLAUDE_CODE_ENABLE_TODO_TOOLS = '1';
   return env;
 }
 
@@ -920,7 +923,26 @@ function stopWatch(session) {
   if (w.file) { try { fs.unwatchFile(w.file); } catch {} w.file = null; }
   if (w.discoverIv) { clearInterval(w.discoverIv); w.discoverIv = null; }
   if (w.subIv) { clearInterval(w.subIv); w.subIv = null; }
+  if (w.taskIv) { clearInterval(w.taskIv); w.taskIv = null; }
   session.subagents = [];
+}
+// 작업 목록 — <설정 폴더>/tasks/<세션 ID>/ 를 주기적으로 읽어 바뀔 때만 보낸다(lib/task-list.js)
+const TASK_POLL_MS = 1500;
+function watchTasks(session, sessionId) {
+  const w = session.watch;
+  if (w.taskIv) clearInterval(w.taskIv);
+  const dir = taskList.taskDir(configDirFor(session.profile) || path.join(os.homedir(), '.claude'), sessionId);
+  let last = null; // 처음 한 번은 꼭 보낸다(세션이 바뀌면 옛 목록을 지운다)
+  const tick = () => {
+    const items = taskList.readTasks(dir);
+    const sig = JSON.stringify(items);
+    if (sig === last) return;
+    last = sig;
+    session.tasks = items;
+    broadcastJson(session, { type: 'tasks', items });
+  };
+  tick();
+  w.taskIv = setInterval(tick, TASK_POLL_MS);
 }
 // HUD 서브에이전트 — 세션 기록 옆 subagents 폴더를 주기적으로 훑어 바뀔 때만 보낸다
 const SUBAGENT_POLL_MS = 1500;
@@ -944,6 +966,7 @@ function beginWatch(session, jsonl, isResume) {
   const w = session.watch;
   w.file = jsonl; w.isResume = isResume;
   watchSubagents(session, jsonl);
+  watchTasks(session, path.basename(jsonl, '.jsonl')); // 기록 파일 이름 = 세션 ID
   try { w.pos = fs.statSync(jsonl).size; } catch { w.pos = 0; }
   fs.watchFile(jsonl, { interval: 1200 }, (curr) => {
     if (curr.size <= w.pos) { w.pos = curr.size; return; }
@@ -1359,6 +1382,7 @@ wss.on('connection', (ws) => {
         if (existing.resumeId) safeSend({ type: 'session', id: existing.resumeId });
         if (existing.activity) safeSend({ type: 'activity', ...existing.activity });
         safeSend({ type: 'subagents', list: existing.subagents || [] });
+        safeSend({ type: 'tasks', items: existing.tasks || [] });
         if (existing.buf) { try { ws.send(existing.buf); } catch {} } // 최근 화면 재생 → 재부착 클라이언트 상태 복원
         existing.resizedAt = Date.now(); // 다시 붙으면 화면 전체를 다시 그린다 — 지난 대화 속 한도 문구에 걸리지 않게
         try { existing.term.resize(cols, rows); } catch {}

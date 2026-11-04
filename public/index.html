@@ -249,6 +249,25 @@
     #defaultAgentRow svg{width:12px;height:12px}
     .pane .bar .agent-badge{display:inline-flex;align-items:center;gap:4px;flex:none;height:20px;padding:0 8px 0 5px;border:1px solid var(--border);border-radius:10px;background:var(--panel);color:var(--text);font-size:11px;font-weight:700}
     .pane .bar .agent-badge svg{width:12px;height:12px;color:var(--accent)}
+    /* 작업 목록 (public/task-list-ui.js) */
+    .pane .bar .tasks{display:inline-flex;align-items:center;gap:5px;height:22px;padding:0 8px;font-size:11px;font-weight:700;font-variant-numeric:tabular-nums}
+    .pane .bar .tasks[hidden]{display:none}
+    .pane .bar .tasks svg{width:12px;height:12px}
+    .pane .bar .tasks.on{border-color:var(--accent)}
+    .pane .bar .tasks.all-done{color:var(--muted)}
+    .task-pop{position:absolute;top:8px;right:14px;z-index:20;width:min(320px,calc(100% - 28px));max-height:calc(100% - 16px);overflow-y:auto;padding:10px 12px;background:var(--head);color:var(--text);border:1px solid var(--border);border-radius:10px;box-shadow:0 12px 30px rgba(0,0,0,.35);font-size:12.5px}
+    .task-pop .tp-head{display:flex;font-size:11px;font-weight:700;color:var(--muted);margin-bottom:6px}
+    .task-pop .tp-head span{margin-left:auto;font-variant-numeric:tabular-nums}
+    .task-pop .tp-prog{height:4px;border-radius:2px;background:var(--panel);overflow:hidden;margin-bottom:8px}
+    .task-pop .tp-prog i{display:block;height:100%;background:var(--accent)}
+    .task-pop ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:5px}
+    .task-pop li{display:flex;gap:8px;align-items:flex-start;line-height:1.45}
+    .task-pop .box{flex:none;width:14px;height:14px;margin-top:2px;border-radius:4px;border:1.5px solid var(--border);display:flex;align-items:center;justify-content:center}
+    .task-pop .st-completed .box{background:var(--accent);border-color:var(--accent)}
+    .task-pop .st-completed .box::after{content:"";width:7px;height:4px;border:2px solid #fff;border-top:0;border-right:0;transform:rotate(-45deg) translate(1px,-1px)}
+    .task-pop .st-completed .t{color:var(--muted);text-decoration:line-through}
+    .task-pop .st-in_progress .box{border-color:var(--accent);box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 25%,transparent)}
+    .task-pop .st-in_progress .t{font-weight:700}
     .pane.agent-codex .compose,.pane.agent-codex .bar .acct{display:none !important}
     .min-chip .chip-agent{display:inline-flex;flex:none}
     .min-chip .chip-agent svg{width:12px;height:12px;color:var(--muted)}
@@ -806,6 +825,7 @@
   <script src="/md-lite.js"></script>
   <script src="/paste-image.js"></script>
   <script src="/account-ui.js"></script>
+  <script src="/task-list-ui.js"></script>
   <script src="/app.js"></script>
   <script src="/prompt-scan.js"></script>
   <script src="/prompt-answer.js"></script>

@@ -1593,6 +1593,7 @@ function addPane(cfg, placement) {
       <span class="label" title="${escapeHtml(cfg.cwd)}">
         <span class="ttl">${escapeHtml(title)}</span><span class="cwd">${ICON.folder}<span>${escapeHtml(shortCwd)}</span></span>
       </span>
+      <button class="tasks" title="Claude 작업 목록 (완료 / 전체)" hidden>${ic('<path d="M9 6h11M9 12h11M9 18h11"/><path d="M4 6l1 1 2-2M4 12l1 1 2-2M4 18l1 1 2-2"/>')}<span class="tl-cnt"></span></button>
       <button class="acct" title="이 패널을 돌리는 계정 — 눌러서 다른 계정으로 이어가기"></button>
       <button class="reload" title="새로고침 (세션 다시 불러오기)">${ICON.refresh}</button>
       <button class="split" title="아래로 분할">${ICON.split}</button>
@@ -1618,6 +1619,7 @@ function addPane(cfg, placement) {
 
   const termEl = pane.querySelector('.term');
   termEl.style.position = 'relative';
+  const taskUi = window.TaskListUI ? window.TaskListUI.mount(pane, pane.querySelector('.bar .tasks'), termEl) : null;
   const term = new Terminal({
     cursorBlink: true,
     fontFamily: withHangul(termFontFamily),
@@ -1830,6 +1832,7 @@ function addPane(cfg, placement) {
           // HUD — 지금 쓰는 도구 (public/hud-status.js 가 읽는다)
           if (m.type === 'activity') { paneObj._activity = { tool: m.tool || '', target: m.target || '', at: m.at || Date.now() }; return; }
           if (m.type === 'subagents') { paneObj._subagents = Array.isArray(m.list) ? m.list : []; return; }
+          if (m.type === 'tasks') { if (window.TaskListUI) window.TaskListUI.render(taskUi, m.items); return; }
         } catch { /* 실제 출력 → write */ }
       }
       term.write(typeof ev.data === 'string' ? ev.data : new Uint8Array(ev.data));
