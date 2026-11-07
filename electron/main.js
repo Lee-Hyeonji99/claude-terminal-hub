@@ -252,6 +252,18 @@ function initAutoUpdate(win) {
   setInterval(() => { autoUpdater.checkForUpdates().catch(() => {}); }, UPDATE_CHECK_INTERVAL_MS);
 }
 
+// Claude Code CLI 자동 업데이트 (하루 1번, 백그라운드)
+function checkClaudeCodeUpdate() {
+  const fs = require('fs');
+  const { exec } = require('child_process');
+  const stamp = path.join(app.getPath('userData'), 'claude_code_update_stamp');
+  const today = new Date().toISOString().slice(0, 10);
+  try { if (fs.readFileSync(stamp, 'utf8').trim() === today) return; } catch {}
+  exec('npm install -g @anthropic-ai/claude-code@latest', { timeout: 120000 }, (err) => {
+    if (!err) fs.writeFile(stamp, today, () => {});
+  });
+}
+
 // 한 번만 실행 — 두 번째 실행은 떠 있는 허브 창을 앞으로 올리고 끝난다.
 // (여러 개가 뜨면 뒤에 뜬 앱은 레이아웃 저장소를 열지 못해 빈 화면으로 시작한다)
 const gotLock = app.requestSingleInstanceLock();
@@ -266,6 +278,7 @@ app.on('second-instance', () => {
 
 app.whenReady().then(async () => {
   if (!gotLock) return;
+  checkClaudeCodeUpdate();
   Menu.setApplicationMenu(null); // Ctrl+W/T/N 등 기본 accelerator 제거 → 키가 터미널로 전달
   const ok = await ensureServer();
   const win = createWindow(ok);
