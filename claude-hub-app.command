@@ -18,6 +18,14 @@ if [ ! -x "$ELECTRON_BIN" ]; then
   exit 1
 fi
 
+# Claude Code 자동 업데이트 (하루 1번)
+STAMP="$HOME/.claude_update_stamp"
+NOW=$(date +%Y%m%d)
+if [ "$(cat "$STAMP" 2>/dev/null)" != "$NOW" ]; then
+  echo "[claude-hub-app] Claude Code 업데이트 확인 중…"
+  npm install -g @anthropic-ai/claude-code@latest --silent && echo "$NOW" > "$STAMP"
+fi
+
 # 앱 창을 백그라운드로 띄우고 런처는 즉시 종료 (터미널 점유 안 함)
 "$ELECTRON_BIN" "$ROOT/electron/main.js" >/dev/null 2>&1 &
 disown 2>/dev/null || true
