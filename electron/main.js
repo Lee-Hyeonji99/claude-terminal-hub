@@ -15,6 +15,7 @@ const { initPet } = require('./pet');
 const { initHud } = require('./hud');
 const { bringToFront } = require('./focus-main');
 const { initRoom } = require('./room');
+const openPane = require('../lib/open-pane');
 
 // 작업표시줄(Windows)/Dock(macOS)/Alt-Tab이 패키징 안 된 electron 자체 정체성("Electron")으로
 // 뜨는 걸 막기 위해 앱 고유 이름/AppUserModelID를 지정
@@ -266,11 +267,20 @@ function checkClaudeCodeUpdate() {
 
 // 한 번만 실행 — 두 번째 실행은 떠 있는 허브 창을 앞으로 올리고 끝난다.
 // (여러 개가 뜨면 뒤에 뜬 앱은 레이아웃 저장소를 열지 못해 빈 화면으로 시작한다)
-const gotLock = app.requestSingleInstanceLock();
+// `--open-pane=<요청 파일>` 로 실행한 두 번째 실행은 그 요청을 떠 있는 허브에 넘기고 끝난다(lib/open-pane.js).
+// 허브가 꺼져 있을 때 이 인자로 켜면 요청은 버리고 평소처럼 뜬다.
+const gotLock = app.requestSingleInstanceLock({ openPane: openPane.readRequest(process.argv) });
 if (!gotLock) app.quit();
 let mainWin = null;
-app.on('second-instance', () => {
+app.on('second-instance', (_e, _argv, _cwd, data) => {
   if (!mainWin || mainWin.isDestroyed()) return;
+  // 넘어온 값은 다른 프로세스가 만든 것이라 여기서 한 번 더 다듬는다
+  const paneRequest = openPane.normalizeRequest(data && data.openPane);
+  if (paneRequest) {
+    // 패널만 연다 — 창을 앞으로 끌어오지 않는다(다른 창에서 일하는 중일 수 있다)
+    try { mainWin.webContents.send('cth-open-pane', paneRequest); } catch { /* 화면이 다시 뜨는 중 */ }
+    return;
+  }
   if (mainWin.isMinimized()) mainWin.restore();
   mainWin.show();
   bringToFront(mainWin);

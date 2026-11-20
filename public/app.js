@@ -2442,6 +2442,16 @@ async function launchAgent(agent, cwd, placement) {
   addPane({ cwd, runClaude: true, command: 'claude', title: 'claude 새 대화' }, placement);
 }
 
+// 밖에서 온 패널 열기 요청(앱에서만 — `--open-pane=<요청 파일>`, lib/open-pane.js).
+// 「명령 직접 입력」과 같은 길로 연다. 계정을 안 정했으면 새 패널 기본 계정을 쓴다.
+if (window.claudeHub && window.claudeHub.onOpenPane) {
+  window.claudeHub.onOpenPane((req) => {
+    if (!req || !req.cwd) return;
+    const command = req.command || 'claude';
+    addPane({ cwd: req.cwd, runClaude: true, command, title: req.title || command, profile: req.profile || undefined }, 'column');
+  });
+}
+
 function getPlacement() {
   const r = document.querySelector('input[name="placement"]:checked');
   return r ? r.value : 'column';

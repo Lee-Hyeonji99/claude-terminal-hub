@@ -15,6 +15,8 @@ contextBridge.exposeInMainWorld('claudeHub', {
   checkUpdate: () => ipcRenderer.invoke('update-check'),
   installUpdate: () => ipcRenderer.invoke('update-install'),
   onUpdateStatus: (cb) => ipcRenderer.on('cth-update-status', (_e, payload) => cb(payload)),
+  // 밖에서 온 패널 열기 요청 — `--open-pane=<요청 파일>` 로 한 번 더 실행했을 때 (lib/open-pane.js)
+  onOpenPane: (cb) => ipcRenderer.on('cth-open-pane', (_e, payload) => cb(payload)),
   // 펫: 패널에서 찾은 질문을 넘기고, 펫이 고른 답을 받는다 (public/pet-bridge.js)
   petState: (list) => ipcRenderer.send('pet:state', list),
   petResult: (r) => ipcRenderer.send('pet:result', r),
