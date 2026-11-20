@@ -51,6 +51,20 @@ npm install
 
 기본 포트는 `4778`이며 `CLAUDE_HUB_PORT` 환경변수로 바꿀 수 있습니다.
 
+### 밖에서 패널 열기
+
+허브가 떠 있을 때 실행 파일을 `--open-pane=<요청 파일>` 인자로 한 번 더 실행하면, 떠 있는 허브에 패널이 하나 열립니다(스크립트 · 다른 세션에서 새 세션을 띄울 때). 데스크톱 앱에서만 동작합니다.
+
+```powershell
+# request.json — cwd 만 필수(절대 경로). command 를 비우면 claude 새 대화.
+# { "cwd": "D:\\work\\proj", "command": "claude --remote-control '이름'", "title": "이름" }
+& "$env:LOCALAPPDATA\Programs\Claude Terminal Hub\Claude Terminal Hub.exe" "--open-pane=C:\tmp\request.json"
+```
+
+- `command` 는 패널 셸에 그대로 입력됩니다(「명령 직접 입력」과 같음). 줄바꿈 · 탭이 든 요청은 받지 않습니다.
+- 허브 패널 안에서 실행할 때는 환경 변수 `ELECTRON_RUN_AS_NODE` 를 지우고 실행해야 합니다(패널 셸이 물려받은 값 때문에 앱이 아니라 node 로 뜹니다).
+- 허브가 꺼져 있으면 요청은 버려지고 허브만 켜집니다.
+
 ### Windows 설치 파일(.exe)
 
 `npm run dist:win`으로 NSIS 설치 파일을 빌드할 수 있습니다(Windows 환경 필요 — `node-pty` 네이티브 모듈 특성상 다른 OS에서 크로스컴파일이 안 됩니다). 저장소에는 GitHub Actions 워크플로(`.github/workflows/build-windows.yml`)가 있어 태그 푸시나 수동 실행으로 CI에서 빌드할 수 있습니다.
